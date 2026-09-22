@@ -16,7 +16,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.update(
         MAX_CONTENT_LENGTH=int(os.getenv("AEGIS_MAX_EVENT_BYTES", "65536")),
-        DATABASE_PATH=os.getenv("AEGIS_DATABASE_PATH", "/data/aegis.db"),
+        DATABASE_PATH=os.getenv("AEGIS_DATABASE_PATH", "./data/aegis.db"),
         INGEST_API_KEY=os.getenv("AEGIS_INGEST_API_KEY", ""),
         RETENTION_DAYS=int(os.getenv("AEGIS_RETENTION_DAYS", "30")),
     )
@@ -77,7 +77,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     def events():
         limit = request.args.get("limit", 100, type=int)
         q = request.args.get("q", type=str)
-        filters = {key: request.args.get(key, type=str) for key in ("country","protocol","service","honeypot","severity","source_ip","session_id","event_type")}
+        filters = {
+            key: request.args.get(key, type=str)
+            for key in ("country", "protocol", "service", "honeypot", "severity", "source_ip", "session_id", "event_type")
+        }
         return jsonify({"items": store.list_events(limit=limit, q=q, filters=filters)})
 
     @app.get("/api/v1/events/<event_id>")
@@ -101,7 +104,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/v1/dashboard")
     def dashboard():
         hours = request.args.get("hours", 24, type=int)
-        include_sim = request.args.get("include_simulation", "false").lower() in {"1","true","yes"}
+        include_sim = request.args.get("include_simulation", "false").lower() in {"1", "true", "yes"}
         return jsonify(store.dashboard(hours=hours, include_simulation=include_sim))
 
     @app.get("/api/v1/reports/session/<session_id>")
