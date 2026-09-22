@@ -14,6 +14,8 @@ x-sensor-env: &sensor-env
   AEGIS_COLLECTOR_URL: http://collector:8600/api/v1/events
   AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:?set AEGIS_INGEST_API_KEY in .env}
   AEGIS_SENSOR_TIMEOUT: ${AEGIS_SENSOR_TIMEOUT:-2.0}
+  AEGIS_SIGN_SENSOR_REQUESTS: ${AEGIS_SIGN_SENSOR_REQUESTS:-true}
+  AEGIS_SENSOR_MAX_CONNECTIONS: ${AEGIS_SENSOR_MAX_CONNECTIONS:-32}
 
 services:
   collector:
@@ -21,6 +23,13 @@ services:
     environment:
       AEGIS_DATABASE_PATH: /data/aegis.db
       AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:?set AEGIS_INGEST_API_KEY in .env}
+      AEGIS_OPERATOR_API_KEY: ${AEGIS_OPERATOR_API_KEY:?set AEGIS_OPERATOR_API_KEY in .env}
+      AEGIS_REQUIRE_SENSOR_SIGNATURE: ${AEGIS_REQUIRE_SENSOR_SIGNATURE:-true}
+      AEGIS_SENSOR_SIGNATURE_MAX_SKEW: ${AEGIS_SENSOR_SIGNATURE_MAX_SKEW:-300}
+      AEGIS_INGEST_RATE_LIMIT_PER_MINUTE: ${AEGIS_INGEST_RATE_LIMIT_PER_MINUTE:-600}
+      AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE: ${AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE:-1200}
+      AEGIS_MAX_DB_EVENTS: ${AEGIS_MAX_DB_EVENTS:-500000}
+      AEGIS_ANALYTICS_MAX_EVENTS: ${AEGIS_ANALYTICS_MAX_EVENTS:-20000}
       AEGIS_MAX_EVENT_BYTES: ${AEGIS_MAX_EVENT_BYTES:-65536}
       AEGIS_RETENTION_DAYS: ${AEGIS_RETENTION_DAYS:-30}
       AEGIS_STORE_CREDENTIAL_SECRETS: ${AEGIS_STORE_CREDENTIAL_SECRETS:-false}
@@ -89,6 +98,26 @@ services:
       - aegis_mgmt
     depends_on:
       - collector
+
+
+  backup:
+    build: .
+    profiles: ["ops"]
+    command: ["python", "scripts/backup.py"]
+    environment:
+      AEGIS_DATABASE_PATH: /data/aegis.db
+      AEGIS_BACKUP_DIR: /data/backups
+      AEGIS_BACKUP_KEEP: ${AEGIS_BACKUP_KEEP:-14}
+    volumes:
+      - aegis-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid,nodev
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 32
+    mem_limit: 128m
 
 networks:
   aegis_dmz:
