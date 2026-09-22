@@ -62,3 +62,57 @@ def test_suricata_alert_ingestion_preserves_evidence_without_inventing_mappings(
     assert event["event_type"] == "ids.alert"
     assert event["observed"]["alert"]["signature"] == "Example IDS signature"
     assert event["derived"] == {}
+
+
+def test_filters_ti_session_study_and_csv_report(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE_PATH": str(tmp_path / "aegis.db"), "INGEST_API_KEY": "secret"})
+    client = app.test_client()
+    payload = {
+        "timestamp": "2026-09-22T18:10:00Z",
+        "honeypot": "ssh-decoy-01",
+        "event_type": "credential",
+        "severity": "medium",
+        "observed": {
+            "source_ip": "203.0.113.77",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "credential": {"username": "admin", "password": "example-secret"},
+        },
+        "enrichment": {
+            "reputation": {
+                "source": "fixture-provider",
+                "observed_at": "2026-09-22T18:11:00Z",
+                "data": {"score": 42, "classification": "test-only"},
+            }
+        },
+    }
+    created = client.post("/api/v1/events", headers={"X-Aegis-Key": "secret"}, json=payload)
+    assert created.status_code == 201
+    session_id = created.get_json()["session_id"]
+
+    filtered = client.get("/api/v1/dashboard?service=ssh&severity=medium&include_simulation=true").get_json()
+    assert filtered["totals"]["events"] == 1
+    assert filtered["filters"]["service"] == "ssh"
+
+    no_match = client.get("/api/v1/dashboard?service=http&include_simulation=true").get_json()
+    assert no_match["totals"]["events"] == 0
+
+    options = client.get("/api/v1/meta/filters").get_json()
+    assert "ssh" in options["service"]
+    assert "credential" in options["event_type"]
+
+    ti = client.get("/api/v1/ips/203.0.113.77/threat-intelligence").get_json()
+    assert ti["items"][0]["source"] == "fixture-provider"
+    assert ti["items"][0]["provenance"] == "external_enrichment"
+
+    study = client.get(f"/api/v1/study/session/{session_id}?lang=it").get_json()
+    assert study["facts"]
+    assert study["next_steps"]
+
+    csv_report = client.get(f"/api/v1/reports/session/{session_id}.csv")
+    assert csv_report.status_code == 200
+    assert csv_report.mimetype == "text/csv"
+    body = csv_report.get_data(as_text=True)
+    assert "admin" in body
+    assert "example-secret" not in body
