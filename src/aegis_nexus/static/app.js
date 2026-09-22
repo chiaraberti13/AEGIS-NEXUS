@@ -1093,6 +1093,7 @@
       bars("chart-credentials", dashboard.credentials, {search: true});
       bars("chart-commands", dashboard.commands, {search: true});
       bars("chart-ids", dashboard.ids_alerts, {search: true});
+      bars("chart-ioc", dashboard.iocs, {search: true});
       bars("chart-mitre", dashboard.mitre, {search: true});
       renderFeed("event-feed", state.events);
       renderFeed("dashboard-feed", state.events, 12);
