@@ -1,0 +1,29 @@
+services:
+  collector:
+    build: .
+    environment:
+      AEGIS_DATABASE_PATH: /data/aegis.db
+      AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:?set AEGIS_INGEST_API_KEY in .env}
+      AEGIS_MAX_EVENT_BYTES: ${AEGIS_MAX_EVENT_BYTES:-65536}
+      AEGIS_RETENTION_DAYS: ${AEGIS_RETENTION_DAYS:-30}
+      AEGIS_STORE_CREDENTIAL_SECRETS: ${AEGIS_STORE_CREDENTIAL_SECRETS:-false}
+    ports:
+      - "127.0.0.1:8600:8600"
+    volumes:
+      - aegis-data:/data
+    networks:
+      - aegis_mgmt
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+networks:
+  aegis_mgmt:
+    internal: true
+
+volumes:
+  aegis-data:

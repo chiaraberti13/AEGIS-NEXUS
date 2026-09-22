@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-nexus"
+version = "0.1.0"
+description = "Honeypot telemetry, SOC analysis and study lab"
+requires-python = ">=3.12"
+dependencies = [
+  "Flask>=3.1,<4",
+  "gunicorn>=23,<24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<9"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
