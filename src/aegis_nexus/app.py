@@ -38,6 +38,15 @@ def _load_sensor_keys(raw: str) -> dict[str, str]:
     return result
 
 
+def _csv_safe(value):
+    if value is None:
+        return ""
+    text = str(value)
+    if text.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + text
+    return text
+
+
 def _filters_from_request() -> dict[str, str]:
     return {
         key: value[:256]
@@ -328,6 +337,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         except ValueError as exc:
             if str(exc) == "evidence_not_found":
                 return jsonify({"error": "evidence_not_found"}), 404
+            if str(exc) == "case_evidence_limit":
+                return jsonify({"error": "case_evidence_limit"}), 422
             raise
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
@@ -349,6 +360,10 @@ def create_app(test_config: dict | None = None) -> Flask:
             item = store.add_case_note(case_id[:128], normalize_note(request.get_json()))
         except CaseValidationError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        except ValueError as exc:
+            if str(exc) == "case_note_limit":
+                return jsonify({"error": "case_note_limit"}), 422
+            raise
         return (jsonify(item), 201) if item else (jsonify({"error": "not_found"}), 404)
 
     @app.get("/api/v1/reports/case/<case_id>")
@@ -376,15 +391,15 @@ def create_app(test_config: dict | None = None) -> Flask:
         ])
         for evidence in item["evidence"]:
             writer.writerow([
-                item["case"]["id"],
-                item["case"]["title"],
-                item["case"]["status"],
-                item["case"]["severity"],
+                _csv_safe(item["case"]["id"]),
+                _csv_safe(item["case"]["title"]),
+                _csv_safe(item["case"]["status"]),
+                _csv_safe(item["case"]["severity"]),
                 "analyst",
-                evidence["evidence_type"],
-                evidence["evidence_id"],
-                evidence["available"],
-                evidence["added_at"],
+                _csv_safe(evidence["evidence_type"]),
+                _csv_safe(evidence["evidence_id"]),
+                _csv_safe(evidence["available"]),
+                _csv_safe(evidence["added_at"]),
             ])
         filename = f"aegis-{case_id[:64]}.csv"
         return Response(
@@ -425,19 +440,19 @@ def create_app(test_config: dict | None = None) -> Flask:
             credential = observed.get("credential") if isinstance(observed.get("credential"), dict) else {}
             alert = observed.get("alert") if isinstance(observed.get("alert"), dict) else {}
             writer.writerow([
-                event.get("timestamp"),
-                event.get("id"),
-                event.get("event_type"),
-                event.get("severity"),
-                event.get("source_ip"),
-                event.get("honeypot"),
-                event.get("service"),
-                event.get("protocol"),
-                event.get("destination_port"),
-                credential.get("username"),
-                observed.get("command"),
-                observed.get("payload"),
-                alert.get("signature"),
+                _csv_safe(event.get("timestamp")),
+                _csv_safe(event.get("id")),
+                _csv_safe(event.get("event_type")),
+                _csv_safe(event.get("severity")),
+                _csv_safe(event.get("source_ip")),
+                _csv_safe(event.get("honeypot")),
+                _csv_safe(event.get("service")),
+                _csv_safe(event.get("protocol")),
+                _csv_safe(event.get("destination_port")),
+                _csv_safe(credential.get("username")),
+                _csv_safe(observed.get("command")),
+                _csv_safe(observed.get("payload")),
+                _csv_safe(alert.get("signature")),
             ])
         filename = f"aegis-{session_id[:64]}.csv"
         return Response(
