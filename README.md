@@ -29,14 +29,14 @@ The current implementation provides both the secure telemetry/investigation foun
 - Offline exact-match threat context from an operator-supplied JSON feed for observed IPs and derived URL/domain/hash artifacts; matches remain external context and never become automatic attribution, CVE or MITRE claims.
 - MITRE ATT&CK and CVE derived mappings are accepted only when they include both `rationale` and `evidence`.
 - Deterministic static artifact extraction from observed commands/payloads for URLs, domains, IP literals and common hash formats; extracted values remain evidence-backed derived artifacts, not automatic maliciousness claims.
-- Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw storage is explicit opt-in only.
+- Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw database storage is explicit opt-in only, and operator APIs/UI/reports never return the cleartext secret.
 - Persistent SQLite session correlation that prefers explicit decoy connection IDs or Suricata flow identity and falls back to source IP, honeypot, service, protocol, destination port and inactivity window when needed.
 - Investigation APIs and dedicated SOC views for events, IP profiles, sessions, timelines, relationship graphs, Threat Intelligence context and Study Mode.
 - Stable cursor pagination for historical event/session navigation; the live dashboard stays on current data while Investigation can append older matching telemetry.
 - Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail, bounded lifecycle/closed-case retention and JSON/CSV/Markdown case reports.
-- SOC dashboard with global search/filters, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, interactive Attack Map and Live Feed.
+- SOC dashboard with global search/filters, attacks over time, unique-source-IP timeline, top source IPs, event types, severities, countries, ASN, ports, protocols, services, honeypots, usernames, password fingerprints, commands, payloads, IDS alerts, IOC, evidence-backed MITRE/CVE, temporal heatmap, aggregated interactive Attack Map and Live Feed.
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
-- Collector-side `received_at` provenance separates receipt time from sensor event time; `AEGIS_RETENTION_DAYS` and capacity cleanup use receipt time, while investigation timelines keep the original event `timestamp`.
+- Collector-side receipt provenance separates sensor event time from collector acceptance time: `collector_received_at` is canonical for retention/operational freshness and `received_at` is a synchronized compatibility alias; investigation timelines keep the original event `timestamp`.
 - Continuous time-based retention with `AEGIS_RETENTION_DAYS` plus the storage ceiling `AEGIS_MAX_DB_EVENTS`; JSON/CSV/Markdown investigation exports never include cleartext passwords.
 - Readiness checks validate SQLite access and a configurable free-space floor; authenticated operations status reports telemetry receipt without claiming sensor online/offline state.
 - Hardened Docker runtime: non-root user, dropped capabilities, read-only root filesystem, `no-new-privileges`, bounded concurrent TCP connections, per-sensor management networks and localhost-only operator port.
@@ -86,7 +86,7 @@ Send one Suricata EVE JSON event to `POST /api/v1/integrations/suricata/eve` usi
 
 `Dashboard → event → IP → session → timeline → credentials/commands/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relations → case → report → Study Mode`
 
-The relationship graph is generated only from data actually present in the selected session. Threat Intelligence displays only stored external enrichment with source/timestamp provenance. Study Mode covers both the selected event and the complete correlated session while keeping analytical limitations visible. See [Investigation workflow](docs/INVESTIGATION.md).
+The relationship graph is generated only from data actually present in the selected session and marks nodes by provenance. External context is split explicitly between contextual enrichment (for example GeoIP/ASN) and true `threat_context` matches; source/timestamp provenance remains visible. Study Mode covers both the selected event and the complete correlated session while keeping analytical limitations visible. See [Investigation workflow](docs/INVESTIGATION.md).
 
 ## Quick start
 
@@ -105,7 +105,7 @@ Development:
 ```bash
 python -m pip install -e '.[dev]'
 pytest -q
-AEGIS_DATABASE_PATH=./data/aegis.db flask --app aegis_nexus.app run --host 127.0.0.1 --port 8600
+AEGIS_DATABASE_PATH=./data/aegis.db AEGIS_OPERATOR_API_KEY='replace-with-a-long-random-secret' flask --app aegis_nexus.app run --host 127.0.0.1 --port 8600
 ```
 
 ## Repository structure
