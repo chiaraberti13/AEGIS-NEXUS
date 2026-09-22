@@ -287,3 +287,5 @@ pre{
 .sidebar-substatus{font-size:10px;color:#647d8f;padding-left:16px;margin-top:-22px;overflow-wrap:anywhere}
 .sidebar-substatus.ready{color:#79b99d}.sidebar-substatus.partial{color:#c1a461}.sidebar-substatus.disabled{color:#647d8f}
 @media(max-width:800px){.sidebar-substatus{display:none}}
+
+.feed-pagination{display:flex;justify-content:center;padding-top:10px}.feed-pagination .compact{min-width:180px}
