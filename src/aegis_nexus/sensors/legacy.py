@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import socketserver
 import threading
+import uuid
 from typing import BinaryIO
 
 from .client import SensorClient
@@ -26,6 +27,7 @@ class BaseHandler(socketserver.StreamRequestHandler):
     def setup(self):
         super().setup()
         self.request.settimeout(TIMEOUT)
+        self.sensor_session_id = uuid.uuid4().hex
 
     @property
     def source_ip(self) -> str:
@@ -36,7 +38,13 @@ class BaseHandler(socketserver.StreamRequestHandler):
         return int(self.server.server_address[1])
 
     def emit(self, event_type: str, observed: dict, severity: str = "info"):
-        base = {"source_ip": self.source_ip, "service": self.service, "protocol": "tcp", **observed}
+        base = {
+            "source_ip": self.source_ip,
+            "service": self.service,
+            "protocol": "tcp",
+            "sensor_session_id": self.sensor_session_id,
+            **observed,
+        }
         self.sensor.emit(event_type, base, severity)
 
 
