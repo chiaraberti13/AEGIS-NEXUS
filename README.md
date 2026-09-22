@@ -29,6 +29,7 @@ The current implementation provides both the secure telemetry/investigation foun
 - Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw storage is explicit opt-in only.
 - Persistent SQLite session correlation by source IP, honeypot, service, protocol, destination port and inactivity window, with compatible schema migration.
 - Investigation APIs and dedicated SOC views for events, IP profiles, sessions, timelines, relationship graphs, Threat Intelligence context and Study Mode.
+- Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail and JSON/CSV case reports.
 - SOC dashboard with global search/filters, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, interactive Attack Map and Live Feed.
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
 - Continuous time-based retention with `AEGIS_RETENTION_DAYS` plus the storage ceiling `AEGIS_MAX_DB_EVENTS`; JSON/CSV investigation exports never include cleartext passwords.
@@ -77,7 +78,7 @@ Send one Suricata EVE JSON event to `POST /api/v1/integrations/suricata/eve` usi
 
 ## Investigation flow
 
-`Dashboard → event → IP → session → timeline → credentials/commands/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relations → report → Study Mode`
+`Dashboard → event → IP → session → timeline → credentials/commands/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relations → case → report → Study Mode`
 
 The relationship graph is generated only from data actually present in the selected session. Threat Intelligence displays only stored external enrichment with source/timestamp provenance. Study Mode covers both the selected event and the complete correlated session while keeping analytical limitations visible. See [Investigation workflow](docs/INVESTIGATION.md).
 
@@ -107,12 +108,15 @@ src/aegis_nexus/
 ├── app.py          Flask API, security headers and routes
 ├── model.py        hostile-input normalization and provenance validation
 ├── correlation.py session correlation rules
-├── store.py        persistence, analytics, relations and reports
+├── casework.py     bounded analyst-case validation
+├── backup.py       reusable SQLite backup logic
+├── store.py        persistence, analytics, cases, relations and reports
 ├── study.py        deterministic IT/EN Study Mode
 ├── sensors/        SSH, web, FTP/Telnet decoys and telemetry client
 ├── templates/      SOC console
 └── static/         i18n, charts, map, live feed and investigation
 docs/
+├── CASE_MANAGEMENT.md
 ├── DATA_PROVENANCE.md
 ├── INVESTIGATION.md
 ├── PRIVACY.md
@@ -129,7 +133,7 @@ See [Privacy & retention](docs/PRIVACY.md), the [Threat model](docs/THREAT_MODEL
 
 ## Roadmap
 
-Next implementation cycles focus on controlled enrichment adapters, case management, richer investigation exports and additional sensor/IDS integrations. Capabilities are documented when they are implemented, not ahead of the code.
+Next implementation cycles focus on controlled enrichment adapters, richer investigation exports and additional sensor/IDS integrations. Capabilities are documented when they are implemented, not ahead of the code.
 
 ## Licence & responsible use
 
