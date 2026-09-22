@@ -47,6 +47,10 @@ The investigation feed uses cursor pagination ordered by event timestamp plus ev
 
 Session listing APIs use the same keyset approach with `last_seen` plus session ID. Cursors are navigation state, not evidence and not authorization tokens.
 
+### Large-session analysis bounds
+
+A single correlated session can be attacker-amplified. `AEGIS_SESSION_MAX_EVENTS` therefore bounds how many session events are loaded into one timeline, relationship graph, report or Study Mode request. If the retained session is larger, AEGIS uses the latest bounded subset and returns explicit `analysis.truncated`, `event_limit` and scope metadata. The console and generated analysis surface that limitation; a truncated view must not be described as the complete session.
+
 ### Case management
 
 Cases let an operator preserve the investigation context without duplicating hostile telemetry. Status, severity, summary, tags and notes are analyst-owned metadata. Event/session evidence is linked by identifier and can later become unavailable when normal telemetry retention removes its source. This is shown explicitly rather than interpreted as absence of activity. See [Case management](CASE_MANAGEMENT.md).
@@ -107,6 +111,10 @@ Il grafo può contenere nodi evento, sessione, IP, ASN, paese, servizio, protoco
 Il feed investigativo usa paginazione a cursore ordinata per timestamp evento più ID evento. Il cursore congela il limite temporale della prima pagina ed è vincolato a ricerca e filtri esatti attivi, evitando il riuso accidentale dopo un cambio di scope. La nuova telemetria che arriva mentre si caricano pagine precedenti non sposta i cursori già emessi e non produce i duplicati tipici della paginazione a offset.
 
 Le API delle sessioni usano lo stesso approccio keyset con `last_seen` più ID sessione. I cursori sono stato di navigazione, non evidenza e non token di autorizzazione.
+
+### Limiti per sessioni molto grandi
+
+Una singola sessione correlata può essere amplificata dall'attaccante. `AEGIS_SESSION_MAX_EVENTS` limita quindi il numero di eventi caricati in una singola richiesta di timeline, grafo relazionale, report o Study Mode. Se la sessione conservata è più grande, AEGIS usa il sottoinsieme più recente entro il limite e restituisce metadata espliciti `analysis.truncated`, `event_limit` e scope. Console e analisi generate mostrano questa limitazione; una vista troncata non deve essere descritta come sessione completa.
 
 ### Gestione casi
 
