@@ -26,6 +26,7 @@ L'implementazione attuale fornisce sia la base sicura per telemetria e investiga
 - Schema eventi normalizzato con `observed`, `enrichment`, `derived`, `hypotheses` separati.
 - Provenienza obbligatoria per enrichment esterni (`source` e `observed_at`).
 - Enrichment locale offline GeoIP/ASN da file MMDB MaxMind forniti dall'operatore; gli IP sorgente pubblici vengono arricchiti nel collector senza inviare gli IP raccolti ad API di terze parti.
+- Threat context locale offline con match esatti da feed JSON fornito dall'operatore per IP osservati e artefatti URL/dominio/hash derivati; i match restano contesto esterno e non diventano automaticamente attribuzioni, CVE o mapping MITRE.
 - Mapping MITRE ATT&CK e CVE accettati solo con `rationale` ed `evidence`.
 - Estrazione statica deterministica da comandi/payload osservati di URL, domini, IP letterali e formati hash comuni; i valori restano artefatti derivati supportati da evidenza e non diventano automaticamente indicatori malevoli.
 - Password redatte per default, con fingerprint SHA-256 e lunghezza; memorizzazione raw solo tramite opt-in esplicito.
@@ -114,6 +115,7 @@ src/aegis_nexus/
 ├── correlation.py regole di correlazione sessioni
 ├── enrichment.py  enrichment locale offline GeoIP/ASN
 ├── derivation.py  estrazione statica bounded degli artefatti osservati
+├── threat_context.py contesto esterno locale a match esatto
 ├── casework.py     validazione bounded dei casi analista
 ├── backup.py       logica riusabile di backup SQLite
 ├── store.py        persistenza, analytics, casi, relazioni e report
@@ -128,6 +130,7 @@ docs/
 ├── INVESTIGATION.md
 ├── PRIVACY.md
 ├── SENSOR_ISOLATION.md
+├── THREAT_CONTEXT.md
 └── THREAT_MODEL.md
 tests/
 ```
@@ -140,7 +143,7 @@ Consulta [Privacy e retention](docs/PRIVACY.md), [Enrichment locale](docs/ENRICH
 
 ## Roadmap
 
-I prossimi cicli implementativi sono dedicati ad ulteriori adapter controllati di threat context, export investigativi più ricchi e ulteriori integrazioni sensore/IDS. Le funzionalità vengono documentate quando sono realmente presenti nel codice.
+I prossimi cicli implementativi sono dedicati a export investigativi più ricchi, ulteriori integrazioni sensore/IDS e percorsi opzionali standardizzati di import del threat context. Le funzionalità vengono documentate quando sono realmente presenti nel codice.
 
 ## Licenza e uso responsabile
 
