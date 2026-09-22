@@ -29,7 +29,7 @@ L'implementazione attuale fornisce sia la base sicura per telemetria e investiga
 - Mapping MITRE ATT&CK e CVE accettati solo con `rationale` ed `evidence`.
 - Estrazione statica deterministica da comandi/payload osservati di URL, domini, IP letterali e formati hash comuni; i valori restano artefatti derivati supportati da evidenza e non diventano automaticamente indicatori malevoli.
 - Password redatte per default, con fingerprint SHA-256 e lunghezza; memorizzazione raw solo tramite opt-in esplicito.
-- Correlazione persistente delle sessioni su SQLite per IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività, con migrazione compatibile dello schema.
+- Correlazione persistente delle sessioni su SQLite che preferisce ID espliciti di connessione dei decoy o identità flow Suricata e usa come fallback IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività.
 - API e viste SOC dedicate per eventi, profili IP, sessioni, timeline, relazioni, contesto Threat Intelligence e Study Mode.
 - Gestione casi SOC evidence-preserving con classificazione dell’analista, note, tag, riferimenti a eventi/sessioni, audit trail e report JSON/CSV.
 - Dashboard SOC con ricerca/filtri globali, timeline, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, IDS, MITRE, heatmap temporale, Attack Map interattiva e Live Feed.

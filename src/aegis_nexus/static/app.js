@@ -442,6 +442,7 @@
       return;
     }
     const summary = bundle.summary || {};
+    fact(root, t("session.correlation"), t("session.correlation." + (summary.correlation_method || "temporal_fallback")));
     fact(root, t("session.events"), summary.event_count || 0);
     fact(root, t("session.credentials"), summary.credentials || 0);
     fact(root, t("session.commands"), summary.commands || 0);

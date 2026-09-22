@@ -205,3 +205,98 @@ def test_case_audit_notes_and_analyst_classification(tmp_path):
     after_duplicate = store.case_report(case["id"])
     duplicate_actions = [item["action"] for item in after_duplicate["history"]]
     assert duplicate_actions == actions
+
+
+def test_explicit_sensor_session_id_prevents_temporal_merging(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def explicit(ts, token):
+        return normalize_event({
+            "timestamp": ts,
+            "honeypot": "ssh-1",
+            "event_type": "connection",
+            "observed": {
+                "source_ip": "203.0.113.100",
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+                "sensor_session_id": token,
+            },
+        })
+
+    first = store.ingest(explicit(start.isoformat(), "conn-a"))
+    second = store.ingest(explicit((start + timedelta(minutes=1)).isoformat(), "conn-b"))
+    later_same = store.ingest(explicit((start + timedelta(hours=4)).isoformat(), "conn-a"))
+
+    assert first["session_id"] != second["session_id"]
+    assert first["session_id"] == later_same["session_id"]
+    assert first["session_id"].startswith("sesx_")
+    bundle = store.get_session(first["session_id"])
+    assert bundle["summary"]["correlation_method"] == "sensor_connection_id"
+    assert bundle["session"]["event_count"] == 2
+
+
+def test_explicit_session_handles_out_of_order_events(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    later = normalize_event({
+        "timestamp": (start + timedelta(minutes=5)).isoformat(),
+        "honeypot": "ftp-1",
+        "event_type": "credential",
+        "observed": {
+            "source_ip": "203.0.113.101",
+            "service": "ftp",
+            "protocol": "tcp",
+            "destination_port": 21,
+            "sensor_session_id": "ftp-conn",
+        },
+    })
+    earlier = normalize_event({
+        "timestamp": start.isoformat(),
+        "honeypot": "ftp-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.101",
+            "service": "ftp",
+            "protocol": "tcp",
+            "destination_port": 21,
+            "sensor_session_id": "ftp-conn",
+        },
+    })
+    a = store.ingest(later)
+    b = store.ingest(earlier)
+    assert a["session_id"] == b["session_id"]
+    bundle = store.get_session(a["session_id"])
+    assert bundle["session"]["started_at"] == start.isoformat()
+    assert bundle["session"]["last_seen"] == (start + timedelta(minutes=5)).isoformat()
+
+
+def test_suricata_flow_id_is_used_as_explicit_correlation(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def flow(ts, flow_start):
+        return normalize_event({
+            "timestamp": ts,
+            "honeypot": "suricata-01",
+            "event_type": "ids.alert",
+            "observed": {
+                "source_ip": "203.0.113.102",
+                "destination_ip": "192.0.2.2",
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+                "flow_id": 123456,
+                "flow_start": flow_start,
+            },
+        })
+
+    first = store.ingest(flow(start.isoformat(), "2026-01-01T00:00:00Z"))
+    same = store.ingest(flow((start + timedelta(hours=2)).isoformat(), "2026-01-01T00:00:00Z"))
+    reused_after_restart = store.ingest(flow((start + timedelta(hours=3)).isoformat(), "2026-01-01T03:00:00Z"))
+
+    assert first["session_id"] == same["session_id"]
+    assert reused_after_restart["session_id"] != first["session_id"]
+    bundle = store.get_session(first["session_id"])
+    assert bundle["summary"]["correlation_method"] == "suricata_flow_id"

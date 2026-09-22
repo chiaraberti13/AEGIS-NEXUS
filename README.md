@@ -29,7 +29,7 @@ The current implementation provides both the secure telemetry/investigation foun
 - MITRE ATT&CK and CVE derived mappings are accepted only when they include both `rationale` and `evidence`.
 - Deterministic static artifact extraction from observed commands/payloads for URLs, domains, IP literals and common hash formats; extracted values remain evidence-backed derived artifacts, not automatic maliciousness claims.
 - Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw storage is explicit opt-in only.
-- Persistent SQLite session correlation by source IP, honeypot, service, protocol, destination port and inactivity window, with compatible schema migration.
+- Persistent SQLite session correlation that prefers explicit decoy connection IDs or Suricata flow identity and falls back to source IP, honeypot, service, protocol, destination port and inactivity window when needed.
 - Investigation APIs and dedicated SOC views for events, IP profiles, sessions, timelines, relationship graphs, Threat Intelligence context and Study Mode.
 - Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail and JSON/CSV case reports.
 - SOC dashboard with global search/filters, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, interactive Attack Map and Live Feed.

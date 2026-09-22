@@ -253,9 +253,9 @@ def explain_session(bundle: dict[str, Any], lang: str = "it") -> dict[str, Any]:
         "next_steps": next_steps,
         "limitations": [
             (
-                "La correlazione temporale raggruppa eventi compatibili ma non dimostra che dietro tutti gli eventi ci sia la stessa persona."
+                "La sessione usa ID espliciti di connessione/flow quando disponibili e fallback temporale negli altri casi; nessun metodo dimostra l'identità della persona dietro gli eventi."
                 if it else
-                "Temporal correlation groups compatible events but does not prove that the same person is behind all events."
+                "The session uses explicit connection/flow IDs when available and temporal fallback otherwise; no method proves the identity of the person behind the events."
             ),
             (
                 "Geolocalizzazione, ASN e reputazione IP descrivono infrastruttura, non identità umana."

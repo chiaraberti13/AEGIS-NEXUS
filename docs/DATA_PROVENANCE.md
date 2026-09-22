@@ -2,7 +2,7 @@
 
 AEGIS-NEXUS keeps four classes separate in every event:
 
-- `observed`: values captured directly by a sensor or honeypot.
+- `observed`: values captured directly by a sensor or honeypot. Sensor metadata such as `sensor_session_id`, Suricata `flow_id` and `flow_start` also remains observed data.
 - `enrichment`: external context; every block requires `source` and `observed_at`.
 - `derived`: deterministic or analyst-produced values derived from evidence. MITRE/CVE entries require both `rationale` and `evidence`.
 - `hypotheses`: explicitly non-factual analytical possibilities.
@@ -19,7 +19,7 @@ The term IOC in the schema is a correlation container, not a verdict. Automatic 
 
 AEGIS-NEXUS mantiene separate quattro classi in ogni evento:
 
-- `observed`: valori catturati direttamente da un sensore o honeypot.
+- `observed`: valori catturati direttamente da un sensore o honeypot. Anche metadata del sensore come `sensor_session_id`, `flow_id` e `flow_start` Suricata restano dati osservati.
 - `enrichment`: contesto esterno; ogni blocco richiede `source` e `observed_at`.
 - `derived`: valori deterministici o prodotti dall'analista a partire da evidenze. Le voci MITRE/CVE richiedono `rationale` ed `evidence`.
 - `hypotheses`: possibilità analitiche esplicitamente non fattuali.

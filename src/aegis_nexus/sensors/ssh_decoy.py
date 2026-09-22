@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import socketserver
 import time
+import uuid
 
 import paramiko
 
@@ -20,9 +21,10 @@ FAKE_FILES = {
 
 
 class AegisSSHServer(paramiko.ServerInterface):
-    def __init__(self, client: SensorClient, source_ip: str):
+    def __init__(self, client: SensorClient, source_ip: str, sensor_session_id: str):
         self.client = client
         self.source_ip = source_ip
+        self.sensor_session_id = sensor_session_id
         self.username = ""
 
     def check_auth_password(self, username: str, password: str):
@@ -34,6 +36,7 @@ class AegisSSHServer(paramiko.ServerInterface):
                 "service": "ssh",
                 "protocol": "tcp",
                 "destination_port": 22,
+                "sensor_session_id": self.sensor_session_id,
                 "credential": {"username": self.username, "password": password[:256]},
             },
             "medium",
@@ -81,12 +84,22 @@ class SSHHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         source_ip = str(self.client_address[0])
+        sensor_session_id = uuid.uuid4().hex
         self.request.settimeout(20)
-        self.sensor.emit("connection", {"source_ip": source_ip, "service": "ssh", "protocol": "tcp", "destination_port": 22})
+        self.sensor.emit(
+            "connection",
+            {
+                "source_ip": source_ip,
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+                "sensor_session_id": sensor_session_id,
+            },
+        )
         transport = paramiko.Transport(self.request)
         transport.local_version = "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10"
         transport.add_server_key(HOST_KEY)
-        server = AegisSSHServer(self.sensor, source_ip)
+        server = AegisSSHServer(self.sensor, source_ip, sensor_session_id)
         try:
             transport.start_server(server=server)
             channel = transport.accept(10)
@@ -112,7 +125,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
                     continue
                 self.sensor.emit(
                     "command",
-                    {"source_ip": source_ip, "service": "ssh", "protocol": "tcp", "destination_port": 22, "command": command},
+                    {"source_ip": source_ip, "service": "ssh", "protocol": "tcp", "destination_port": 22, "sensor_session_id": sensor_session_id, "command": command},
                     "medium",
                 )
                 response = _fake_command(command)
