@@ -1132,6 +1132,16 @@ class Store:
                 "destination_ports": sorted({
                     event["destination_port"] for event in events if event.get("destination_port")
                 }),
+                "sensor_first_timestamp": min((event["timestamp"] for event in events), default=None),
+                "sensor_last_timestamp": max((event["timestamp"] for event in events), default=None),
+                "collector_first_received": min(
+                    (event["collector_received_at"] for event in events if event.get("collector_received_at")),
+                    default=None,
+                ),
+                "collector_last_received": max(
+                    (event["collector_received_at"] for event in events if event.get("collector_received_at")),
+                    default=None,
+                ),
             },
             "credentials": credentials,
             "commands": commands,
@@ -1145,6 +1155,8 @@ class Store:
                 "External enrichment is contextual and may be stale or inaccurate.",
                 "Derived MITRE/CVE entries are included only when rationale and evidence were stored with the event.",
                 "Credential exports never include cleartext passwords, even when raw credential storage was explicitly enabled.",
+                "collector_received_at is collector-controlled receipt metadata; event timestamp remains sensor-reported.",
+                "Rows created before collector receipt tracking was introduced may have collector_received_at backfilled from the event timestamp.",
             ],
         }
 
