@@ -47,6 +47,9 @@ def normalize_eve_event(payload: dict[str, Any], sensor_id: str) -> dict[str, An
     for field in ("flow_id", "community_id", "in_iface"):
         if payload.get(field) not in (None, ""):
             observed[field] = payload[field]
+    flow = payload.get("flow")
+    if isinstance(flow, dict) and flow.get("start") not in (None, ""):
+        observed["flow_start"] = str(flow["start"])[:128]
 
     event_type = f"suricata.{eve_type}"
     severity = "info"
