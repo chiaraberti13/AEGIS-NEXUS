@@ -68,7 +68,6 @@ def test_filters_ti_session_study_and_csv_report(tmp_path):
     app = create_app({"TESTING": True, "DATABASE_PATH": str(tmp_path / "aegis.db"), "INGEST_API_KEY": "secret"})
     client = app.test_client()
     payload = {
-        "timestamp": "2026-09-22T18:10:00Z",
         "honeypot": "ssh-decoy-01",
         "event_type": "credential",
         "severity": "medium",
@@ -116,3 +115,21 @@ def test_filters_ti_session_study_and_csv_report(tmp_path):
     body = csv_report.get_data(as_text=True)
     assert "admin" in body
     assert "example-secret" not in body
+
+
+def test_frontend_shell_exposes_soc_workspace(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE_PATH": str(tmp_path / "aegis.db"), "INGEST_API_KEY": "secret"})
+    client = app.test_client()
+    html = client.get("/").get_data(as_text=True)
+    for marker in (
+        'data-view="dashboard"',
+        'data-view="investigate"',
+        'data-view="relations"',
+        'data-view="study"',
+        'id="map-zoom-in"',
+        'id="event-feed"',
+        'id="ti-list"',
+        'id="relation-graph"',
+        'id="session-study"',
+    ):
+        assert marker in html

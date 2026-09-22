@@ -8,6 +8,10 @@ x-sensor-hardening: &sensor-hardening
   pids_limit: 128
   mem_limit: 192m
   cpus: 0.50
+  ulimits:
+    nofile:
+      soft: 1024
+      hard: 1024
   restart: unless-stopped
 
 x-sensor-env: &sensor-env
@@ -32,13 +36,16 @@ services:
       AEGIS_ANALYTICS_MAX_EVENTS: ${AEGIS_ANALYTICS_MAX_EVENTS:-20000}
       AEGIS_MAX_EVENT_BYTES: ${AEGIS_MAX_EVENT_BYTES:-65536}
       AEGIS_RETENTION_DAYS: ${AEGIS_RETENTION_DAYS:-30}
+      AEGIS_MAX_DB_EVENTS: ${AEGIS_MAX_DB_EVENTS:-500000}
       AEGIS_STORE_CREDENTIAL_SECRETS: ${AEGIS_STORE_CREDENTIAL_SECRETS:-false}
     ports:
       - "127.0.0.1:8600:8600"
     volumes:
       - aegis-data:/data
     networks:
-      - aegis_mgmt
+      - ssh_mgmt
+      - web_mgmt
+      - legacy_mgmt
     read_only: true
     tmpfs:
       - /tmp:size=16m,noexec,nosuid,nodev
@@ -47,6 +54,11 @@ services:
       - no-new-privileges:true
     pids_limit: 256
     mem_limit: 512m
+    cpus: 1.00
+    ulimits:
+      nofile:
+        soft: 2048
+        hard: 2048
     restart: unless-stopped
 
   ssh-decoy:
@@ -60,15 +72,37 @@ services:
     ports:
       - "${AEGIS_PUBLIC_SSH_PORT:-2222}:2222"
     networks:
-      - aegis_dmz
-      - aegis_mgmt
+      - ssh_exposure
+      - ssh_mgmt
     depends_on:
       - collector
 
   web-decoy:
     <<: *sensor-hardening
     build: .
-    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "2", "--timeout", "20", "aegis_nexus.sensors.web_decoy:app"]
+    command:
+      - gunicorn
+      - --bind
+      - 0.0.0.0:8080
+      - --workers
+      - "2"
+      - --threads
+      - "2"
+      - --timeout
+      - "20"
+      - --keep-alive
+      - "2"
+      - --limit-request-line
+      - "2048"
+      - --limit-request-fields
+      - "40"
+      - --limit-request-field_size
+      - "4096"
+      - --max-requests
+      - "1500"
+      - --max-requests-jitter
+      - "150"
+      - aegis_nexus.sensors.web_decoy:app
     environment:
       <<: *sensor-env
       AEGIS_HONEYPOT_ID: web-decoy-01
@@ -76,8 +110,8 @@ services:
     ports:
       - "${AEGIS_PUBLIC_WEB_PORT:-8080}:8080"
     networks:
-      - aegis_dmz
-      - aegis_mgmt
+      - web_exposure
+      - web_mgmt
     depends_on:
       - collector
 
@@ -94,8 +128,8 @@ services:
       - "${AEGIS_PUBLIC_FTP_PORT:-2121}:2121"
       - "${AEGIS_PUBLIC_TELNET_PORT:-2323}:2323"
     networks:
-      - aegis_dmz
-      - aegis_mgmt
+      - legacy_exposure
+      - legacy_mgmt
     depends_on:
       - collector
 
@@ -120,8 +154,14 @@ services:
     mem_limit: 128m
 
 networks:
-  aegis_dmz:
-  aegis_mgmt:
+  ssh_exposure:
+  web_exposure:
+  legacy_exposure:
+  ssh_mgmt:
+    internal: true
+  web_mgmt:
+    internal: true
+  legacy_mgmt:
     internal: true
 
 volumes:
