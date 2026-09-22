@@ -16,4 +16,5 @@ jobs:
       - run: python -m compileall -q src
       - run: node --check src/aegis_nexus/static/app.js
       - run: pytest -q
+      - run: AEGIS_INGEST_API_KEY=ci-secret docker compose config -q
       - run: docker build -t aegis-nexus:ci .

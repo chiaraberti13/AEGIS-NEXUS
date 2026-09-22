@@ -16,7 +16,7 @@ it:{
 "study.eventEyebrow":"EVENT LEARNING","study.eventTitle":"Cosa osservare nell'evento","study.sessionEyebrow":"SESSION LEARNING","study.sessionTitle":"Come analizzare la sessione","study.selectEvent":"Seleziona prima un evento per attivare lo Study Mode.","study.why":"Perché è interessante","study.checklist":"Checklist SOC","study.questions":"Domande di analisi","study.facts":"Fatti osservati","study.focus":"Punti di attenzione","study.next":"Passi successivi","study.limitations":"Limiti",
 "report.json":"Report JSON","report.csv":"Report CSV","report.stats":"Statistiche JSON",
 "map.point":"Evento geolocalizzato","map.zoomIn":"Ingrandisci mappa","map.zoomOut":"Riduci mappa","map.reset":"Ripristina mappa","map.limit":"La posizione deriva da enrichment IP e non rappresenta necessariamente la posizione fisica dell'operatore.",
-"empty.noData":"Nessun dato osservato","empty.noTI":"Nessun enrichment esterno disponibile per questo IP.","empty.noSession":"Nessuna sessione selezionata","common.source":"Fonte","common.observedAt":"Osservato il","common.count":"Conteggio"
+"aria.timeWindow":"Finestra temporale","aria.globalFilters":"Filtri globali","empty.noData":"Nessun dato osservato","empty.noTI":"Nessun enrichment esterno disponibile per questo IP.","empty.noSession":"Nessuna sessione selezionata","common.source":"Fonte","common.observedAt":"Osservato il","common.count":"Conteggio"
 },
 en:{
 "brand.subtitle":"Honeypot · SOC · Threat Research","nav.dashboard":"Dashboard","nav.investigate":"Investigation","nav.relations":"Relations","nav.study":"Study Mode","status.live":"Collector online","header.eyebrow":"AEGIS SOC CONSOLE","header.title":"Threat Observation & Investigation","search.placeholder":"Search IP, event, payload, username, IOC…",
@@ -34,6 +34,6 @@ en:{
 "study.eventEyebrow":"EVENT LEARNING","study.eventTitle":"What to inspect in the event","study.sessionEyebrow":"SESSION LEARNING","study.sessionTitle":"How to analyze the session","study.selectEvent":"Select an event first to activate Study Mode.","study.why":"Why it matters","study.checklist":"SOC checklist","study.questions":"Analysis questions","study.facts":"Observed facts","study.focus":"Focus areas","study.next":"Next steps","study.limitations":"Limitations",
 "report.json":"JSON report","report.csv":"CSV report","report.stats":"Stats JSON",
 "map.point":"Geolocated event","map.zoomIn":"Zoom in","map.zoomOut":"Zoom out","map.reset":"Reset map","map.limit":"The location comes from IP enrichment and does not necessarily represent the physical location of the operator.",
-"empty.noData":"No observed data","empty.noTI":"No external enrichment is available for this IP.","empty.noSession":"No session selected","common.source":"Source","common.observedAt":"Observed at","common.count":"Count"
+"aria.timeWindow":"Time window","aria.globalFilters":"Global filters","empty.noData":"No observed data","empty.noTI":"No external enrichment is available for this IP.","empty.noSession":"No session selected","common.source":"Source","common.observedAt":"Observed at","common.count":"Count"
 }
 };
