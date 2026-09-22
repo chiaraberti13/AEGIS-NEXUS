@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import uuid
 from typing import Any
 
 
@@ -20,6 +23,12 @@ def _severity(alert: dict[str, Any]) -> str:
     if level == 3:
         return "low"
     return "info"
+
+
+def _stable_event_id(payload: dict[str, Any], sensor_id: str) -> str:
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    digest = hashlib.sha256(canonical.encode("utf-8", "replace")).hexdigest()
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"aegis:suricata:{sensor_id}:{digest}"))
 
 
 def normalize_eve_event(payload: dict[str, Any], sensor_id: str) -> dict[str, Any]:
@@ -54,6 +63,7 @@ def normalize_eve_event(payload: dict[str, Any], sensor_id: str) -> dict[str, An
         }
 
     return {
+        "id": _stable_event_id(payload, sensor_id),
         "timestamp": payload.get("timestamp"),
         "honeypot": sensor_id,
         "event_type": event_type,
