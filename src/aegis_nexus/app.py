@@ -22,6 +22,7 @@ from .security import SlidingWindowLimiter, verify_signed_payload
 from .store import Store
 from .study import explain, explain_session
 from .suricata import SuricataValidationError, normalize_eve_event
+from .threat_context import LocalThreatContextEnricher
 
 
 FILTER_KEYS = ("country", "asn", "destination_port", "protocol", "service", "honeypot", "severity", "source_ip", "session_id", "event_type")
@@ -90,6 +91,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         OPERATOR_RATE_LIMIT=int(os.getenv("AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE", "1200")),
         GEOIP_CITY_DB=os.getenv("AEGIS_GEOIP_CITY_DB", ""),
         GEOIP_ASN_DB=os.getenv("AEGIS_GEOIP_ASN_DB", ""),
+        THREAT_CONTEXT_FILE=os.getenv("AEGIS_THREAT_CONTEXT_FILE", ""),
+        THREAT_CONTEXT_MAX_BYTES=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_BYTES", str(20 * 1024 * 1024))),
+        THREAT_CONTEXT_MAX_INDICATORS=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_INDICATORS", "100000")),
+        THREAT_CONTEXT_MAX_MATCHES=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_MATCHES", "32")),
     )
     if test_config:
         app.config.update(test_config)
@@ -109,9 +114,19 @@ def create_app(test_config: dict | None = None) -> Flask:
             str(app.config.get("GEOIP_CITY_DB") or ""),
             str(app.config.get("GEOIP_ASN_DB") or ""),
         )
+    threat_context = app.config.get("THREAT_CONTEXT")
+    if threat_context is None:
+        threat_context = LocalThreatContextEnricher(
+            str(app.config.get("THREAT_CONTEXT_FILE") or ""),
+            max_bytes=int(app.config.get("THREAT_CONTEXT_MAX_BYTES", 20 * 1024 * 1024)),
+            max_indicators=int(app.config.get("THREAT_CONTEXT_MAX_INDICATORS", 100000)),
+            max_matches=int(app.config.get("THREAT_CONTEXT_MAX_MATCHES", 32)),
+        )
+
     app.extensions["aegis_store"] = store
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
+    app.extensions["aegis_threat_context"] = threat_context
     close_enricher = getattr(enricher, "close", None)
     if callable(close_enricher):
         atexit.register(close_enricher)
@@ -232,6 +247,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = normalize_event(payload)
             event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
+            event = threat_context.enrich(event)
             stored = store.ingest(event)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
@@ -260,6 +276,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = normalize_event(normalize_eve_event(request.get_json(), sensor_id))
             event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
+            event = threat_context.enrich(event)
             stored = store.ingest(event)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
@@ -337,6 +354,15 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/v1/enrichment/status")
     def enrichment_status():
         status = getattr(enricher, "status", None)
+        return jsonify(status() if callable(status) else {
+            "mode": "custom",
+            "configured": True,
+            "network_requests": None,
+        })
+
+    @app.get("/api/v1/threat-context/status")
+    def threat_context_status():
+        status = getattr(threat_context, "status", None)
         return jsonify(status() if callable(status) else {
             "mode": "custom",
             "configured": True,
