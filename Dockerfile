@@ -5,6 +5,7 @@ RUN groupadd -r aegis && useradd -r -g aegis -d /nonexistent -s /usr/sbin/nologi
 WORKDIR /app
 COPY pyproject.toml ./
 COPY src ./src
+COPY scripts ./scripts
 RUN pip install --no-cache-dir .
 USER aegis
 EXPOSE 8600
