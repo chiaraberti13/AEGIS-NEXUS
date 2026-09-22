@@ -554,6 +554,12 @@ class Store:
         with self.connect() as conn:
             if not conn.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
                 return None
+            evidence_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM case_evidence WHERE case_id=?",
+                (case_id,),
+            ).fetchone()["count"]
+            if int(evidence_count) >= 1000:
+                raise ValueError("case_evidence_limit")
             if evidence_type == "event":
                 available = conn.execute("SELECT 1 FROM events WHERE id=?", (evidence_id,)).fetchone()
             else:
@@ -603,6 +609,12 @@ class Store:
         with self.connect() as conn:
             if not conn.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
                 return None
+            note_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM case_notes WHERE case_id=?",
+                (case_id,),
+            ).fetchone()["count"]
+            if int(note_count) >= 500:
+                raise ValueError("case_note_limit")
             now = self._case_now()
             cur = conn.execute(
                 "INSERT INTO case_notes(case_id,body,created_at) VALUES(?,?,?)",
