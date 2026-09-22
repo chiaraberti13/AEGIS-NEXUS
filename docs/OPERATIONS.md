@@ -39,6 +39,16 @@ Application-level request limits protect sensor ingestion and operator APIs, but
 
 Dashboard analysis is explicitly capped by `AEGIS_ANALYTICS_MAX_EVENTS`. If the cap is reached the UI shows a warning; narrow the time window or filters before treating the displayed totals as complete.
 
+### Local threat context
+
+The optional threat-context adapter reads a local JSON feed and performs exact matches only. Keep the feed outside the repository and mount it read-only:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.threat-context.yml up -d --build
+```
+
+Monitor `GET /api/v1/threat-context/status` as an operator. A malformed, missing or oversized feed disables only threat-context enrichment; telemetry ingestion continues. Treat feed updates as controlled configuration changes and record provider/licence/update provenance.
+
 ### Backups
 
 Use SQLite's online backup API instead of copying a live WAL database directly:
@@ -89,6 +99,16 @@ Non usare accesso operatore remoto senza TLS. L'esempio `deploy/nginx.conf.examp
 I limiti applicativi proteggono ingestione e API operatore, ma sono per-processo. Per un deployment esposto a Internet mantieni anche rate limiting indipendente su firewall/reverse proxy.
 
 L'analisi della dashboard è limitata esplicitamente da `AEGIS_ANALYTICS_MAX_EVENTS`. Quando il limite viene raggiunto la UI mostra un avviso: restringi intervallo temporale o filtri prima di considerare completi i totali visualizzati.
+
+### Threat context locale
+
+L'adapter opzionale legge un feed JSON locale e usa esclusivamente match esatti. Mantieni il feed fuori dal repository e montalo read-only:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.threat-context.yml up -d --build
+```
+
+Controlla `GET /api/v1/threat-context/status` come operatore. Un feed mancante, malformato o troppo grande disabilita soltanto il threat-context enrichment; l'ingestione continua. Tratta gli aggiornamenti del feed come modifiche di configurazione controllate e documenta provider, licenza e frequenza di aggiornamento.
 
 ### Backup
 
