@@ -1397,6 +1397,18 @@ class Store:
             for family in ("mitre", "cve"):
                 for item in event["derived"].get(family, []) or []:
                     mappings.append({"event_id": event["id"], "family": family, "mapping": item})
+        limitations = [
+            "IP, ASN and geolocation do not establish human identity or attribution.",
+            "External enrichment is contextual and may be stale or inaccurate.",
+            "Derived MITRE/CVE entries are included only when rationale and evidence were stored with the event.",
+            "Credential exports never include cleartext passwords, even when raw credential storage was explicitly enabled.",
+            "collector_received_at is collector-controlled receipt metadata; event timestamp remains sensor-reported.",
+            "Rows created before collector receipt tracking was introduced may have collector_received_at backfilled from the event timestamp.",
+        ]
+        if bundle.get("analysis", {}).get("truncated"):
+            limitations.append(
+                "Session analysis was truncated to the configured latest-event limit; this report is not a complete retained-session timeline."
+            )
         return {
             "report_type": "investigation_session",
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1430,14 +1442,7 @@ class Store:
             "derived_iocs": iocs,
             "evidence_backed_mappings": mappings,
             "events": events,
-            "limitations": [
-                "IP, ASN and geolocation do not establish human identity or attribution.",
-                "External enrichment is contextual and may be stale or inaccurate.",
-                "Derived MITRE/CVE entries are included only when rationale and evidence were stored with the event.",
-                "Credential exports never include cleartext passwords, even when raw credential storage was explicitly enabled.",
-                "collector_received_at is collector-controlled receipt metadata; event timestamp remains sensor-reported.",
-                "Rows created before collector receipt tracking was introduced may have collector_received_at backfilled from the event timestamp.",
-            ],
+            "limitations": limitations,
         }
 
     def relations(self, session_id: str) -> dict[str, Any]:
