@@ -51,12 +51,16 @@ def create_app(test_config: dict | None = None) -> Flask:
         INGEST_API_KEY=os.getenv("AEGIS_INGEST_API_KEY", ""),
         SENSOR_KEYS=_load_sensor_keys(os.getenv("AEGIS_SENSOR_KEYS", "")),
         RETENTION_DAYS=int(os.getenv("AEGIS_RETENTION_DAYS", "30")),
+        MAX_DB_EVENTS=int(os.getenv("AEGIS_MAX_DB_EVENTS", "500000")),
     )
     if test_config:
         app.config.update(test_config)
-    store = Store(app.config["DATABASE_PATH"])
+    store = Store(
+        app.config["DATABASE_PATH"],
+        retention_days=int(app.config.get("RETENTION_DAYS", 30)),
+        max_events=int(app.config.get("MAX_DB_EVENTS", 500000)),
+    )
     app.extensions["aegis_store"] = store
-    store.prune(int(app.config.get("RETENTION_DAYS", 30)))
 
     @app.after_request
     def security_headers(response):
@@ -140,6 +144,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                 limit=request.args.get("limit", 100, type=int),
                 q=request.args.get("q", type=str),
                 filters=_filters_from_request(),
+                hours=request.args.get("hours", type=int),
             )
         })
 
