@@ -35,7 +35,9 @@ The current implementation provides both the secure telemetry/investigation foun
 - Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail, bounded lifecycle/closed-case retention and JSON/CSV/Markdown case reports.
 - SOC dashboard with global search/filters, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, interactive Attack Map and Live Feed.
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
+- Collector-side `received_at` provenance separates receipt time from sensor event time; `AEGIS_RETENTION_DAYS` and capacity cleanup use receipt time, while investigation timelines keep the original event `timestamp`.
 - Continuous time-based retention with `AEGIS_RETENTION_DAYS` plus the storage ceiling `AEGIS_MAX_DB_EVENTS`; JSON/CSV/Markdown investigation exports never include cleartext passwords.
+- Readiness checks validate SQLite access and a configurable free-space floor; authenticated operations status reports telemetry receipt without claiming sensor online/offline state.
 - Hardened Docker runtime: non-root user, dropped capabilities, read-only root filesystem, `no-new-privileges`, bounded concurrent TCP connections, per-sensor management networks and localhost-only operator port.
 - Sensor containers with CPU/memory/PID/file-descriptor limits and separate exposure/management networks so SSH, web and legacy sensors do not share a lateral management segment.
 - Native evidence-first Suricata EVE JSON ingestion for IDS telemetry; alert signatures are preserved as observed IDS output without inventing MITRE or CVE mappings.
