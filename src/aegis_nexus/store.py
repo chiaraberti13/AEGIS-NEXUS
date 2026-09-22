@@ -130,9 +130,20 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_case_history_case ON case_history(case_id, timestamp);
             """)
             event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(events)")}
+            if "received_at" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN received_at TEXT")
+                conn.execute("UPDATE events SET received_at=timestamp WHERE received_at IS NULL")
+                event_columns.add("received_at")
             if "collector_received_at" not in event_columns:
                 conn.execute("ALTER TABLE events ADD COLUMN collector_received_at TEXT")
-                conn.execute("UPDATE events SET collector_received_at=timestamp WHERE collector_received_at IS NULL")
+                conn.execute(
+                    "UPDATE events SET collector_received_at=COALESCE(received_at, timestamp) "
+                    "WHERE collector_received_at IS NULL"
+                )
+            conn.execute(
+                "UPDATE events SET received_at=collector_received_at "
+                "WHERE received_at IS NULL AND collector_received_at IS NOT NULL"
+            )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_events_received "
                 "ON events(collector_received_at ASC, id ASC)"
@@ -227,15 +238,14 @@ class Store:
         observed = event["observed"]
         received_at = collector_received_at or datetime.now(timezone.utc).isoformat()
         country, asn, latitude, longitude = self._geo(event["enrichment"])
-        received_at = datetime.now(timezone.utc).isoformat()
         with self.connect() as conn:
             session_id = self._select_or_create_session(conn, event)
             conn.execute("""
                 INSERT INTO events(
-                    id,timestamp,honeypot,event_type,severity,source_ip,session_id,protocol,service,
+                    id,timestamp,received_at,honeypot,event_type,severity,source_ip,session_id,protocol,service,
                     destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version,
                     collector_received_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 event["id"], event["timestamp"], received_at, event["honeypot"], event["event_type"], event["severity"],
                 observed.get("source_ip"), session_id, observed.get("protocol"), observed.get("service"),
@@ -247,7 +257,12 @@ class Store:
             ))
         self._ingest_since_maintenance += 1
         self.maintain()
-        return {**event, "session_id": session_id, "collector_received_at": received_at}
+        return {
+            **event,
+            "session_id": session_id,
+            "received_at": received_at,
+            "collector_received_at": received_at,
+        }
 
     def maintain(self, force: bool = False) -> dict[str, int]:
         if not force and self._ingest_since_maintenance < 100:
@@ -1044,10 +1059,10 @@ class Store:
                 """
                 SELECT
                     honeypot,
-                    MAX(received_at) AS last_received_at,
+                    MAX(collector_received_at) AS last_received_at,
                     MAX(timestamp) AS latest_event_timestamp,
                     COUNT(*) AS total_events,
-                    SUM(CASE WHEN received_at >= ? THEN 1 ELSE 0 END) AS recent_events
+                    SUM(CASE WHEN collector_received_at >= ? THEN 1 ELSE 0 END) AS recent_events
                 FROM events
                 GROUP BY honeypot
                 ORDER BY honeypot COLLATE NOCASE
