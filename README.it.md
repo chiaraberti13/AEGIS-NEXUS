@@ -10,7 +10,7 @@
 
 > Telemetria honeypot, investigazione SOC, threat research e studio della cybersecurity in una piattaforma evidence-first.
 
-<p align="center"><a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="LICENSE">Licenza MIT</a></p>
+<p align="center"><a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="docs/INVESTIGATION.md">Flusso investigativo</a> · <a href="LICENSE">Licenza MIT</a></p>
 
 ---
 
@@ -28,12 +28,12 @@ L'implementazione attuale fornisce sia la base sicura per telemetria e investiga
 - Mapping MITRE ATT&CK e CVE accettati solo con `rationale` ed `evidence`.
 - Password redatte per default, con fingerprint SHA-256 e lunghezza; memorizzazione raw solo tramite opt-in esplicito.
 - Correlazione persistente delle sessioni su SQLite per IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività, con migrazione compatibile dello schema.
-- API di investigazione per eventi, IP, sessioni, relazioni, Study Mode e report JSON evidence-preserving.
-- Dashboard SOC con timeline, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, IDS, MITRE, heatmap temporale, Attack Map e Live Feed.
+- API e viste SOC dedicate per eventi, profili IP, sessioni, timeline, relazioni, contesto Threat Intelligence e Study Mode.
+- Dashboard SOC con ricerca/filtri globali, timeline, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, IDS, MITRE, heatmap temporale, Attack Map interattiva e Live Feed.
 - Interfaccia IT/EN tramite dizionario i18n centrale; la telemetria viene sempre resa come testo e mai come HTML controllato dall'attaccante.
-- Retention configurabile con `AEGIS_RETENTION_DAYS`.
-- Runtime Docker hardenizzato: utente non-root, capability rimosse, root filesystem read-only, `no-new-privileges`, rete management privata e porta operatore esposta solo su localhost.
-- Container sensore con filesystem read-only, capability rimosse, limiti di risorse e percorso DMZ/telemetria separato.
+- Retention temporale continua con `AEGIS_RETENTION_DAYS` più limite di capacità `AEGIS_MAX_DB_EVENTS`; gli export investigativi JSON/CSV non includono mai password in chiaro.
+- Runtime Docker hardenizzato: utente non-root, capability rimosse, root filesystem read-only, `no-new-privileges`, connessioni TCP concorrenti limitate, reti management separate per sensore e porta operatore solo su localhost.
+- Container sensore con limiti CPU/memoria/PID/file descriptor e reti di esposizione/management separate, evitando un segmento management laterale condiviso tra SSH, web e legacy.
 - Ingestione nativa evidence-first di eventi Suricata EVE JSON per la telemetria IDS; le signature vengono conservate come output IDS osservato senza inventare mapping MITRE o CVE.
 - CI per test Python e build Docker.
 
@@ -77,9 +77,9 @@ Invia un singolo evento Suricata EVE JSON a `POST /api/v1/integrations/suricata/
 
 ## Flusso investigativo
 
-`Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → enrichment → MITRE/IOC → relazioni → report`
+`Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relazioni → report → Study Mode`
 
-Il grafo usa esclusivamente i dati realmente presenti nella sessione selezionata. Study Mode spiega perché un evento è interessante e cosa dovrebbe verificare un SOC Analyst, mantenendo visibili i limiti dell'analisi.
+Il grafo usa esclusivamente i dati realmente presenti nella sessione selezionata. La Threat Intelligence visualizza soltanto enrichment esterni memorizzati, mantenendo fonte e timestamp. Study Mode lavora sia sull'evento sia sull'intera sessione correlata, rendendo visibili i limiti dell'analisi. Consulta il [flusso investigativo](docs/INVESTIGATION.md).
 
 ## Avvio rapido
 
@@ -114,7 +114,9 @@ src/aegis_nexus/
 └── static/         i18n, grafici, mappa, live feed e investigazione
 docs/
 ├── DATA_PROVENANCE.md
+├── INVESTIGATION.md
 ├── PRIVACY.md
+├── SENSOR_ISOLATION.md
 └── THREAT_MODEL.md
 tests/
 ```
@@ -127,7 +129,7 @@ Consulta [Privacy e retention](docs/PRIVACY.md), [Threat model](docs/THREAT_MODE
 
 ## Roadmap
 
-I prossimi cicli implementativi sono dedicati a identità più forte per ogni sensore, adapter di enrichment controllati, ingestione nativa Suricata, case management, formati di export e ulteriori workflow SOC/Study. Le funzionalità vengono documentate quando sono realmente presenti nel codice.
+I prossimi cicli implementativi sono dedicati ad adapter di enrichment controllati, case management, export investigativi più ricchi e ulteriori integrazioni sensore/IDS. Le funzionalità vengono documentate quando sono realmente presenti nel codice.
 
 ## Licenza e uso responsabile
 
