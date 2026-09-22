@@ -52,13 +52,13 @@ class FTPHandler(BaseHandler):
                 username = argument[:128]
                 self.wfile.write(b"331 Password required\r\n")
             elif command == "PASS":
-                self.emit("credential", {"destination_port": 21, "credential": {"username": username, "password": argument[:256]}}, "medium")
+                self.emit("credential", {"destination_port": self.destination_port, "credential": {"username": username, "password": argument[:256]}}, "medium")
                 self.wfile.write(b"530 Login incorrect\r\n")
             elif command == "QUIT":
                 self.wfile.write(b"221 Goodbye\r\n")
                 break
             else:
-                self.emit("legacy.command", {"destination_port": 21, "command": line[:256]}, "low")
+                self.emit("legacy.command", {"destination_port": self.destination_port, "command": line[:256]}, "low")
                 self.wfile.write(b"500 Command not understood\r\n")
 
 
@@ -71,7 +71,7 @@ class TelnetHandler(BaseHandler):
         username = _readline(self.rfile)[:128]
         self.wfile.write(b"Password: ")
         password = _readline(self.rfile)[:256]
-        self.emit("credential", {"destination_port": 23, "credential": {"username": username, "password": password}}, "medium")
+        self.emit("credential", {"destination_port": self.destination_port, "credential": {"username": username, "password": password}}, "medium")
         self.wfile.write(b"Login incorrect\r\n")
 
 
