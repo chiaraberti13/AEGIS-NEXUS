@@ -4,7 +4,7 @@
 
 AEGIS-NEXUS is evidence-first. The operator workflow is:
 
-`Dashboard → event → IP → session → timeline → credentials/commands/payloads → external enrichment → MITRE/CVE/IOC → relationships → report → Study Mode`
+`Dashboard → event → IP → session → timeline → credentials/commands/payloads → external enrichment → MITRE/CVE/IOC → relationships → case → report → Study Mode`
 
 ### Dashboard
 
@@ -35,6 +35,10 @@ AEGIS does not invent reputation, malware family, actor or campaign information.
 
 The graph can contain event, session, IP, ASN, country, service, protocol, port, honeypot, credential, command, payload, IDS, IOC, MITRE and CVE nodes. Nodes exist only when the underlying data exists. MITRE and CVE nodes therefore appear only when the stored record contains rationale and evidence.
 
+### Case management
+
+Cases let an operator preserve the investigation context without duplicating hostile telemetry. Status, severity, summary, tags and notes are analyst-owned metadata. Event/session evidence is linked by identifier and can later become unavailable when normal telemetry retention removes its source. This is shown explicitly rather than interpreted as absence of activity. See [Case management](CASE_MANAGEMENT.md).
+
 ### Reporting
 
 JSON reports preserve the complete evidence model. CSV reports provide a flat event timeline for analysis/export and deliberately omit cleartext passwords. Dashboard statistics can also be exported as JSON.
@@ -49,7 +53,7 @@ Event Study Mode explains why the selected evidence matters, what a SOC analyst 
 
 AEGIS-NEXUS segue un approccio evidence-first. Il flusso operativo è:
 
-`Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → enrichment esterno → MITRE/CVE/IOC → relazioni → report → Study Mode`
+`Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → enrichment esterno → MITRE/CVE/IOC → relazioni → caso → report → Study Mode`
 
 ### Dashboard
 
@@ -79,6 +83,10 @@ AEGIS non inventa reputazione, malware family, actor o campagne. Il pannello Thr
 ### Grafo delle relazioni
 
 Il grafo può contenere nodi evento, sessione, IP, ASN, paese, servizio, protocollo, porta, honeypot, credential, comando, payload, IDS, IOC, MITRE e CVE. I nodi esistono solo se esistono i dati corrispondenti. MITRE e CVE compaiono quindi soltanto quando il record contiene razionale ed evidenza.
+
+### Gestione casi
+
+I casi permettono di conservare il contesto investigativo senza duplicare la telemetria ostile. Stato, severità, sintesi, tag e note sono metadati dell'analista. Eventi e sessioni vengono collegati per identificativo e possono diventare non disponibili quando la normale retention elimina la sorgente. Questa condizione viene mostrata esplicitamente e non interpretata come assenza di attività. Consulta [Gestione casi](CASE_MANAGEMENT.md).
 
 ### Reporting
 

@@ -196,3 +196,35 @@ def test_case_api_is_operator_protected_and_exports_reference_only(tmp_path):
     assert csv_report.status_code == 200
     assert event_id in csv_report.get_data(as_text=True)
     assert "do-not-export" not in csv_report.get_data(as_text=True)
+
+
+def test_csv_exports_neutralize_formula_injection(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "secret",
+    })
+    client = app.test_client()
+    created = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "secret"},
+        json={
+            "honeypot": "web-1",
+            "event_type": "web.payload",
+            "observed": {
+                "source_ip": "203.0.113.93",
+                "service": "http",
+                "protocol": "tcp",
+                "destination_port": 80,
+                "payload": "=HYPERLINK(\"https://example.invalid\",\"x\")",
+            },
+        },
+    )
+    assert created.status_code == 201
+    session_id = created.get_json()["session_id"]
+
+    csv_report = client.get(f"/api/v1/reports/session/{session_id}.csv")
+    assert csv_report.status_code == 200
+    body = csv_report.get_data(as_text=True)
+    assert "'=HYPERLINK" in body
+    assert ",=HYPERLINK" not in body
