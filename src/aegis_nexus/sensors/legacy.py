@@ -30,6 +30,10 @@ class BaseHandler(socketserver.StreamRequestHandler):
     def source_ip(self) -> str:
         return str(self.client_address[0])
 
+    @property
+    def destination_port(self) -> int:
+        return int(self.server.server_address[1])
+
     def emit(self, event_type: str, observed: dict, severity: str = "info"):
         base = {"source_ip": self.source_ip, "service": self.service, "protocol": "tcp", **observed}
         self.sensor.emit(event_type, base, severity)
@@ -39,7 +43,7 @@ class FTPHandler(BaseHandler):
     service = "ftp"
 
     def handle(self):
-        self.emit("connection", {"destination_port": 21})
+        self.emit("connection", {"destination_port": self.destination_port})
         self.wfile.write(b"220 Meridian FTP Service\r\n")
         username = ""
         for _ in range(6):
@@ -66,7 +70,7 @@ class TelnetHandler(BaseHandler):
     service = "telnet"
 
     def handle(self):
-        self.emit("connection", {"destination_port": 23})
+        self.emit("connection", {"destination_port": self.destination_port})
         self.wfile.write(b"Meridian Gateway\r\nlogin: ")
         username = _readline(self.rfile)[:128]
         self.wfile.write(b"Password: ")
