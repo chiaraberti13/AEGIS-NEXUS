@@ -172,6 +172,32 @@
     renderEnrichmentStatus();
   }
 
+  function renderThreatContextStatus() {
+    const node = $("threat-context-status");
+    if (!node) return;
+    const status = state.threatContextStatus;
+    let key = "status.threatContextDisabled";
+    let level = "disabled";
+    if (status?.configured) {
+      if (status.ready) {
+        key = "status.threatContextReady";
+        level = "ready";
+      } else {
+        key = "status.threatContextError";
+        level = "partial";
+      }
+    }
+    node.className = "sidebar-substatus " + level;
+    node.textContent = t(key);
+  }
+
+  async function loadThreatContextStatus() {
+    const data = await safeGet("/api/v1/threat-context/status");
+    if (!data) return;
+    state.threatContextStatus = data;
+    renderThreatContextStatus();
+  }
+
   function showView(name) {
     document.querySelectorAll("[data-view]").forEach((node) => {
       node.classList.toggle("active", node.dataset.view === name);

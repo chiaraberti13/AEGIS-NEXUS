@@ -17,6 +17,7 @@ Default controls:
 - SOC cases store references to source event/session IDs rather than copies of payloads or credentials, so creating a case does not silently extend telemetry retention;
 - case notes and analyst metadata have a lifecycle separate from raw telemetry: define an explicit policy for them and avoid putting secrets or unnecessary personal data in notes;
 - the local GeoIP/ASN adapter performs no network requests and does not send captured IPs to a third-party API;
+- the optional local threat-context feed also performs no network requests; exact-match context is attached locally and the feed should be protected and retained according to its provider/licence requirements;
 - restrict dashboard/API access and never publish raw credentials or personal data in reports.
 
 IP geolocation, ASN and reputation information are external context. They can identify VPNs, proxies, NAT gateways, hosting providers or compromised systems rather than the human operator. AEGIS-NEXUS does not infer human identity, threat actor attribution or campaign attribution from these fields.
@@ -42,6 +43,7 @@ Controlli predefiniti:
 - i casi SOC conservano riferimenti agli ID di eventi/sessioni invece di copie di payload o credenziali, quindi creare un caso non estende implicitamente la retention della telemetria;
 - note e metadata dei casi hanno un ciclo di vita separato dalla telemetria raw: definisci una policy esplicita e non inserire nelle note segreti o dati personali non necessari;
 - l'adapter locale GeoIP/ASN non effettua richieste di rete e non invia gli IP raccolti ad API di terze parti;
+- il feed locale opzionale di threat context non effettua richieste di rete; il contesto viene associato localmente tramite match esatto e il feed va protetto/conservato secondo requisiti del provider e della relativa licenza;
 - limita l'accesso a dashboard/API e non pubblicare credenziali raw o dati personali nei report.
 
 Geolocalizzazione IP, ASN e reputazione sono contesto esterno. Possono indicare VPN, proxy, NAT, provider hosting o sistemi compromessi invece della persona che ha generato il traffico. AEGIS-NEXUS non deduce identità umana, threat actor o campagne da questi campi.

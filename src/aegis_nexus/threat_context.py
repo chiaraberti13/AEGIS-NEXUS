@@ -1,0 +1,253 @@
+from __future__ import annotations
+
+import ipaddress
+import json
+import re
+from copy import deepcopy
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+
+SUPPORTED_TYPES = {"ip", "domain", "url", "md5", "sha1", "sha256"}
+DOMAIN_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$")
+HASH_LENGTHS = {"md5": 32, "sha1": 40, "sha256": 64}
+HEX_RE = re.compile(r"^[A-Fa-f0-9]+$")
+CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+class ThreatContextError(ValueError):
+    pass
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _clean_text(value: Any, limit: int) -> str | None:
+    if value in (None, ""):
+        return None
+    return CONTROL_RE.sub("", str(value)).strip()[:limit]
+
+
+def _normalize_domain(value: Any) -> str | None:
+    text = _clean_text(value, 253)
+    if not text:
+        return None
+    text = text.rstrip(".").lower()
+    try:
+        text = text.encode("idna").decode("ascii")
+    except UnicodeError:
+        return None
+    return text if DOMAIN_RE.fullmatch(text) else None
+
+
+def _normalize_url(value: Any) -> str | None:
+    text = _clean_text(value, 2048)
+    if not text:
+        return None
+    try:
+        parsed = urlsplit(text)
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        return None
+    if parsed.username is not None or parsed.password is not None:
+        return None
+    host = parsed.hostname.rstrip(".")
+    normalized_ip = None
+    try:
+        normalized_ip = str(ipaddress.ip_address(host))
+    except ValueError:
+        host = _normalize_domain(host)
+        if not host:
+            return None
+    if normalized_ip:
+        host = f"[{normalized_ip}]" if ":" in normalized_ip else normalized_ip
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    netloc = host + (f":{port}" if port is not None else "")
+    return urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "", parsed.query or "", parsed.fragment or ""))
+
+
+def normalize_indicator(kind: Any, value: Any) -> tuple[str, str] | None:
+    kind_text = _clean_text(kind, 16)
+    if not kind_text:
+        return None
+    kind_text = kind_text.lower()
+    if kind_text not in SUPPORTED_TYPES:
+        return None
+    if kind_text == "ip":
+        try:
+            return kind_text, str(ipaddress.ip_address(str(value)))
+        except ValueError:
+            return None
+    if kind_text == "domain":
+        normalized = _normalize_domain(value)
+        return (kind_text, normalized) if normalized else None
+    if kind_text == "url":
+        normalized = _normalize_url(value)
+        return (kind_text, normalized) if normalized else None
+    text = _clean_text(value, 128)
+    if not text:
+        return None
+    text = text.lower()
+    if len(text) != HASH_LENGTHS[kind_text] or not HEX_RE.fullmatch(text):
+        return None
+    return kind_text, text
+
+
+def _bounded_metadata(item: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    labels = item.get("labels")
+    if isinstance(labels, list):
+        clean_labels = []
+        for label in labels[:16]:
+            text = _clean_text(label, 128)
+            if text:
+                clean_labels.append(text)
+        if clean_labels:
+            result["labels"] = clean_labels
+    confidence = item.get("confidence")
+    if confidence is not None:
+        try:
+            numeric = int(confidence)
+        except (TypeError, ValueError):
+            numeric = None
+        if numeric is not None and 0 <= numeric <= 100:
+            result["confidence"] = numeric
+    for key, limit in (("description", 512), ("reference", 1024), ("first_seen", 128), ("last_seen", 128)):
+        text = _clean_text(item.get(key), limit)
+        if text:
+            result[key] = text
+    return result
+
+
+class LocalThreatContextEnricher:
+    """Offline exact-match threat context from an operator-supplied JSON feed."""
+
+    def __init__(
+        self,
+        feed_path: str | None = None,
+        *,
+        max_bytes: int = 20 * 1024 * 1024,
+        max_indicators: int = 100_000,
+        max_matches: int = 32,
+    ):
+        self.path = Path(feed_path).expanduser() if feed_path else None
+        self.max_bytes = max(1024, min(int(max_bytes), 100 * 1024 * 1024))
+        self.max_indicators = max(1, min(int(max_indicators), 500_000))
+        self.max_matches = max(1, min(int(max_matches), 128))
+        self.source: str | None = None
+        self.generated_at: str | None = None
+        self.loaded_at: str | None = None
+        self.error: str | None = None
+        self._index: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        if self.path:
+            self._load()
+
+    def _load(self) -> None:
+        try:
+            with self.path.open("rb") as handle:
+                raw_bytes = handle.read(self.max_bytes + 1)
+            if len(raw_bytes) > self.max_bytes:
+                raise ThreatContextError("feed_too_large")
+            raw = raw_bytes.decode("utf-8")
+            payload = json.loads(raw)
+            if not isinstance(payload, dict):
+                raise ThreatContextError("feed_root_must_be_object")
+            indicators = payload.get("indicators")
+            if not isinstance(indicators, list):
+                raise ThreatContextError("indicators_must_be_list")
+            if len(indicators) > self.max_indicators:
+                raise ThreatContextError("too_many_indicators")
+            source = _clean_text(payload.get("source"), 256)
+            self.source = source or f"local-threat-feed:{self.path.name}"
+            self.generated_at = _clean_text(payload.get("generated_at"), 128)
+            index: dict[tuple[str, str], list[dict[str, Any]]] = {}
+            for raw_item in indicators:
+                if not isinstance(raw_item, dict):
+                    continue
+                normalized = normalize_indicator(raw_item.get("type"), raw_item.get("value"))
+                if not normalized:
+                    continue
+                kind, value = normalized
+                entry = {"type": kind, "value": value, **_bounded_metadata(raw_item)}
+                bucket = index.setdefault((kind, value), [])
+                if len(bucket) < 8 and entry not in bucket:
+                    bucket.append(entry)
+            self._index = index
+            self.loaded_at = _now()
+            self.error = None
+        except Exception as exc:
+            self._index = {}
+            self.loaded_at = None
+            self.error = str(exc)[:160] if isinstance(exc, ThreatContextError) else type(exc).__name__
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "mode": "local_offline_exact_match",
+            "network_requests": False,
+            "configured": self.path is not None,
+            "ready": self.path is not None and self.error is None and self.loaded_at is not None,
+            "feed": self.path.name if self.path else None,
+            "source": self.source,
+            "generated_at": self.generated_at,
+            "loaded_at": self.loaded_at,
+            "indicator_keys": len(self._index),
+            "error": self.error,
+        }
+
+    def _candidates(self, event: dict[str, Any]) -> list[tuple[str, str, list[str]]]:
+        candidates: list[tuple[str, str, list[str]]] = []
+        observed = event.get("observed") or {}
+        source_ip = observed.get("source_ip")
+        normalized_source = normalize_indicator("ip", source_ip) if source_ip else None
+        if normalized_source:
+            candidates.append((normalized_source[0], normalized_source[1], ["observed.source_ip"]))
+        derived = event.get("derived") or {}
+        for item in (derived.get("ioc") or [])[:128]:
+            if not isinstance(item, dict):
+                continue
+            normalized = normalize_indicator(item.get("type"), item.get("value"))
+            if not normalized:
+                continue
+            evidence = item.get("evidence")
+            paths = [str(value)[:256] for value in evidence[:16]] if isinstance(evidence, list) else ["derived.ioc"]
+            candidates.append((normalized[0], normalized[1], paths or ["derived.ioc"]))
+        return candidates
+
+    def enrich(self, event: dict[str, Any]) -> dict[str, Any]:
+        if not self._index:
+            return event
+        enrichment = event.get("enrichment") or {}
+        if "threat_context" in enrichment:
+            return event
+        matches: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for kind, value, evidence in self._candidates(event):
+            for feed_item in self._index.get((kind, value), []):
+                fingerprint = (kind, value, json.dumps(feed_item, ensure_ascii=False, sort_keys=True))
+                if fingerprint in seen:
+                    continue
+                seen.add(fingerprint)
+                matches.append({**feed_item, "evidence": evidence})
+                if len(matches) >= self.max_matches:
+                    break
+            if len(matches) >= self.max_matches:
+                break
+        if not matches:
+            return event
+        result = deepcopy(event)
+        result.setdefault("enrichment", {})["threat_context"] = {
+            "source": self.source or (f"local-threat-feed:{self.path.name}" if self.path else "local-threat-feed"),
+            "observed_at": _now(),
+            "data": {
+                "match_policy": "exact",
+                "feed_generated_at": self.generated_at,
+                "matches": matches,
+            },
+        }
+        return result

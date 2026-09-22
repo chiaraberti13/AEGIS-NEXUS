@@ -31,6 +31,8 @@ Session correlation prefers an explicit per-connection sensor ID when a decoy pr
 
 AEGIS does not invent reputation, malware family, actor or campaign information. The Threat Intelligence panel displays only enrichment present in the dataset and always keeps provider and timestamp visible. Empty enrichment produces an empty panel rather than an inferred classification.
 
+Local threat context exact matches, when configured, appear as external enrichment. They mean that an observed value is present in the operator-supplied feed; they do not change event severity and are not automatic evidence of compromise, attribution, MITRE technique or CVE.
+
 ### Observed artifact extraction
 
 Commands and payloads are scanned statically for exact URLs, domains, IP literals and MD5/SHA-1/SHA-256-shaped values. Extracted items are deterministic derived data with an evidence path. They are useful for cross-session correlation and search, but their presence alone is not a maliciousness or compromise verdict.
@@ -89,6 +91,8 @@ La correlazione preferisce un ID esplicito per connessione quando fornito dal de
 ### Threat Intelligence
 
 AEGIS non inventa reputazione, malware family, actor o campagne. Il pannello Threat Intelligence visualizza soltanto enrichment presenti nel dataset e mantiene sempre visibili provider e timestamp. In assenza di enrichment il pannello resta vuoto invece di produrre classificazioni inferite.
+
+I match esatti del threat context locale, quando configurati, compaiono come enrichment esterno. Indicano che un valore osservato è presente nel feed fornito dall'operatore; non cambiano la severità e non costituiscono automaticamente prova di compromissione, attribuzione, tecnica MITRE o CVE.
 
 ### Estrazione artefatti osservati
 
