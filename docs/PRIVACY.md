@@ -8,7 +8,7 @@ Default controls:
 
 - cleartext passwords are **not stored**; AEGIS keeps a SHA-256 fingerprint and length for reuse/correlation studies;
 - raw password storage requires the explicit `AEGIS_STORE_CREDENTIAL_SECRETS=true` opt-in and should only be used in a controlled lab with a documented purpose;
-- investigation JSON/CSV reports never export cleartext passwords, even when raw storage was explicitly enabled; sanitization is applied to the complete exported event copy, not only to the credential summary;
+- investigation JSON/CSV/Markdown reports never export cleartext passwords, even when raw storage was explicitly enabled; sanitization is applied to the complete exported event copy, not only to the credential summary;
 - the collector rejects oversized bodies and bounds nested structures and strings;
 - hostile values are rendered as text, never as attacker-controlled HTML;
 - `AEGIS_RETENTION_DAYS` applies time-based retention continuously while the collector is running;
@@ -33,7 +33,7 @@ Controlli predefiniti:
 
 - le password in chiaro **non vengono archiviate**; AEGIS conserva fingerprint SHA-256 e lunghezza per studi di riuso/correlazione;
 - l'archiviazione raw richiede l'opt-in esplicito `AEGIS_STORE_CREDENTIAL_SECRETS=true` e va usata solo in laboratorio controllato con finalità documentata;
-- i report investigativi JSON/CSV non esportano mai password in chiaro, anche se la memorizzazione raw è stata abilitata esplicitamente; la sanitizzazione viene applicata alla copia completa dell'evento esportato e non soltanto al riepilogo credential;
+- i report investigativi JSON/CSV/Markdown non esportano mai password in chiaro, anche se la memorizzazione raw è stata abilitata esplicitamente; la sanitizzazione viene applicata alla copia completa dell'evento esportato e non soltanto al riepilogo credential;
 - il collector rifiuta body eccessivi e limita profondità, cardinalità e lunghezza delle stringhe;
 - i valori ostili vengono renderizzati come testo e mai come HTML controllato dall'attaccante;
 - `AEGIS_RETENTION_DAYS` applica la retention temporale in modo continuo mentre il collector è in esecuzione;
