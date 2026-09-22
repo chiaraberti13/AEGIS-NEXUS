@@ -283,3 +283,7 @@ pre{
 .compact:disabled,.icon-button:disabled{opacity:.42;cursor:not-allowed}
 @media(max-width:1200px){.case-grid{grid-template-columns:1fr}.case-browser,.case-editor{min-height:auto}}
 @media(max-width:620px){.case-filters,.case-form-row{grid-template-columns:1fr}}
+
+.sidebar-substatus{font-size:10px;color:#647d8f;padding-left:16px;margin-top:-22px;overflow-wrap:anywhere}
+.sidebar-substatus.ready{color:#79b99d}.sidebar-substatus.partial{color:#c1a461}.sidebar-substatus.disabled{color:#647d8f}
+@media(max-width:800px){.sidebar-substatus{display:none}}
