@@ -211,6 +211,44 @@ def test_dashboard_exposes_investigation_dimensions_and_aggregates_geo_points(tm
     assert dashboard["analysis"]["provenance"]["hypotheses_in_analytics"] is False
 
 
+def test_session_investigation_is_bounded_and_discloses_truncation(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"), session_max_events=100)
+    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    session_id = None
+    for index in range(101):
+        saved = store.ingest(normalize_event({
+            "timestamp": timestamp,
+            "honeypot": "ssh-1",
+            "event_type": "connection",
+            "observed": {
+                "source_ip": "203.0.113.77",
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+                "sensor_session_id": "bounded-session-1",
+                "sequence": index,
+            },
+        }))
+        session_id = saved["session_id"]
+
+    bundle = store.get_session(session_id)
+    assert bundle is not None
+    assert len(bundle["events"]) == 100
+    assert bundle["summary"]["truncated"] is True
+    assert bundle["analysis"] == {
+        "truncated": True,
+        "event_limit": 100,
+        "scope": "latest_session_events",
+    }
+
+    graph = store.relations(session_id)
+    assert graph["analysis"]["truncated"] is True
+    report = store.report(session_id)
+    assert report is not None
+    assert report["analysis"]["truncated"] is True
+    assert any("not a complete" in item for item in report["limitations"])
+
+
 def test_report_never_exports_cleartext_password(tmp_path, monkeypatch):
     monkeypatch.setenv("AEGIS_STORE_CREDENTIAL_SECRETS", "true")
     store = Store(str(tmp_path / "aegis.db"))
