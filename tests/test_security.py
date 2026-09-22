@@ -129,7 +129,10 @@ def test_operator_api_is_protected_when_key_is_configured(tmp_path):
     })
     client = app.test_client()
     status = client.get("/api/v1/operator/status").get_json()
-    assert status == {"required": True, "authenticated": False}
+    assert status["required"] is True
+    assert status["configured"] is True
+    assert status["authenticated"] is False
+    assert status["insecure_unauthenticated_opt_in"] is False
     assert client.get("/api/v1/dashboard").status_code == 401
     headers = {"X-Aegis-Operator-Key": "operator-secret"}
     authenticated = client.get("/api/v1/operator/status", headers=headers).get_json()
