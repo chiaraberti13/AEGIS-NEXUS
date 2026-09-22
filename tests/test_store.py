@@ -199,3 +199,9 @@ def test_case_audit_notes_and_analyst_classification(tmp_path):
     assert report["notes"][0]["provenance"] == "analyst_note"
     actions = [item["action"] for item in report["history"]]
     assert actions == ["created", "evidence_added", "note_added", "updated"]
+
+    # Re-linking the same source evidence is idempotent and must not forge audit activity.
+    store.add_case_evidence(case["id"], "session", saved["session_id"])
+    after_duplicate = store.case_report(case["id"])
+    duplicate_actions = [item["action"] for item in after_duplicate["history"]]
+    assert duplicate_actions == actions
