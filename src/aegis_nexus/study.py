@@ -152,14 +152,23 @@ def explain_session(bundle: dict[str, Any], lang: str = "it") -> dict[str, Any]:
     session = bundle.get("session", {})
     summary = bundle.get("summary", {})
     events = bundle.get("events", [])
+    analysis = bundle.get("analysis", {})
+    truncated = bool(analysis.get("truncated"))
 
     facts = []
     event_count = int(summary.get("event_count") or len(events))
-    facts.append(
-        f"La sessione contiene {event_count} eventi osservati."
-        if it else
-        f"The session contains {event_count} observed events."
-    )
+    if truncated:
+        facts.append(
+            f"L'analisi è limitata agli ultimi {event_count} eventi conservati restituiti per questa sessione."
+            if it else
+            f"Analysis is limited to the latest {event_count} retained events returned for this session."
+        )
+    else:
+        facts.append(
+            f"La sessione contiene {event_count} eventi osservati."
+            if it else
+            f"The session contains {event_count} observed events."
+        )
     if session.get("source_ip"):
         facts.append(
             f"Sorgente osservata: {session['source_ip']}."
@@ -252,6 +261,13 @@ def explain_session(bundle: dict[str, Any], lang: str = "it") -> dict[str, Any]:
         "focus": focus,
         "next_steps": next_steps,
         "limitations": [
+            *([
+                (
+                    "La sessione supera il limite di analisi configurato: timeline, grafo, report e Study Mode usano soltanto il sottoinsieme più recente indicato."
+                    if it else
+                    "The session exceeds the configured analysis limit: timeline, graph, report and Study Mode use only the indicated latest subset."
+                )
+            ] if truncated else []),
             (
                 "La sessione usa ID espliciti di connessione/flow quando disponibili e fallback temporale negli altri casi; nessun metodo dimostra l'identità della persona dietro gli eventi."
                 if it else
