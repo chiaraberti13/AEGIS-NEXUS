@@ -577,6 +577,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         writer = csv.writer(output)
         writer.writerow([
             "timestamp",
+            "collector_received_at",
             "event_id",
             "event_type",
             "severity",
@@ -596,6 +597,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             alert = observed.get("alert") if isinstance(observed.get("alert"), dict) else {}
             writer.writerow([
                 _csv_safe(event.get("timestamp")),
+                _csv_safe(event.get("collector_received_at")),
                 _csv_safe(event.get("id")),
                 _csv_safe(event.get("event_type")),
                 _csv_safe(event.get("severity")),
