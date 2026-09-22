@@ -33,6 +33,7 @@ The current implementation provides both the secure telemetry/investigation foun
 - Persistent SQLite session correlation that prefers explicit decoy connection IDs or Suricata flow identity and falls back to source IP, honeypot, service, protocol, destination port and inactivity window when needed.
 - Investigation APIs and dedicated SOC views for events, IP profiles, sessions, timelines, relationship graphs, Threat Intelligence context and Study Mode.
 - Stable cursor pagination for historical event/session navigation; the live dashboard stays on current data while Investigation can append older matching telemetry.
+- Large single-session investigations are bounded by `AEGIS_SESSION_MAX_EVENTS`; when the retained session exceeds the limit, UI, graph, reports and Study Mode explicitly disclose that they are operating on the latest subset.
 - Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail, bounded lifecycle/closed-case retention and JSON/CSV/Markdown case reports.
 - SOC dashboard with global search/filters, attacks over time, unique-source-IP timeline, top source IPs, event types, severities, countries, ASN, ports, protocols, services, honeypots, usernames, password fingerprints, commands, payloads, IDS alerts, IOC, evidence-backed MITRE/CVE, temporal heatmap, aggregated interactive Attack Map and Live Feed.
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
