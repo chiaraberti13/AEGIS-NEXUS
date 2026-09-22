@@ -348,8 +348,15 @@ class Store:
                 if isinstance(item, dict) and item.get("cve_id"):
                     cves.add(str(item["cve_id"]))
             iocs += len(derived.get("ioc", []) or [])
+        correlation_method = "temporal_fallback"
+        if any(event["observed"].get("sensor_session_id") for event in events):
+            correlation_method = "sensor_connection_id"
+        elif any(event["observed"].get("flow_id") for event in events):
+            correlation_method = "suricata_flow_id"
+
         return {
             "event_count": len(events),
+            "correlation_method": correlation_method,
             "severity": dict(severity),
             "event_types": [{"label": key, "value": value} for key, value in event_types.most_common()],
             "credentials": credentials,
