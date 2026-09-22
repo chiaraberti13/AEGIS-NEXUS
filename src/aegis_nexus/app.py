@@ -183,15 +183,18 @@ def create_app(test_config: dict | None = None) -> Flask:
         remote = request.remote_addr or "unknown"
         if not limiter.allow(f"operator-status:{remote}", 60, 60):
             return jsonify({"error": "rate_limited"}), 429
-        sensor_keys = app.config.get("SENSOR_KEYS") or {}
-        return jsonify({
+        authenticated = operator_authorized()
+        payload = {
             "required": bool(app.config.get("OPERATOR_API_KEY")),
-            "authenticated": operator_authorized(),
-            "sensor_auth_mode": "per_sensor_allowlist" if sensor_keys else (
+            "authenticated": authenticated,
+        }
+        if authenticated:
+            sensor_keys = app.config.get("SENSOR_KEYS") or {}
+            payload["sensor_auth_mode"] = "per_sensor_allowlist" if sensor_keys else (
                 "shared_key" if app.config.get("INGEST_API_KEY") else "unconfigured"
-            ),
-            "sensor_allowlist_count": len(sensor_keys),
-        })
+            )
+            payload["sensor_allowlist_count"] = len(sensor_keys)
+        return jsonify(payload)
 
     @app.post("/api/v1/events")
     def ingest_event():
