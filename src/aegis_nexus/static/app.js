@@ -106,7 +106,6 @@
 
   function feedParams() {
     const params = currentParams();
-    params.delete("hours");
     params.set("limit", "120");
     return params;
   }
