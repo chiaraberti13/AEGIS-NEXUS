@@ -10,7 +10,7 @@
 
 > Honeypot telemetry, SOC investigation, threat research and cybersecurity study in one evidence-first platform.
 
-<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="LICENSE">MIT Licence</a></p>
+<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="docs/INVESTIGATION.md">Investigation workflow</a> · <a href="LICENSE">MIT Licence</a></p>
 
 ---
 
@@ -28,12 +28,12 @@ The current implementation provides both the secure telemetry/investigation foun
 - MITRE ATT&CK and CVE derived mappings are accepted only when they include both `rationale` and `evidence`.
 - Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw storage is explicit opt-in only.
 - Persistent SQLite session correlation by source IP, honeypot, service, protocol, destination port and inactivity window, with compatible schema migration.
-- Investigation APIs for events, IP profiles, sessions, relationship graphs, Study Mode and evidence-preserving JSON reports.
-- SOC dashboard with attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, Attack Map and Live Feed.
+- Investigation APIs and dedicated SOC views for events, IP profiles, sessions, timelines, relationship graphs, Threat Intelligence context and Study Mode.
+- SOC dashboard with global search/filters, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, interactive Attack Map and Live Feed.
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
-- Configurable retention with `AEGIS_RETENTION_DAYS`.
-- Hardened Docker runtime: non-root user, dropped capabilities, read-only root filesystem, `no-new-privileges`, private management network and localhost-only operator port.
-- Sensor containers with read-only filesystems, dropped capabilities, resource limits and a separate DMZ/telemetry network path.
+- Continuous time-based retention with `AEGIS_RETENTION_DAYS` plus the storage ceiling `AEGIS_MAX_DB_EVENTS`; JSON/CSV investigation exports never include cleartext passwords.
+- Hardened Docker runtime: non-root user, dropped capabilities, read-only root filesystem, `no-new-privileges`, bounded concurrent TCP connections, per-sensor management networks and localhost-only operator port.
+- Sensor containers with CPU/memory/PID/file-descriptor limits and separate exposure/management networks so SSH, web and legacy sensors do not share a lateral management segment.
 - Native evidence-first Suricata EVE JSON ingestion for IDS telemetry; alert signatures are preserved as observed IDS output without inventing MITRE or CVE mappings.
 - CI for Python tests and Docker image build.
 
@@ -77,9 +77,9 @@ Send one Suricata EVE JSON event to `POST /api/v1/integrations/suricata/eve` usi
 
 ## Investigation flow
 
-`Dashboard → event → IP → session → timeline → credentials/commands/payload → enrichment → MITRE/IOC → relations → report`
+`Dashboard → event → IP → session → timeline → credentials/commands/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relations → report → Study Mode`
 
-The relationship graph is generated only from data actually present in the selected session. Study Mode explains why an event is interesting and what a SOC analyst should inspect next while keeping analytical limitations visible.
+The relationship graph is generated only from data actually present in the selected session. Threat Intelligence displays only stored external enrichment with source/timestamp provenance. Study Mode covers both the selected event and the complete correlated session while keeping analytical limitations visible. See [Investigation workflow](docs/INVESTIGATION.md).
 
 ## Quick start
 
@@ -114,7 +114,9 @@ src/aegis_nexus/
 └── static/         i18n, charts, map, live feed and investigation
 docs/
 ├── DATA_PROVENANCE.md
+├── INVESTIGATION.md
 ├── PRIVACY.md
+├── SENSOR_ISOLATION.md
 └── THREAT_MODEL.md
 tests/
 ```
@@ -127,7 +129,7 @@ See [Privacy & retention](docs/PRIVACY.md), the [Threat model](docs/THREAT_MODEL
 
 ## Roadmap
 
-Next implementation cycles focus on stronger per-sensor identity, controlled enrichment adapters, native Suricata ingestion, case management, export formats and additional SOC/Study workflows. Capabilities are documented when they are implemented, not ahead of the code.
+Next implementation cycles focus on controlled enrichment adapters, case management, richer investigation exports and additional sensor/IDS integrations. Capabilities are documented when they are implemented, not ahead of the code.
 
 ## Licence & responsible use
 
