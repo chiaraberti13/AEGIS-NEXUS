@@ -851,6 +851,11 @@ class Store:
             "window_hours": bounded_hours,
             "query": q or "",
             "filters": {key: value for key, value in (filters or {}).items() if value},
+            "analysis": {
+                "truncated": truncated,
+                "event_limit": self.analytics_max_events,
+                "scope": "latest_matching_events",
+            },
             "totals": {
                 "events": len(events),
                 "unique_source_ip": len({event["source_ip"] for event in events if event.get("source_ip")}),
