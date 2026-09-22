@@ -10,6 +10,7 @@
     sessionStudy: null,
     dashboard: null,
     enrichmentStatus: null,
+    threatContextStatus: null,
     events: [],
     eventsCursor: null,
     eventsHasMore: false,
@@ -99,6 +100,7 @@
       $("analytics-warning").textContent = t("analytics.truncated").replace("{limit}", String(state.dashboard.analysis.event_limit));
     }
     renderEnrichmentStatus();
+    renderThreatContextStatus();
     renderEventPagination();
   }
 
@@ -128,6 +130,32 @@
     if (!data) return;
     state.enrichmentStatus = data;
     renderEnrichmentStatus();
+  }
+
+  function renderThreatContextStatus() {
+    const node = $("threat-context-status");
+    if (!node) return;
+    const status = state.threatContextStatus;
+    let key = "status.threatContextDisabled";
+    let level = "disabled";
+    if (status?.configured) {
+      if (status.ready) {
+        key = "status.threatContextReady";
+        level = "ready";
+      } else {
+        key = "status.threatContextError";
+        level = "partial";
+      }
+    }
+    node.className = "sidebar-substatus " + level;
+    node.textContent = t(key);
+  }
+
+  async function loadThreatContextStatus() {
+    const data = await safeGet("/api/v1/threat-context/status");
+    if (!data) return;
+    state.threatContextStatus = data;
+    renderThreatContextStatus();
   }
 
   function showView(name) {
@@ -1198,6 +1226,7 @@
         hideOperatorGate();
         await loadFilterOptions();
         await loadEnrichmentStatus();
+        await loadThreatContextStatus();
         await refresh();
       } else {
         showOperatorGate(true);
@@ -1279,6 +1308,7 @@
       hideOperatorGate();
       await loadFilterOptions();
       await loadEnrichmentStatus();
+      await loadThreatContextStatus();
       await refresh();
     } catch (error) {
       console.error("AEGIS bootstrap failed", error);
