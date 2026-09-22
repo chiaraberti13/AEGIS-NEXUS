@@ -24,16 +24,22 @@ _EVENT_FILTERS = (
 
 
 class Store:
-    def __init__(self, path: str):
+    def __init__(self, path: str, retention_days: int = 30, max_events: int = 500_000):
         self.path = path
+        self.retention_days = max(0, retention_days)
+        self.max_events = max(1_000, max_events)
+        self._ingest_since_maintenance = 0
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._init()
+        self.maintain(force=True)
 
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA trusted_schema=OFF")
+        conn.execute("PRAGMA secure_delete=ON")
         conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
@@ -125,7 +131,28 @@ class Store:
                 json.dumps(event["derived"], ensure_ascii=False),
                 json.dumps(event["hypotheses"], ensure_ascii=False), event["schema_version"],
             ))
+        self._ingest_since_maintenance += 1
+        self.maintain()
         return {**event, "session_id": session_id}
+
+    def maintain(self, force: bool = False) -> dict[str, int]:
+        if not force and self._ingest_since_maintenance < 100:
+            return {"retention_deleted": 0, "capacity_deleted": 0}
+        self._ingest_since_maintenance = 0
+        retention_deleted = self.prune(self.retention_days)
+        capacity_deleted = 0
+        with self.connect() as conn:
+            count = conn.execute("SELECT COUNT(*) AS count FROM events").fetchone()["count"]
+            overflow = max(0, int(count) - self.max_events)
+            if overflow:
+                cur = conn.execute(
+                    "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY timestamp ASC LIMIT ?)",
+                    (overflow,),
+                )
+                capacity_deleted = cur.rowcount
+                conn.execute("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM events)")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        return {"retention_deleted": retention_deleted, "capacity_deleted": capacity_deleted}
 
     @staticmethod
     def _decode(row: sqlite3.Row) -> dict[str, Any]:
@@ -164,8 +191,14 @@ class Store:
         limit: int = 100,
         q: str | None = None,
         filters: dict[str, str] | None = None,
+        hours: int | None = None,
     ) -> list[dict[str, Any]]:
         clauses, params = self._sql_filters(filters)
+        if hours is not None:
+            bounded_hours = max(1, min(hours, 720))
+            since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+            clauses.append("timestamp >= ?")
+            params.append(since)
         if q:
             clauses.append(
                 "(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR protocol LIKE ? OR "
