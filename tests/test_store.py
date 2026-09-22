@@ -304,3 +304,87 @@ def test_suricata_flow_id_is_used_as_explicit_correlation(tmp_path):
     assert reused_after_restart["session_id"] != first["session_id"]
     bundle = store.get_session(first["session_id"])
     assert bundle["summary"]["correlation_method"] == "suricata_flow_id"
+
+
+def test_case_capacity_and_closed_case_retention(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"), max_cases=2, case_retention_days=30)
+    first = store.create_case({
+        "title": "Open case",
+        "summary": "",
+        "status": "open",
+        "severity": "low",
+        "tags": [],
+    })
+    second = store.create_case({
+        "title": "Closed case",
+        "summary": "",
+        "status": "closed",
+        "severity": "info",
+        "tags": [],
+    })
+
+    with store.connect() as conn:
+        old = (datetime.now(timezone.utc) - timedelta(days=45)).isoformat()
+        conn.execute("UPDATE cases SET closed_at=?, updated_at=? WHERE id=?", (old, old, second["id"]))
+
+    deleted = store.prune_cases()
+    assert deleted == 1
+    assert store.get_case(second["id"]) is None
+    assert store.get_case(first["id"]) is not None
+
+    replacement = store.create_case({
+        "title": "Replacement",
+        "summary": "",
+        "status": "open",
+        "severity": "info",
+        "tags": [],
+    })
+    assert replacement["id"]
+
+    try:
+        store.create_case({
+            "title": "Over capacity",
+            "summary": "",
+            "status": "open",
+            "severity": "info",
+            "tags": [],
+        })
+        assert False, "expected case_capacity"
+    except ValueError as exc:
+        assert str(exc) == "case_capacity"
+
+
+def test_closed_case_delete_cascades_case_data_but_preserves_source_telemetry(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.150",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+        },
+    })
+    saved = store.ingest(event)
+    case = store.create_case({
+        "title": "Lifecycle case",
+        "summary": "temporary analyst context",
+        "status": "open",
+        "severity": "medium",
+        "tags": ["lifecycle"],
+    })
+    store.add_case_evidence(case["id"], "event", saved["id"])
+    store.add_case_note(case["id"], "temporary note")
+
+    assert store.delete_case(case["id"]) == "case_not_closed"
+    store.update_case(case["id"], {"status": "closed"})
+    assert store.delete_case(case["id"]) == "deleted"
+    assert store.get_case(case["id"]) is None
+    assert store.get_event(saved["id"]) is not None
+
+    with store.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM case_tags WHERE case_id=?", (case["id"],)).fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM case_evidence WHERE case_id=?", (case["id"],)).fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM case_notes WHERE case_id=?", (case["id"],)).fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM case_history WHERE case_id=?", (case["id"],)).fetchone()[0] == 0
