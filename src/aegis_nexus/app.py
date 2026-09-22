@@ -22,7 +22,7 @@ from .study import explain, explain_session
 from .suricata import SuricataValidationError, normalize_eve_event
 
 
-FILTER_KEYS = ("country", "protocol", "service", "honeypot", "severity", "source_ip", "session_id", "event_type")
+FILTER_KEYS = ("country", "asn", "destination_port", "protocol", "service", "honeypot", "severity", "source_ip", "session_id", "event_type")
 
 
 def _load_sensor_keys(raw: str) -> dict[str, str]:
