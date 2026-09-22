@@ -31,7 +31,7 @@ L'implementazione attuale fornisce sia la base sicura per telemetria e investiga
 - Password redatte per default, con fingerprint SHA-256 e lunghezza; memorizzazione raw solo tramite opt-in esplicito.
 - Correlazione persistente delle sessioni su SQLite che preferisce ID espliciti di connessione dei decoy o identità flow Suricata e usa come fallback IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività.
 - API e viste SOC dedicate per eventi, profili IP, sessioni, timeline, relazioni, contesto Threat Intelligence e Study Mode.
-- Gestione casi SOC evidence-preserving con classificazione dell’analista, note, tag, riferimenti a eventi/sessioni, audit trail e report JSON/CSV.
+- Gestione casi SOC evidence-preserving con classificazione dell’analista, note, tag, riferimenti a eventi/sessioni, audit trail, lifecycle bounded/retention dei soli casi chiusi e report JSON/CSV.
 - Dashboard SOC con ricerca/filtri globali, timeline, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, IDS, MITRE, heatmap temporale, Attack Map interattiva e Live Feed.
 - Interfaccia IT/EN tramite dizionario i18n centrale; la telemetria viene sempre resa come testo e mai come HTML controllato dall'attaccante.
 - Retention temporale continua con `AEGIS_RETENTION_DAYS` più limite di capacità `AEGIS_MAX_DB_EVENTS`; gli export investigativi JSON/CSV non includono mai password in chiaro.
