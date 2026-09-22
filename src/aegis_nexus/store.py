@@ -427,18 +427,31 @@ class Store:
     ) -> dict[str, Any]:
         bounded_hours = max(1, min(hours, 720))
         since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+        clauses = ["timestamp >= ?"]
+        params: list[Any] = [since]
+        filter_clauses, filter_params = self._sql_filters(filters)
+        clauses.extend(filter_clauses)
+        params.extend(filter_params)
+        if q:
+            clauses.append(
+                "(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR protocol LIKE ? OR "
+                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR observed LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
+            )
+            needle = f"%{q[:128]}%"
+            params.extend([needle] * 10)
+        params.append(self.analytics_max_events + 1)
+        where = " AND ".join(clauses)
         with self.connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM events WHERE timestamp >= ? ORDER BY timestamp ASC",
-                (since,),
+                f"SELECT * FROM events WHERE {where} ORDER BY timestamp DESC LIMIT ?",
+                params,
             ).fetchall()
-        events = [self._decode(row) for row in rows]
+        truncated = len(rows) > self.analytics_max_events
+        if truncated:
+            rows = rows[:self.analytics_max_events]
+        events = [self._decode(row) for row in reversed(rows)]
         if not include_simulation:
             events = [event for event in events if event["derived"].get("data_mode") != "simulation"]
-        events = [
-            event for event in events
-            if self._matches_q(event, q) and self._event_matches_filters(event, filters)
-        ]
 
         timeline: dict[str, int] = defaultdict(int)
         heatmap = [[0 for _ in range(24)] for _ in range(7)]
