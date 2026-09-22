@@ -63,6 +63,7 @@
       } catch {}
       throw new Error("HTTP " + response.status + (detail ? " · " + detail : ""));
     }
+    if (response.status === 204) return null;
     return response.json();
   }
 
@@ -762,6 +763,7 @@
     $("case-add-session").disabled = !hasCase || !state.selected?.session_id;
     $("case-report-json").disabled = !hasCase;
     $("case-report-csv").disabled = !hasCase;
+    $("case-delete").disabled = !hasCase || state.selectedCase?.status !== "closed";
     $("case-note").disabled = !hasCase;
     $("case-note-form").querySelector("button").disabled = !hasCase;
   }
@@ -1026,6 +1028,19 @@
     downloadBlob(await response.blob(), "aegis-" + state.selectedCase.id + ".csv", "text/csv");
   }
 
+  async function deleteSelectedCase() {
+    if (!state.selectedCase?.id || state.selectedCase.status !== "closed") return;
+    if (!window.confirm(t("cases.deleteConfirm"))) return;
+    const caseId = state.selectedCase.id;
+    try {
+      await requestJSON("/api/v1/cases/" + encodeURIComponent(caseId), "DELETE");
+      resetCaseEditor([]);
+      await loadCases();
+    } catch (error) {
+      console.error("AEGIS case deletion failed", error);
+    }
+  }
+
   function downloadBlob(content, filename, type) {
     const blob = content instanceof Blob ? content : new Blob([content], {type});
     const url = URL.createObjectURL(blob);
@@ -1181,6 +1196,7 @@
   $("case-note-form").addEventListener("submit", addCaseNote);
   $("case-report-json").addEventListener("click", downloadCaseReportJSON);
   $("case-report-csv").addEventListener("click", downloadCaseReportCSV);
+  $("case-delete").addEventListener("click", deleteSelectedCase);
   $("case-status-filter").addEventListener("change", loadCases);
   let caseSearchTimer;
   $("case-search").addEventListener("input", () => {

@@ -392,3 +392,38 @@ def test_exact_asn_and_destination_port_filters(tmp_path):
     options = client.get("/api/v1/meta/filters").get_json()
     assert "AS64500" in options["asn"]
     assert "22" in options["destination_port"]
+
+
+def test_case_delete_requires_closed_status_and_case_capacity_is_bounded(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "secret",
+        "MAX_CASES": 1,
+    })
+    client = app.test_client()
+
+    created = client.post(
+        "/api/v1/cases",
+        json={"title": "Lifecycle API case", "status": "open", "severity": "low"},
+    )
+    assert created.status_code == 201
+    case_id = created.get_json()["id"]
+
+    capacity = client.post(
+        "/api/v1/cases",
+        json={"title": "Second case", "status": "open", "severity": "low"},
+    )
+    assert capacity.status_code == 409
+    assert capacity.get_json()["error"] == "case_capacity"
+
+    open_delete = client.delete(f"/api/v1/cases/{case_id}")
+    assert open_delete.status_code == 409
+    assert open_delete.get_json()["error"] == "case_not_closed"
+
+    closed = client.patch(f"/api/v1/cases/{case_id}", json={"status": "closed"})
+    assert closed.status_code == 200
+
+    deleted = client.delete(f"/api/v1/cases/{case_id}")
+    assert deleted.status_code == 204
+    assert client.get(f"/api/v1/cases/{case_id}").status_code == 404

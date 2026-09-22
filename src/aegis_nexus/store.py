@@ -34,11 +34,15 @@ class Store:
         retention_days: int = 30,
         max_events: int = 500_000,
         analytics_max_events: int = 20_000,
+        max_cases: int = 10_000,
+        case_retention_days: int = 0,
     ):
         self.path = path
         self.retention_days = max(0, retention_days)
         self.max_events = max(1_000, max_events)
         self.analytics_max_events = max(100, min(analytics_max_events, self.max_events))
+        self.max_cases = max(1, min(int(max_cases), 1_000_000))
+        self.case_retention_days = max(0, min(int(case_retention_days), 3650))
         self._ingest_since_maintenance = 0
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._init()
@@ -227,9 +231,10 @@ class Store:
 
     def maintain(self, force: bool = False) -> dict[str, int]:
         if not force and self._ingest_since_maintenance < 100:
-            return {"retention_deleted": 0, "capacity_deleted": 0}
+            return {"retention_deleted": 0, "capacity_deleted": 0, "case_retention_deleted": 0}
         self._ingest_since_maintenance = 0
         retention_deleted = self.prune(self.retention_days)
+        case_retention_deleted = self.prune_cases(self.case_retention_days)
         capacity_deleted = 0
         with self.connect() as conn:
             count = conn.execute("SELECT COUNT(*) AS count FROM events").fetchone()["count"]
@@ -243,7 +248,11 @@ class Store:
                 conn.execute("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM events)")
         with self.connect() as checkpoint_conn:
             checkpoint_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        return {"retention_deleted": retention_deleted, "capacity_deleted": capacity_deleted}
+        return {
+            "retention_deleted": retention_deleted,
+            "capacity_deleted": capacity_deleted,
+            "case_retention_deleted": case_retention_deleted,
+        }
 
     @staticmethod
     def _decode(row: sqlite3.Row) -> dict[str, Any]:
@@ -261,6 +270,21 @@ class Store:
             deleted = cur.rowcount
             conn.execute("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM events)")
         return deleted
+
+    def prune_cases(self, retention_days: int | None = None) -> int:
+        days = self.case_retention_days if retention_days is None else max(0, int(retention_days))
+        if days <= 0:
+            return 0
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        with self.connect() as conn:
+            cur = conn.execute(
+                """
+                DELETE FROM cases
+                WHERE status='closed' AND closed_at IS NOT NULL AND closed_at < ?
+                """,
+                (cutoff,),
+            )
+            return cur.rowcount
 
     def get_event(self, event_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
@@ -429,14 +453,16 @@ class Store:
         )
 
     def create_case(self, data: dict[str, Any]) -> dict[str, Any]:
+        self.prune_cases()
         case_id = "case_" + uuid.uuid4().hex[:20]
         now = self._case_now()
         closed_at = now if data["status"] == "closed" else None
         with self.connect() as conn:
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT INTO cases(id,title,status,severity,summary,created_at,updated_at,closed_at)
-                VALUES(?,?,?,?,?,?,?,?)
+                SELECT ?,?,?,?,?,?,?,?
+                WHERE (SELECT COUNT(*) FROM cases) < ?
                 """,
                 (
                     case_id,
@@ -447,8 +473,11 @@ class Store:
                     now,
                     now,
                     closed_at,
+                    self.max_cases,
                 ),
             )
+            if cur.rowcount != 1:
+                raise ValueError("case_capacity")
             for tag in data.get("tags", []):
                 conn.execute("INSERT OR IGNORE INTO case_tags(case_id,tag) VALUES(?,?)", (case_id, tag))
             self._case_log(
@@ -462,6 +491,16 @@ class Store:
                 },
             )
         return self.get_case(case_id) or {}
+
+    def delete_case(self, case_id: str) -> str:
+        with self.connect() as conn:
+            row = conn.execute("SELECT status FROM cases WHERE id=?", (case_id,)).fetchone()
+            if not row:
+                return "not_found"
+            if row["status"] != "closed":
+                return "case_not_closed"
+            conn.execute("DELETE FROM cases WHERE id=?", (case_id,))
+            return "deleted"
 
     def list_cases(
         self,
