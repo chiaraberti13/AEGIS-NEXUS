@@ -196,3 +196,92 @@ def test_case_api_is_operator_protected_and_exports_reference_only(tmp_path):
     assert csv_report.status_code == 200
     assert event_id in csv_report.get_data(as_text=True)
     assert "do-not-export" not in csv_report.get_data(as_text=True)
+
+
+def test_operator_triggered_abuseipdb_enrichment_is_cached_and_provenance_safe(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_lookup(ip, api_key, *, max_age_days, timeout):
+        calls.append((ip, api_key, max_age_days, timeout))
+        return {
+            "kind": "reputation",
+            "source": "AbuseIPDB API v2",
+            "source_reference": "check",
+            "observed_at": "2026-09-22T20:30:00+00:00",
+            "data": {
+                "ipAddress": ip,
+                "abuseConfidenceScore": 73,
+                "totalReports": 12,
+            },
+            "provenance": "external_enrichment",
+        }
+
+    monkeypatch.setattr("aegis_nexus.app.enrichment_module.fetch_abuseipdb", fake_lookup)
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "sensor-secret",
+        "OPERATOR_API_KEY": "operator-secret",
+        "ABUSEIPDB_API_KEY": "provider-secret",
+        "ABUSEIPDB_MAX_AGE_DAYS": 30,
+        "ENRICHMENT_CACHE_HOURS": 6,
+        "ENRICHMENT_TIMEOUT": 2.0,
+    })
+    client = app.test_client()
+    operator = {"X-Aegis-Operator-Key": "operator-secret"}
+
+    providers = client.get("/api/v1/enrichment/providers", headers=operator).get_json()
+    assert providers["abuseipdb"]["configured"] is True
+    assert providers["abuseipdb"]["automatic"] is False
+
+    first = client.post(
+        "/api/v1/enrichment/ip/8.8.8.8/abuseipdb",
+        headers=operator,
+        json={"force": False},
+    )
+    assert first.status_code == 201
+    assert first.get_json()["cached"] is False
+
+    second = client.post(
+        "/api/v1/enrichment/ip/8.8.8.8/abuseipdb",
+        headers=operator,
+        json={"force": False},
+    )
+    assert second.status_code == 200
+    assert second.get_json()["cached"] is True
+    assert len(calls) == 1
+
+    ti = client.get("/api/v1/ips/8.8.8.8/threat-intelligence", headers=operator).get_json()
+    assert ti["items"][0]["source"] == "AbuseIPDB API v2"
+    assert ti["items"][0]["provenance"] == "external_enrichment"
+    assert ti["items"][0]["record_origin"] == "standalone_enrichment"
+    assert ti["items"][0]["data"]["abuseConfidenceScore"] == 73
+
+
+def test_manual_external_enrichment_stays_separate_from_observed_events(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "sensor-secret",
+        "OPERATOR_API_KEY": "operator-secret",
+    })
+    client = app.test_client()
+    operator = {"X-Aegis-Operator-Key": "operator-secret"}
+    response = client.post(
+        "/api/v1/enrichment/ip/203.0.113.55",
+        headers=operator,
+        json={
+            "kind": "asn_context",
+            "source": "fixture-provider",
+            "source_reference": "fixture-1",
+            "observed_at": "2026-09-22T20:00:00Z",
+            "data": {"asn": "AS64500", "note": "test only"},
+        },
+    )
+    assert response.status_code == 201
+
+    profile = client.get("/api/v1/ips/203.0.113.55", headers=operator).get_json()
+    assert profile["event_count"] == 0
+    assert profile["events"] == []
+    assert profile["threat_intelligence"][0]["source"] == "fixture-provider"
+    assert profile["threat_intelligence"][0]["record_origin"] == "standalone_enrichment"
