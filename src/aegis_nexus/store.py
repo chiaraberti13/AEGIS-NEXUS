@@ -24,10 +24,17 @@ _EVENT_FILTERS = (
 
 
 class Store:
-    def __init__(self, path: str, retention_days: int = 30, max_events: int = 500_000):
+    def __init__(
+        self,
+        path: str,
+        retention_days: int = 30,
+        max_events: int = 500_000,
+        analytics_max_events: int = 20_000,
+    ):
         self.path = path
         self.retention_days = max(0, retention_days)
         self.max_events = max(1_000, max_events)
+        self.analytics_max_events = max(100, min(analytics_max_events, self.max_events))
         self._ingest_since_maintenance = 0
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._init()
