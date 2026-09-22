@@ -554,6 +554,15 @@ class Store:
         with self.connect() as conn:
             if not conn.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
                 return None
+            existing = conn.execute(
+                """
+                SELECT 1 FROM case_evidence
+                WHERE case_id=? AND evidence_type=? AND evidence_id=?
+                """,
+                (case_id, evidence_type, evidence_id),
+            ).fetchone()
+            if existing:
+                return self.get_case(case_id)
             evidence_count = conn.execute(
                 "SELECT COUNT(*) AS count FROM case_evidence WHERE case_id=?",
                 (case_id,),
