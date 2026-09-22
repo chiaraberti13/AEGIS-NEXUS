@@ -19,3 +19,8 @@ Key threats and current controls:
 - Evidence loss through retention -> cases preserve identifiers and expose evidence availability; operators must treat unavailable references as missing source telemetry, not as negative evidence.
 
 Internet-facing deployment still requires controls outside the application boundary: dedicated VM/VLAN or host, deny routes to production networks, restrict egress, host/network firewalling, TLS termination, monitoring of the Docker host, key rotation and a documented legal/privacy retention policy. The repository includes a reverse-proxy/rate-limit example, but deployment-specific perimeter controls remain the operator's responsibility.
+
+
+## Nota aggiuntiva / Additional note
+
+- Impersonificazione tra sensori: il deployment Compose assegna credenziali distinte ai decoy integrati e il collector usa un'allowlist; le identità non configurate vengono rifiutate.
