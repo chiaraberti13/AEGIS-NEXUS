@@ -75,17 +75,55 @@ def create_app(test_config: dict | None = None) -> Flask:
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    def authorized(sensor_id: str) -> bool:
+    def sensor_secret(sensor_id: str) -> str:
+        sensor_keys = app.config.get("SENSOR_KEYS") or {}
+        if sensor_keys:
+            return str(sensor_keys.get(sensor_id) or "")
+        return str(app.config.get("INGEST_API_KEY", ""))
+
+    def authorized(sensor_id: str, raw_body: bytes) -> bool:
         supplied_key = request.headers.get("X-Aegis-Key", "")
         supplied_sensor = request.headers.get("X-Aegis-Sensor", "")
         if supplied_sensor and supplied_sensor != sensor_id:
             return False
-        sensor_keys = app.config.get("SENSOR_KEYS") or {}
-        if sensor_keys:
-            expected = sensor_keys.get(sensor_id)
-            return bool(expected) and hmac.compare_digest(expected, supplied_key)
-        expected = app.config.get("INGEST_API_KEY", "")
-        return bool(expected) and hmac.compare_digest(expected, supplied_key)
+        expected = sensor_secret(sensor_id)
+        if not expected or not hmac.compare_digest(expected, supplied_key):
+            return False
+        if app.config.get("REQUIRE_SENSOR_SIGNATURE"):
+            return verify_signed_payload(
+                expected,
+                request.headers.get("X-Aegis-Timestamp", ""),
+                request.headers.get("X-Aegis-Signature", ""),
+                raw_body,
+                int(app.config.get("SENSOR_SIGNATURE_MAX_SKEW", 300)),
+            )
+        return True
+
+    def operator_authorized() -> bool:
+        expected = str(app.config.get("OPERATOR_API_KEY", ""))
+        if not expected:
+            return True
+        supplied = request.headers.get("X-Aegis-Operator-Key", "")
+        return bool(supplied) and hmac.compare_digest(expected, supplied)
+
+    @app.before_request
+    def protect_operator_api():
+        if not request.path.startswith("/api/v1/"):
+            return None
+        if request.path == "/api/v1/operator/status":
+            return None
+        if request.method == "POST" and request.path in {"/api/v1/events", "/api/v1/integrations/suricata/eve"}:
+            return None
+        if not operator_authorized():
+            return jsonify({"error": "operator_unauthorized"}), 401
+        remote = request.remote_addr or "unknown"
+        if not limiter.allow(
+            f"operator:{remote}",
+            int(app.config.get("OPERATOR_RATE_LIMIT", 1200)),
+            60,
+        ):
+            return jsonify({"error": "rate_limited"}), 429
+        return None
 
     @app.errorhandler(RequestEntityTooLarge)
     def too_large(_exc):
@@ -108,11 +146,21 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not request.is_json:
             return jsonify({"error": "content_type_must_be_json"}), 415
         try:
+            raw_body = request.get_data(cache=True)
             payload = request.get_json()
-            event = normalize_event(payload)
-            if not authorized(event["honeypot"]):
+            sensor_id = str(payload.get("honeypot") or "")[:96] if isinstance(payload, dict) else ""
+            if not authorized(sensor_id, raw_body):
                 return jsonify({"error": "unauthorized"}), 401
+            if not limiter.allow(
+                f"ingest:{sensor_id}:{request.remote_addr or 'unknown'}",
+                int(app.config.get("INGEST_RATE_LIMIT", 600)),
+                60,
+            ):
+                return jsonify({"error": "rate_limited"}), 429
+            event = normalize_event(payload)
             stored = store.ingest(event)
+        except sqlite3.IntegrityError:
+            return jsonify({"error": "duplicate_event"}), 409
         except EventValidationError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         except Exception:
@@ -125,11 +173,20 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not request.is_json:
             return jsonify({"error": "content_type_must_be_json"}), 415
         sensor_id = (request.headers.get("X-Aegis-Sensor") or "suricata-01")[:96]
-        if not authorized(sensor_id):
-            return jsonify({"error": "unauthorized"}), 401
         try:
+            raw_body = request.get_data(cache=True)
+            if not authorized(sensor_id, raw_body):
+                return jsonify({"error": "unauthorized"}), 401
+            if not limiter.allow(
+                f"suricata:{sensor_id}:{request.remote_addr or 'unknown'}",
+                int(app.config.get("INGEST_RATE_LIMIT", 600)),
+                60,
+            ):
+                return jsonify({"error": "rate_limited"}), 429
             event = normalize_event(normalize_eve_event(request.get_json(), sensor_id))
             stored = store.ingest(event)
+        except sqlite3.IntegrityError:
+            return jsonify({"error": "duplicate_event"}), 409
         except (SuricataValidationError, EventValidationError) as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         except Exception:
