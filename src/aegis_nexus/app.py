@@ -68,6 +68,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         RETENTION_DAYS=int(os.getenv("AEGIS_RETENTION_DAYS", "30")),
         MAX_DB_EVENTS=int(os.getenv("AEGIS_MAX_DB_EVENTS", "500000")),
         ANALYTICS_MAX_EVENTS=int(os.getenv("AEGIS_ANALYTICS_MAX_EVENTS", "20000")),
+        MAX_CASES=int(os.getenv("AEGIS_MAX_CASES", "10000")),
+        CASE_RETENTION_DAYS=int(os.getenv("AEGIS_CASE_RETENTION_DAYS", "0")),
         OPERATOR_API_KEY=os.getenv("AEGIS_OPERATOR_API_KEY", ""),
         REQUIRE_SENSOR_SIGNATURE=os.getenv("AEGIS_REQUIRE_SENSOR_SIGNATURE", "false").lower() in {"1", "true", "yes"},
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
@@ -84,6 +86,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         retention_days=int(app.config.get("RETENTION_DAYS", 30)),
         max_events=int(app.config.get("MAX_DB_EVENTS", 500000)),
         analytics_max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)),
+        max_cases=int(app.config.get("MAX_CASES", 10000)),
+        case_retention_days=int(app.config.get("CASE_RETENTION_DAYS", 0)),
     )
     limiter = SlidingWindowLimiter()
     enricher = app.config.get("ENRICHER")
@@ -344,12 +348,25 @@ def create_app(test_config: dict | None = None) -> Flask:
             item = store.create_case(normalize_case_create(request.get_json()))
         except CaseValidationError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        except ValueError as exc:
+            if str(exc) == "case_capacity":
+                return jsonify({"error": "case_capacity"}), 409
+            raise
         return jsonify(item), 201
 
     @app.get("/api/v1/cases/<case_id>")
     def case_detail(case_id: str):
         item = store.get_case(case_id[:128])
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.delete("/api/v1/cases/<case_id>")
+    def delete_case(case_id: str):
+        result = store.delete_case(case_id[:128])
+        if result == "not_found":
+            return jsonify({"error": "not_found"}), 404
+        if result == "case_not_closed":
+            return jsonify({"error": "case_not_closed"}), 409
+        return ("", 204)
 
     @app.patch("/api/v1/cases/<case_id>")
     def update_case(case_id: str):
