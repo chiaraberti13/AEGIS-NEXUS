@@ -1,0 +1,101 @@
+# Operations / Operazioni
+
+## English
+
+AEGIS-NEXUS is designed to keep the operator console on a management interface and the decoys on exposed ports. The default Compose mapping keeps the collector on `127.0.0.1:8600`; do not publish that port directly to the Internet.
+
+### Secrets
+
+Generate independent high-entropy values for sensor ingestion and operator access:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Use different values for `AEGIS_INGEST_API_KEY` and `AEGIS_OPERATOR_API_KEY`. For stronger separation, configure `AEGIS_SENSOR_KEYS` with one key per sensor. Never commit the resulting `.env`.
+
+### Signed telemetry
+
+Compose enables signed sensor requests by default. A sensor sends its ID, Unix timestamp and an HMAC-SHA256 signature over `timestamp + "." + raw_body`. The collector rejects invalid or stale signatures. Normal decoy events include a UUID, so an exact replay is rejected as a duplicate.
+
+For Suricata EVE JSON lines:
+
+```bash
+export AEGIS_SENSOR_API_KEY='...'
+python scripts/send_suricata_event.py --file /var/log/suricata/eve.json --sensor suricata-01
+```
+
+The Suricata adapter creates a deterministic event ID from the EVE record, so repeated forwarding of the same record is rejected rather than counted twice.
+
+### Operator access
+
+When `AEGIS_OPERATOR_API_KEY` is configured, analytical APIs require `X-Aegis-Operator-Key`. The web console asks for the key and keeps it in browser `sessionStorage` only. Closing the browser session or using the lock control removes it.
+
+Do not use remote operator access without TLS. The example in `deploy/nginx.conf.example` provides a starting point for TLS termination and edge rate limiting. Adjust it to your environment and certificate management.
+
+### Rate limits and analytics bounds
+
+Application-level request limits protect sensor ingestion and operator APIs, but they are per process. For an Internet-facing deployment, keep an independent firewall/reverse-proxy rate limit as well.
+
+Dashboard analysis is explicitly capped by `AEGIS_ANALYTICS_MAX_EVENTS`. If the cap is reached the UI shows a warning; narrow the time window or filters before treating the displayed totals as complete.
+
+### Backups
+
+Use SQLite's online backup API instead of copying a live WAL database directly:
+
+```bash
+docker compose --profile ops run --rm backup
+```
+
+Backups are written under `/data/backups` and rotated according to `AEGIS_BACKUP_KEEP`. Apply the same privacy, access-control and retention rules to backups as to the primary telemetry database. Test restoration periodically.
+
+---
+
+## Italiano
+
+AEGIS-NEXUS è progettato per mantenere la console operatore su un'interfaccia di management e i decoy sulle porte esposte. Il Compose predefinito pubblica il collector solo su `127.0.0.1:8600`: non esporre direttamente questa porta su Internet.
+
+### Segreti
+
+Genera valori indipendenti e ad alta entropia per ingestione sensori e accesso operatore:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Usa valori differenti per `AEGIS_INGEST_API_KEY` e `AEGIS_OPERATOR_API_KEY`. Per una separazione più forte configura `AEGIS_SENSOR_KEYS` con una chiave per sensore. Non committare mai il file `.env` risultante.
+
+### Telemetria firmata
+
+Compose abilita per default la firma delle richieste sensore. Il sensore invia ID, timestamp Unix e firma HMAC-SHA256 calcolata su `timestamp + "." + raw_body`. Il collector rifiuta firme non valide o troppo vecchie. Gli eventi dei decoy includono un UUID, quindi il replay identico viene rifiutato come duplicato.
+
+Per file Suricata EVE JSON Lines:
+
+```bash
+export AEGIS_SENSOR_API_KEY='...'
+python scripts/send_suricata_event.py --file /var/log/suricata/eve.json --sensor suricata-01
+```
+
+L'adapter Suricata genera un ID deterministico dal record EVE, quindi l'invio ripetuto dello stesso record viene rifiutato anziché contato due volte.
+
+### Accesso operatore
+
+Quando `AEGIS_OPERATOR_API_KEY` è configurata, le API analitiche richiedono `X-Aegis-Operator-Key`. La console web chiede la chiave e la conserva solo nel `sessionStorage` del browser. La chiusura della sessione del browser o il comando di blocco la rimuovono.
+
+Non usare accesso operatore remoto senza TLS. L'esempio `deploy/nginx.conf.example` fornisce una base per terminazione TLS e rate limiting perimetrale, da adattare al proprio ambiente e alla gestione dei certificati.
+
+### Rate limit e limiti analitici
+
+I limiti applicativi proteggono ingestione e API operatore, ma sono per-processo. Per un deployment esposto a Internet mantieni anche rate limiting indipendente su firewall/reverse proxy.
+
+L'analisi della dashboard è limitata esplicitamente da `AEGIS_ANALYTICS_MAX_EVENTS`. Quando il limite viene raggiunto la UI mostra un avviso: restringi intervallo temporale o filtri prima di considerare completi i totali visualizzati.
+
+### Backup
+
+Usa l'API di backup online di SQLite invece di copiare direttamente un database WAL attivo:
+
+```bash
+docker compose --profile ops run --rm backup
+```
+
+I backup vengono salvati in `/data/backups` e ruotati secondo `AEGIS_BACKUP_KEEP`. Applica a backup e database primario le stesse regole di privacy, controllo accessi e retention. Verifica periodicamente il ripristino.
