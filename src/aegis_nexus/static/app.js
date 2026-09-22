@@ -9,6 +9,7 @@
     eventStudy: null,
     sessionStudy: null,
     dashboard: null,
+    enrichmentStatus: null,
     events: [],
     cases: [],
     selectedCase: null,
@@ -93,6 +94,35 @@
     if (state.dashboard?.analysis?.truncated) {
       $("analytics-warning").textContent = t("analytics.truncated").replace("{limit}", String(state.dashboard.analysis.event_limit));
     }
+    renderEnrichmentStatus();
+  }
+
+  function renderEnrichmentStatus() {
+    const node = $("enrichment-status");
+    if (!node) return;
+    const status = state.enrichmentStatus;
+    let key = "status.enrichmentDisabled";
+    let level = "disabled";
+    if (status?.configured) {
+      const configured = [status.city, status.asn].filter((item) => item?.configured);
+      const ready = configured.filter((item) => item?.ready);
+      if (configured.length && ready.length === configured.length) {
+        key = "status.enrichmentReady";
+        level = "ready";
+      } else {
+        key = "status.enrichmentPartial";
+        level = "partial";
+      }
+    }
+    node.className = "sidebar-substatus " + level;
+    node.textContent = t(key);
+  }
+
+  async function loadEnrichmentStatus() {
+    const data = await safeGet("/api/v1/enrichment/status");
+    if (!data) return;
+    state.enrichmentStatus = data;
+    renderEnrichmentStatus();
   }
 
   function showView(name) {
@@ -1105,6 +1135,7 @@
       if (status.authenticated) {
         hideOperatorGate();
         await loadFilterOptions();
+        await loadEnrichmentStatus();
         await refresh();
       } else {
         showOperatorGate(true);
@@ -1183,6 +1214,7 @@
       }
       hideOperatorGate();
       await loadFilterOptions();
+      await loadEnrichmentStatus();
       await refresh();
     } catch (error) {
       console.error("AEGIS bootstrap failed", error);

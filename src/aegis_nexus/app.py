@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import csv
 import hmac
 import io
@@ -12,6 +13,7 @@ from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
+from .enrichment import LocalGeoIPEnricher
 from .model import EventValidationError, normalize_event
 from .security import SlidingWindowLimiter, verify_signed_payload
 from .store import Store
@@ -70,6 +72,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
         INGEST_RATE_LIMIT=int(os.getenv("AEGIS_INGEST_RATE_LIMIT_PER_MINUTE", "600")),
         OPERATOR_RATE_LIMIT=int(os.getenv("AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE", "1200")),
+        GEOIP_CITY_DB=os.getenv("AEGIS_GEOIP_CITY_DB", ""),
+        GEOIP_ASN_DB=os.getenv("AEGIS_GEOIP_ASN_DB", ""),
     )
     if test_config:
         app.config.update(test_config)
@@ -81,8 +85,18 @@ def create_app(test_config: dict | None = None) -> Flask:
         analytics_max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)),
     )
     limiter = SlidingWindowLimiter()
+    enricher = app.config.get("ENRICHER")
+    if enricher is None:
+        enricher = LocalGeoIPEnricher(
+            str(app.config.get("GEOIP_CITY_DB") or ""),
+            str(app.config.get("GEOIP_ASN_DB") or ""),
+        )
     app.extensions["aegis_store"] = store
     app.extensions["aegis_rate_limiter"] = limiter
+    app.extensions["aegis_enricher"] = enricher
+    close_enricher = getattr(enricher, "close", None)
+    if callable(close_enricher):
+        atexit.register(close_enricher)
 
     @app.after_request
     def security_headers(response):
@@ -190,6 +204,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             ):
                 return jsonify({"error": "rate_limited"}), 429
             event = normalize_event(payload)
+            event = enricher.enrich(event)
             stored = store.ingest(event)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
@@ -216,6 +231,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             ):
                 return jsonify({"error": "rate_limited"}), 429
             event = normalize_event(normalize_eve_event(request.get_json(), sensor_id))
+            event = enricher.enrich(event)
             stored = store.ingest(event)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
@@ -271,6 +287,15 @@ def create_app(test_config: dict | None = None) -> Flask:
         except ValueError:
             return jsonify({"error": "invalid_ip"}), 422
         return jsonify(store.threat_intelligence(normalized))
+
+    @app.get("/api/v1/enrichment/status")
+    def enrichment_status():
+        status = getattr(enricher, "status", None)
+        return jsonify(status() if callable(status) else {
+            "mode": "custom",
+            "configured": True,
+            "network_requests": None,
+        })
 
     @app.get("/api/v1/meta/filters")
     def filter_options():

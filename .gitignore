@@ -11,3 +11,7 @@ htmlcov/
 /data/
 dist/
 build/
+
+# Operator-supplied GeoIP databases
+/geoip/
+*.mmdb

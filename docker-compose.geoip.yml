@@ -1,0 +1,10 @@
+services:
+  collector:
+    environment:
+      AEGIS_GEOIP_CITY_DB: /geoip/GeoLite2-City.mmdb
+      AEGIS_GEOIP_ASN_DB: /geoip/GeoLite2-ASN.mmdb
+    volumes:
+      - type: bind
+        source: ${AEGIS_GEOIP_DIR:-./geoip}
+        target: /geoip
+        read_only: true
