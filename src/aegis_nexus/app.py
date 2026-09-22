@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import ipaddress
+import json
 import os
 
 from flask import Flask, jsonify, render_template, request
@@ -10,6 +11,23 @@ from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 from .model import EventValidationError, normalize_event
 from .store import Store
 from .study import explain
+from .suricata import SuricataValidationError, normalize_eve_event
+
+
+def _load_sensor_keys(raw: str) -> dict[str, str]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    result: dict[str, str] = {}
+    for sensor, key in list(parsed.items())[:128]:
+        if isinstance(sensor, str) and isinstance(key, str) and sensor and key:
+            result[sensor[:96]] = key[:512]
+    return result
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -18,6 +36,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         MAX_CONTENT_LENGTH=int(os.getenv("AEGIS_MAX_EVENT_BYTES", "65536")),
         DATABASE_PATH=os.getenv("AEGIS_DATABASE_PATH", "./data/aegis.db"),
         INGEST_API_KEY=os.getenv("AEGIS_INGEST_API_KEY", ""),
+        SENSOR_KEYS=_load_sensor_keys(os.getenv("AEGIS_SENSOR_KEYS", "")),
         RETENTION_DAYS=int(os.getenv("AEGIS_RETENTION_DAYS", "30")),
     )
     if test_config:
@@ -33,13 +52,20 @@ def create_app(test_config: dict | None = None) -> Flask:
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        response.headers["Cache-Control"] = "no-store"
         return response
 
-    def authorized() -> bool:
+    def authorized(sensor_id: str) -> bool:
+        supplied_key = request.headers.get("X-Aegis-Key", "")
+        supplied_sensor = request.headers.get("X-Aegis-Sensor", "")
+        if supplied_sensor and supplied_sensor != sensor_id:
+            return False
+        sensor_keys = app.config.get("SENSOR_KEYS") or {}
+        if sensor_keys:
+            expected = sensor_keys.get(sensor_id)
+            return bool(expected) and hmac.compare_digest(expected, supplied_key)
         expected = app.config.get("INGEST_API_KEY", "")
-        if not expected:
-            return True
-        return hmac.compare_digest(expected, request.headers.get("X-Aegis-Key", ""))
+        return bool(expected) and hmac.compare_digest(expected, supplied_key)
 
     @app.errorhandler(RequestEntityTooLarge)
     def too_large(_exc):
@@ -59,17 +85,35 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.post("/api/v1/events")
     def ingest_event():
-        if not authorized():
-            return jsonify({"error": "unauthorized"}), 401
         if not request.is_json:
             return jsonify({"error": "content_type_must_be_json"}), 415
         try:
-            event = normalize_event(request.get_json())
+            payload = request.get_json()
+            event = normalize_event(payload)
+            if not authorized(event["honeypot"]):
+                return jsonify({"error": "unauthorized"}), 401
             stored = store.ingest(event)
         except EventValidationError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         except Exception:
             app.logger.exception("event ingestion failed")
+            return jsonify({"error": "ingestion_failed"}), 500
+        return jsonify({"id": stored["id"], "session_id": stored["session_id"]}), 201
+
+    @app.post("/api/v1/integrations/suricata/eve")
+    def ingest_suricata():
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        sensor_id = (request.headers.get("X-Aegis-Sensor") or "suricata-01")[:96]
+        if not authorized(sensor_id):
+            return jsonify({"error": "unauthorized"}), 401
+        try:
+            event = normalize_event(normalize_eve_event(request.get_json(), sensor_id))
+            stored = store.ingest(event)
+        except (SuricataValidationError, EventValidationError) as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        except Exception:
+            app.logger.exception("suricata ingestion failed")
             return jsonify({"error": "ingestion_failed"}), 500
         return jsonify({"id": stored["id"], "session_id": stored["session_id"]}), 201
 
@@ -104,8 +148,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/v1/dashboard")
     def dashboard():
         hours = request.args.get("hours", 24, type=int)
+        q = request.args.get("q", type=str)
         include_sim = request.args.get("include_simulation", "false").lower() in {"1", "true", "yes"}
-        return jsonify(store.dashboard(hours=hours, include_simulation=include_sim))
+        return jsonify(store.dashboard(hours=hours, include_simulation=include_sim, q=q))
 
     @app.get("/api/v1/reports/session/<session_id>")
     def session_report(session_id: str):
