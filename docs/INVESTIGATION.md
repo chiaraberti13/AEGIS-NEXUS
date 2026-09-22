@@ -51,7 +51,7 @@ Cases let an operator preserve the investigation context without duplicating hos
 
 ### Reporting
 
-JSON reports preserve the complete evidence model. CSV reports provide a flat event timeline for analysis/export and deliberately omit cleartext passwords. Dashboard statistics can also be exported as JSON.
+JSON reports preserve the complete evidence model. CSV reports provide a flat event timeline for analysis/export. Markdown reports provide a bilingual human-readable SOC handoff while preserving provenance sections and escaping hostile content. JSON, CSV and Markdown credential exports deliberately omit cleartext passwords. Dashboard statistics can also be exported as JSON. See [Investigation reporting](REPORTING.md).
 
 ### Study Mode
 
