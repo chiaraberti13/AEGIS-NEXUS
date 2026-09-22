@@ -31,13 +31,13 @@ class LocalGeoIPEnricher:
         if self.city_reader is None and self.city_path:
             try:
                 self.city_reader = geoip2.database.Reader(str(self.city_path))
-            except (OSError, ValueError) as exc:
+            except Exception as exc:
                 self.city_error = type(exc).__name__
 
         if self.asn_reader is None and self.asn_path:
             try:
                 self.asn_reader = geoip2.database.Reader(str(self.asn_path))
-            except (OSError, ValueError) as exc:
+            except Exception as exc:
                 self.asn_error = type(exc).__name__
 
     @staticmethod
