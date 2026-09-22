@@ -88,6 +88,38 @@ def test_signed_ingest_rejects_bad_signature(tmp_path):
     assert client.post("/api/v1/events", data=body, headers=headers).status_code == 401
 
 
+def test_operator_api_fails_closed_without_key_outside_testing(tmp_path):
+    app = create_app({
+        "TESTING": False,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "OPERATOR_API_KEY": "",
+        "ALLOW_UNAUTHENTICATED_OPERATOR": False,
+    })
+    client = app.test_client()
+    status = client.get("/api/v1/operator/status").get_json()
+    assert status["required"] is True
+    assert status["configured"] is False
+    assert status["authenticated"] is False
+    assert status["insecure_unauthenticated_opt_in"] is False
+    assert client.get("/api/v1/dashboard").status_code == 401
+
+
+def test_operator_api_allows_explicit_unauthenticated_development_opt_in(tmp_path):
+    app = create_app({
+        "TESTING": False,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "OPERATOR_API_KEY": "",
+        "ALLOW_UNAUTHENTICATED_OPERATOR": True,
+    })
+    client = app.test_client()
+    status = client.get("/api/v1/operator/status").get_json()
+    assert status["required"] is False
+    assert status["configured"] is False
+    assert status["authenticated"] is True
+    assert status["insecure_unauthenticated_opt_in"] is True
+    assert client.get("/api/v1/dashboard").status_code == 200
+
+
 def test_operator_api_is_protected_when_key_is_configured(tmp_path):
     app = create_app({
         "TESTING": True,
