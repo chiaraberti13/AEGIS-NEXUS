@@ -458,13 +458,11 @@ class Store:
         now = self._case_now()
         closed_at = now if data["status"] == "closed" else None
         with self.connect() as conn:
-            count = conn.execute("SELECT COUNT(*) AS count FROM cases").fetchone()["count"]
-            if int(count) >= self.max_cases:
-                raise ValueError("case_capacity")
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT INTO cases(id,title,status,severity,summary,created_at,updated_at,closed_at)
-                VALUES(?,?,?,?,?,?,?,?)
+                SELECT ?,?,?,?,?,?,?,?
+                WHERE (SELECT COUNT(*) FROM cases) < ?
                 """,
                 (
                     case_id,
@@ -475,8 +473,11 @@ class Store:
                     now,
                     now,
                     closed_at,
+                    self.max_cases,
                 ),
             )
+            if cur.rowcount != 1:
+                raise ValueError("case_capacity")
             for tag in data.get("tags", []):
                 conn.execute("INSERT OR IGNORE INTO case_tags(case_id,tag) VALUES(?,?)", (case_id, tag))
             self._case_log(
