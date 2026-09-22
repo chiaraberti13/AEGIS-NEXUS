@@ -50,3 +50,37 @@ def test_report_keeps_evidence_backed_mappings(tmp_path):
     report = store.report(saved["session_id"])
     assert report["evidence_backed_mappings"][0]["family"] == "cve"
     assert report["facts"]["event_count"] == 1
+
+
+def test_session_correlation_separates_destination_ports(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    first = normalize_event({
+        "timestamp": start.isoformat(),
+        "honeypot": "multi-1",
+        "event_type": "connection",
+        "observed": {"source_ip":"203.0.113.20","service":"tcp","protocol":"tcp","destination_port":22},
+    })
+    second = normalize_event({
+        "timestamp": (start + timedelta(minutes=1)).isoformat(),
+        "honeypot": "multi-1",
+        "event_type": "connection",
+        "observed": {"source_ip":"203.0.113.20","service":"tcp","protocol":"tcp","destination_port":23},
+    })
+    a = store.ingest(first)
+    b = store.ingest(second)
+    assert a["session_id"] != b["session_id"]
+
+
+def test_relationship_payload_labels_are_bounded(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot":"web-1",
+        "event_type":"web.payload",
+        "observed":{"source_ip":"203.0.113.30","service":"http","protocol":"tcp","destination_port":80,"payload":"A"*1000},
+    })
+    saved = store.ingest(event)
+    graph = store.relations(saved["session_id"])
+    payloads = [node for node in graph["nodes"] if node["kind"] == "payload"]
+    assert payloads
+    assert len(payloads[0]["label"]) <= 180
