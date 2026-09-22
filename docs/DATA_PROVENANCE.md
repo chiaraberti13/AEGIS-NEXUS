@@ -9,6 +9,14 @@ AEGIS-NEXUS keeps four classes separate in every event:
 
 The UI and API must never collapse these classes into a single “truth” field. IP geolocation, ASN ownership and threat-intelligence reputation are contextual data, not attacker identity.
 
+### Time provenance
+
+`timestamp` is the event time reported by the sensor or source record. `collector_received_at` is collector-controlled system metadata written when AEGIS accepts the event. It is not sensor evidence and is kept separate from `observed`.
+
+AEGIS uses collector receipt time for telemetry retention and storage-capacity eviction so an old or manipulated sensor timestamp cannot immediately expire data or keep it indefinitely. Sensor time remains the analytical time axis for session sequencing and attack timelines. Events too far in the future relative to the collector clock are rejected according to `AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS`.
+
+For databases created before receipt-time tracking existed, the migration backfills `collector_received_at` from the existing event timestamp because the original receive time cannot be reconstructed.
+
 ### Deterministic observed-artifact extraction
 
 AEGIS may derive exact URLs, domain names, IP literals and common cryptographic hash strings from `observed.command` and `observed.payload`. These records live under `derived.ioc`, carry `classification: observed_artifact`, and retain an explicit evidence path such as `observed.command`.
@@ -25,6 +33,14 @@ AEGIS-NEXUS mantiene separate quattro classi in ogni evento:
 - `hypotheses`: possibilità analitiche esplicitamente non fattuali.
 
 UI e API non devono mai fondere queste classi in un unico campo di “verità”. Geolocalizzazione IP, proprietà ASN e reputazione Threat Intelligence sono contesto, non identità dell'attaccante.
+
+### Provenienza temporale
+
+`timestamp` è il tempo dell'evento dichiarato dal sensore o dal record sorgente. `collector_received_at` è metadata di sistema controllato dal collector e scritto quando AEGIS accetta l'evento. Non è evidenza del sensore e rimane separato da `observed`.
+
+AEGIS usa il tempo di ricezione del collector per retention e rimozione per capacità, così un timestamp del sensore vecchio o manipolato non può far scadere subito i dati o conservarli indefinitamente. Il tempo sensore resta l'asse analitico per sequenza delle sessioni e timeline degli attacchi. Gli eventi troppo nel futuro rispetto al clock del collector vengono rifiutati secondo `AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS`.
+
+Per database creati prima del tracking del tempo di ricezione, la migrazione valorizza `collector_received_at` usando il timestamp evento esistente perché il tempo di ricezione originale non è ricostruibile.
 
 ### Estrazione deterministica degli artefatti osservati
 
