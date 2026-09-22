@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from collections import Counter, defaultdict
@@ -17,10 +18,11 @@ class Store:
         self._init()
 
     def connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.path)
+        conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
     def _init(self) -> None:
@@ -28,10 +30,11 @@ class Store:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY, source_ip TEXT NOT NULL, honeypot TEXT NOT NULL,
-                    service TEXT NOT NULL, started_at TEXT NOT NULL, last_seen TEXT NOT NULL,
+                    service TEXT NOT NULL, protocol TEXT NOT NULL DEFAULT 'unknown',
+                    destination_port INTEGER NOT NULL DEFAULT 0,
+                    started_at TEXT NOT NULL, last_seen TEXT NOT NULL,
                     event_count INTEGER NOT NULL DEFAULT 0
                 );
-                CREATE INDEX IF NOT EXISTS idx_sessions_lookup ON sessions(source_ip, honeypot, service, last_seen);
                 CREATE TABLE IF NOT EXISTS events (
                     id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, honeypot TEXT NOT NULL,
                     event_type TEXT NOT NULL, severity TEXT NOT NULL, source_ip TEXT,
@@ -45,20 +48,41 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_events_source ON events(source_ip, timestamp DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, timestamp ASC);
             """)
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(sessions)")}
+            if "protocol" not in columns:
+                conn.execute("ALTER TABLE sessions ADD COLUMN protocol TEXT NOT NULL DEFAULT 'unknown'")
+            if "destination_port" not in columns:
+                conn.execute("ALTER TABLE sessions ADD COLUMN destination_port INTEGER NOT NULL DEFAULT 0")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_lookup_v2 "
+                "ON sessions(source_ip, honeypot, service, protocol, destination_port, last_seen)"
+            )
 
     def _select_or_create_session(self, conn: sqlite3.Connection, event: dict[str, Any]) -> str:
-        source_ip, honeypot, service = session_identity(event)
+        source_ip, honeypot, service, protocol, destination_port = session_identity(event)
         row = conn.execute(
-            "SELECT * FROM sessions WHERE source_ip=? AND honeypot=? AND service=? ORDER BY last_seen DESC LIMIT 1",
-            (source_ip, honeypot, service),
+            """
+            SELECT * FROM sessions
+            WHERE source_ip=? AND honeypot=? AND service=? AND protocol=? AND destination_port=?
+            ORDER BY last_seen DESC LIMIT 1
+            """,
+            (source_ip, honeypot, service, protocol, destination_port),
         ).fetchone()
         if row and should_join(row["last_seen"], event["timestamp"]):
-            conn.execute("UPDATE sessions SET last_seen=?, event_count=event_count+1 WHERE id=?", (event["timestamp"], row["id"]))
+            conn.execute(
+                "UPDATE sessions SET last_seen=?, event_count=event_count+1 WHERE id=?",
+                (event["timestamp"], row["id"]),
+            )
             return row["id"]
-        session_id = session_id_for((source_ip, honeypot, service), event["timestamp"])
+        identity = (source_ip, honeypot, service, protocol, destination_port)
+        session_id = session_id_for(identity, event["timestamp"])
         conn.execute(
-            "INSERT INTO sessions(id,source_ip,honeypot,service,started_at,last_seen,event_count) VALUES(?,?,?,?,?,?,1)",
-            (session_id, source_ip, honeypot, service, event["timestamp"], event["timestamp"]),
+            """
+            INSERT INTO sessions(
+                id,source_ip,honeypot,service,protocol,destination_port,started_at,last_seen,event_count
+            ) VALUES(?,?,?,?,?,?,?,?,1)
+            """,
+            (session_id, source_ip, honeypot, service, protocol, destination_port, event["timestamp"], event["timestamp"]),
         )
         return session_id
 
@@ -121,9 +145,9 @@ class Store:
                 clauses.append(f"{key} = ?")
                 params.append(value)
         if q:
-            clauses.append("(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR observed LIKE ?)")
+            clauses.append("(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR observed LIKE ? OR enrichment LIKE ? OR derived LIKE ?)")
             needle = f"%{q[:128]}%"
-            params.extend([needle, needle, needle, needle])
+            params.extend([needle] * 6)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         params.append(max(1, min(limit, 500)))
         with self.connect() as conn:
@@ -143,10 +167,14 @@ class Store:
             rows = conn.execute("SELECT * FROM events WHERE source_ip=? ORDER BY timestamp DESC LIMIT 500", (ip,)).fetchall()
         events = [self._decode(row) for row in rows]
         return {
-            "source_ip": ip, "event_count": len(events),
+            "source_ip": ip,
+            "event_count": len(events),
             "sessions": sorted({e["session_id"] for e in events}),
             "countries": sorted({e["country"] for e in events if e.get("country")}),
-            "asns": sorted({e["asn"] for e in events if e.get("asn")}), "events": events,
+            "asns": sorted({e["asn"] for e in events if e.get("asn")}),
+            "services": sorted({e["service"] for e in events if e.get("service")}),
+            "destination_ports": sorted({e["destination_port"] for e in events if e.get("destination_port")}),
+            "events": events,
         }
 
     @staticmethod
@@ -154,13 +182,34 @@ class Store:
         counts = Counter(str(e.get(field)) for e in events if e.get(field) not in (None, ""))
         return [{"label": label, "value": value} for label, value in counts.most_common(n)]
 
-    def dashboard(self, hours: int = 24, include_simulation: bool = False) -> dict[str, Any]:
-        since = (datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 720)))).isoformat()
+    @staticmethod
+    def _matches_q(event: dict[str, Any], q: str | None) -> bool:
+        if not q:
+            return True
+        needle = q[:128].casefold()
+        searchable = (
+            event.get("source_ip"),
+            event.get("event_type"),
+            event.get("honeypot"),
+            event.get("protocol"),
+            event.get("service"),
+            event.get("country"),
+            event.get("asn"),
+            json.dumps(event.get("observed", {}), ensure_ascii=False),
+            json.dumps(event.get("enrichment", {}), ensure_ascii=False),
+            json.dumps(event.get("derived", {}), ensure_ascii=False),
+        )
+        return any(needle in str(value).casefold() for value in searchable if value not in (None, ""))
+
+    def dashboard(self, hours: int = 24, include_simulation: bool = False, q: str | None = None) -> dict[str, Any]:
+        bounded_hours = max(1, min(hours, 720))
+        since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
         with self.connect() as conn:
             rows = conn.execute("SELECT * FROM events WHERE timestamp >= ? ORDER BY timestamp ASC", (since,)).fetchall()
         events = [self._decode(row) for row in rows]
         if not include_simulation:
             events = [e for e in events if e["derived"].get("data_mode") != "simulation"]
+        events = [e for e in events if self._matches_q(e, q)]
         timeline: dict[str, int] = defaultdict(int)
         heatmap = [[0 for _ in range(24)] for _ in range(7)]
         credentials, commands, mitre, ids = Counter(), Counter(), Counter(), Counter()
@@ -177,11 +226,13 @@ class Store:
                 if isinstance(item, dict) and item.get("technique_id"):
                     mitre[str(item["technique_id"])] += 1
             if e["event_type"] == "ids.alert":
-                signature = e["observed"].get("signature") or (e["observed"].get("alert") or {}).get("signature")
+                alert = e["observed"].get("alert") if isinstance(e["observed"].get("alert"), dict) else {}
+                signature = e["observed"].get("signature") or alert.get("signature")
                 if signature:
-                    ids[str(signature)] += 1
+                    ids[str(signature)[:160]] += 1
         return {
-            "window_hours": hours,
+            "window_hours": bounded_hours,
+            "query": q or "",
             "totals": {
                 "events": len(events),
                 "unique_source_ip": len({e["source_ip"] for e in events if e.get("source_ip")}),
@@ -189,14 +240,21 @@ class Store:
                 "critical": sum(1 for e in events if e["severity"] == "critical"),
             },
             "timeline": [{"label": k, "value": timeline[k]} for k in sorted(timeline)],
-            "heatmap": heatmap, "country": self._top(events, "country"), "asn": self._top(events, "asn"),
-            "destination_port": self._top(events, "destination_port"), "protocol": self._top(events, "protocol"),
-            "service": self._top(events, "service"), "honeypot": self._top(events, "honeypot"),
+            "heatmap": heatmap,
+            "country": self._top(events, "country"),
+            "asn": self._top(events, "asn"),
+            "destination_port": self._top(events, "destination_port"),
+            "protocol": self._top(events, "protocol"),
+            "service": self._top(events, "service"),
+            "honeypot": self._top(events, "honeypot"),
             "credentials": [{"label": k, "value": v} for k, v in credentials.most_common(10)],
             "commands": [{"label": k, "value": v} for k, v in commands.most_common(10)],
             "ids_alerts": [{"label": k, "value": v} for k, v in ids.most_common(10)],
             "mitre": [{"label": k, "value": v} for k, v in mitre.most_common(10)],
-            "map_points": [{"lat": e["latitude"], "lon": e["longitude"], "source_ip": e["source_ip"], "country": e["country"]} for e in events if e.get("latitude") is not None and e.get("longitude") is not None][-250:],
+            "map_points": [
+                {"lat": e["latitude"], "lon": e["longitude"], "source_ip": e["source_ip"], "country": e["country"]}
+                for e in events if e.get("latitude") is not None and e.get("longitude") is not None
+            ][-250:],
         }
 
     def report(self, session_id: str) -> dict[str, Any] | None:
@@ -204,23 +262,45 @@ class Store:
         if not bundle:
             return None
         events = bundle["events"]
-        credentials, commands, iocs, mappings = [], [], [], []
+        credentials, commands, payloads, iocs, mappings, enrichments = [], [], [], [], [], []
         for e in events:
             cred = e["observed"].get("credential")
             if isinstance(cred, dict):
-                credentials.append({"event_id": e["id"], "username": cred.get("username"), "password": cred.get("password"), "password_sha256": cred.get("password_sha256")})
+                credentials.append({
+                    "event_id": e["id"],
+                    "username": cred.get("username"),
+                    "password": cred.get("password"),
+                    "password_sha256": cred.get("password_sha256"),
+                })
             if e["observed"].get("command"):
                 commands.append({"event_id": e["id"], "command": e["observed"]["command"]})
+            if e["observed"].get("payload"):
+                payloads.append({"event_id": e["id"], "payload": e["observed"]["payload"]})
+            if e["enrichment"]:
+                enrichments.append({"event_id": e["id"], "sources": e["enrichment"]})
             for ioc in e["derived"].get("ioc", []) or []:
                 iocs.append({"event_id": e["id"], "ioc": ioc})
             for family in ("mitre", "cve"):
                 for item in e["derived"].get(family, []) or []:
                     mappings.append({"event_id": e["id"], "family": family, "mapping": item})
         return {
-            "report_type": "investigation_session", "session": bundle["session"],
-            "facts": {"event_count": len(events), "event_types": sorted({e["event_type"] for e in events}), "source_ips": sorted({e["source_ip"] for e in events if e.get("source_ip")})},
-            "credentials": credentials, "commands": commands, "derived_iocs": iocs,
-            "evidence_backed_mappings": mappings, "events": events,
+            "report_type": "investigation_session",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "session": bundle["session"],
+            "facts": {
+                "event_count": len(events),
+                "event_types": sorted({e["event_type"] for e in events}),
+                "source_ips": sorted({e["source_ip"] for e in events if e.get("source_ip")}),
+                "services": sorted({e["service"] for e in events if e.get("service")}),
+                "destination_ports": sorted({e["destination_port"] for e in events if e.get("destination_port")}),
+            },
+            "credentials": credentials,
+            "commands": commands,
+            "payloads": payloads,
+            "enrichment": enrichments,
+            "derived_iocs": iocs,
+            "evidence_backed_mappings": mappings,
+            "events": events,
             "limitations": [
                 "IP, ASN and geolocation do not establish human identity or attribution.",
                 "External enrichment is contextual and may be stale or inaccurate.",
@@ -238,17 +318,31 @@ class Store:
         def add(kind: str, value: Any) -> str | None:
             if value in (None, ""):
                 return None
-            node_id = f"{kind}:{value}"
-            nodes[node_id] = {"id": node_id, "kind": kind, "label": str(value)}
+            label = str(value)
+            digest = hashlib.sha256(f"{kind}\0{label}".encode("utf-8", "replace")).hexdigest()[:20]
+            node_id = f"{kind}:{digest}"
+            nodes[node_id] = {"id": node_id, "kind": kind, "label": label[:180]}
             return node_id
 
         for e in bundle["events"]:
-            event_node, session_node = add("event", e["id"]), add("session", e["session_id"])
-            ip_node, asn_node, port_node = add("ip", e.get("source_ip")), add("asn", e.get("asn")), add("port", e.get("destination_port"))
+            event_node = add("event", e["id"])
+            session_node = add("session", e["session_id"])
+            ip_node = add("ip", e.get("source_ip"))
+            asn_node = add("asn", e.get("asn"))
+            port_node = add("port", e.get("destination_port"))
+            service_node = add("service", e.get("service"))
             cred = e["observed"].get("credential") if isinstance(e["observed"].get("credential"), dict) else {}
             user_node = add("credential", cred.get("username"))
             payload_node = add("payload", e["observed"].get("payload") or e["observed"].get("command"))
-            for target, relation in [(session_node,"belongs_to"),(ip_node,"source"),(asn_node,"enriched_asn"),(port_node,"targets_port"),(user_node,"uses_username"),(payload_node,"observed_payload")]:
+            for target, relation in [
+                (session_node, "belongs_to"),
+                (ip_node, "source"),
+                (asn_node, "enriched_asn"),
+                (port_node, "targets_port"),
+                (service_node, "targets_service"),
+                (user_node, "uses_username"),
+                (payload_node, "observed_payload"),
+            ]:
                 if event_node and target:
                     edges.add((event_node, target, relation))
             for item in e["derived"].get("mitre", []) or []:
@@ -259,4 +353,7 @@ class Store:
                 ioc_node = add("ioc", ioc.get("value") if isinstance(ioc, dict) else ioc)
                 if event_node and ioc_node:
                     edges.add((event_node, ioc_node, "derived_ioc"))
-        return {"nodes": list(nodes.values()), "edges": [{"source": a, "target": b, "relation": r} for a,b,r in sorted(edges)]}
+        return {
+            "nodes": list(nodes.values()),
+            "edges": [{"source": a, "target": b, "relation": r} for a, b, r in sorted(edges)],
+        }

@@ -10,12 +10,14 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 MAX_STRING = 4096
 MAX_ITEMS = 128
 MAX_DEPTH = 6
 _ALLOWED_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
+_MITRE_ID = re.compile(r"^T\d{4}(?:\.\d{3})?$")
+_CVE_ID = re.compile(r"^CVE-\d{4}-\d{4,}$", re.I)
 
 
 class EventValidationError(ValueError):
@@ -56,13 +58,27 @@ def _bounded(value: Any, depth: int = 0) -> Any:
     return str(value)[:MAX_STRING]
 
 
-def _normalize_ip(value: Any) -> str | None:
+def _normalize_ip(value: Any, field: str = "source_ip") -> str | None:
     if not value:
         return None
     try:
         return str(ipaddress.ip_address(str(value)))
     except ValueError as exc:
-        raise EventValidationError("invalid source_ip") from exc
+        raise EventValidationError(f"invalid {field}") from exc
+
+
+def _normalize_port(value: Any, field: str) -> int | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        raise EventValidationError(f"invalid {field}")
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as exc:
+        raise EventValidationError(f"invalid {field}") from exc
+    if not 1 <= port <= 65535:
+        raise EventValidationError(f"invalid {field}")
+    return port
 
 
 def _redact_credentials(observed: dict[str, Any]) -> dict[str, Any]:
@@ -81,8 +97,8 @@ def _redact_credentials(observed: dict[str, Any]) -> dict[str, Any]:
     return observed
 
 
-def _validate_evidence_mappings(derived: dict[str, Any]) -> None:
-    for key in ("mitre", "cve"):
+def _validate_derived(derived: dict[str, Any]) -> None:
+    for key in ("mitre", "cve", "ioc"):
         entries = derived.get(key, [])
         if entries is None:
             continue
@@ -91,8 +107,17 @@ def _validate_evidence_mappings(derived: dict[str, Any]) -> None:
         for entry in entries:
             if not isinstance(entry, dict):
                 raise EventValidationError(f"derived.{key} entries must be objects")
-            if not entry.get("rationale") or not entry.get("evidence"):
-                raise EventValidationError(f"derived.{key} requires rationale and evidence")
+            evidence = entry.get("evidence")
+            if not isinstance(evidence, list) or not evidence:
+                raise EventValidationError(f"derived.{key} requires evidence")
+            if key in {"mitre", "cve"} and not entry.get("rationale"):
+                raise EventValidationError(f"derived.{key} requires rationale")
+            if key == "mitre" and not _MITRE_ID.fullmatch(str(entry.get("technique_id", ""))):
+                raise EventValidationError("invalid MITRE technique_id")
+            if key == "cve" and not _CVE_ID.fullmatch(str(entry.get("cve_id", ""))):
+                raise EventValidationError("invalid CVE id")
+            if key == "ioc" and (not entry.get("type") or entry.get("value") in (None, "")):
+                raise EventValidationError("derived.ioc requires type and value")
 
 
 def _validate_enrichment(enrichment: dict[str, Any]) -> None:
@@ -101,6 +126,18 @@ def _validate_enrichment(enrichment: dict[str, Any]) -> None:
             raise EventValidationError(f"enrichment.{key} must be an object")
         if not value.get("source") or not value.get("observed_at"):
             raise EventValidationError(f"enrichment.{key} requires source and observed_at")
+    geo = enrichment.get("geo")
+    if isinstance(geo, dict) and isinstance(geo.get("data"), dict):
+        data = geo["data"]
+        for name, low, high in (("latitude", -90.0, 90.0), ("longitude", -180.0, 180.0)):
+            if data.get(name) is not None:
+                try:
+                    numeric = float(data[name])
+                except (TypeError, ValueError) as exc:
+                    raise EventValidationError(f"invalid enrichment.geo.data.{name}") from exc
+                if not low <= numeric <= high:
+                    raise EventValidationError(f"invalid enrichment.geo.data.{name}")
+                data[name] = numeric
 
 
 def normalize_event(payload: dict[str, Any]) -> dict[str, Any]:
@@ -115,7 +152,7 @@ def normalize_event(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(hypotheses, list):
         raise EventValidationError("hypotheses must be a list")
     _validate_enrichment(enrichment)
-    _validate_evidence_mappings(derived)
+    _validate_derived(derived)
     observed = _redact_credentials(observed)
     severity = str(payload.get("severity", "info")).lower()
     if severity not in _ALLOWED_SEVERITIES:
@@ -127,6 +164,13 @@ def normalize_event(payload: dict[str, Any]) -> dict[str, Any]:
     source_ip = _normalize_ip(observed.get("source_ip"))
     if source_ip:
         observed["source_ip"] = source_ip
+    destination_ip = _normalize_ip(observed.get("destination_ip"), "destination_ip")
+    if destination_ip:
+        observed["destination_ip"] = destination_ip
+    for field in ("source_port", "destination_port"):
+        port = _normalize_port(observed.get(field), field)
+        if port is not None:
+            observed[field] = port
     event_id = str(payload.get("id") or uuid.uuid4())
     try:
         uuid.UUID(event_id)
