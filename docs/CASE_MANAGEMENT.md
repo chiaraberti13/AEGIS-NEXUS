@@ -18,7 +18,7 @@ Resource controls:
 
 CSV exports neutralize cells beginning with spreadsheet formula prefixes so attacker-controlled telemetry cannot become a formula when opened in spreadsheet software.
 
-A case severity is an analyst assessment. It does not overwrite the severity stored on source telemetry. Closing a case also does not delete or modify source evidence.
+A case severity is an analyst assessment. It does not overwrite the severity stored on source telemetry. Closing a case also does not delete or modify source evidence. Case metadata and analyst notes have a lifecycle separate from raw telemetry, so operators should define an explicit retention policy for them and avoid storing unnecessary secrets or personal data in notes.
 
 ---
 
@@ -40,4 +40,4 @@ Controlli sulle risorse:
 
 Gli export CSV neutralizzano le celle che iniziano con prefissi interpretabili come formule, evitando che telemetria controllata dall'attaccante venga eseguita come formula quando il file viene aperto in un foglio di calcolo.
 
-La severità del caso è una valutazione dell'analista e non sovrascrive la severità della telemetria sorgente. La chiusura di un caso non elimina né modifica le evidenze originali.
+La severità del caso è una valutazione dell'analista e non sovrascrive la severità della telemetria sorgente. La chiusura di un caso non elimina né modifica le evidenze originali. Metadati del caso e note dell'analista hanno un ciclo di vita separato dalla telemetria raw: va quindi definita una policy di retention esplicita ed è opportuno non inserire nelle note segreti o dati personali non necessari.
