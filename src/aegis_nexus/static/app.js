@@ -10,6 +10,9 @@
     sessionStudy: null,
     dashboard: null,
     events: [],
+    cases: [],
+    selectedCase: null,
+    caseSeed: [],
     filters: {},
     mapBox: [0, 0, 800, 390],
     operatorKey: sessionStorage.getItem("aegis-operator-key") || "",
@@ -41,6 +44,24 @@
     const response = await fetch(url, {headers: apiHeaders()});
     if (response.status === 401 && url !== "/api/v1/operator/status") showOperatorGate(true);
     if (!response.ok) throw new Error("HTTP " + response.status);
+    return response.json();
+  }
+
+  async function requestJSON(url, method, payload) {
+    const response = await fetch(url, {
+      method,
+      headers: apiHeaders({"Content-Type": "application/json"}),
+      body: payload === undefined ? undefined : JSON.stringify(payload),
+    });
+    if (response.status === 401) showOperatorGate(true);
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const body = await response.json();
+        detail = body.detail || body.error || "";
+      } catch {}
+      throw new Error("HTTP " + response.status + (detail ? " · " + detail : ""));
+    }
     return response.json();
   }
 
@@ -663,6 +684,317 @@
     await relations(sessionId);
   }
 
+  function caseStatusLabel(status) {
+    return t("cases.status." + status);
+  }
+
+  function renderCaseList() {
+    const root = $("case-list");
+    root.replaceChildren();
+    if (!state.cases.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("cases.empty");
+      root.append(empty);
+      return;
+    }
+    state.cases.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "case-list-item";
+      if (state.selectedCase?.id === item.id) button.classList.add("selected");
+
+      const head = document.createElement("span");
+      head.className = "case-list-head";
+      const title = document.createElement("strong");
+      title.textContent = item.title;
+      const severity = severityBadge(item.severity);
+      head.append(title, severity);
+
+      const meta = document.createElement("span");
+      meta.className = "case-list-meta";
+      meta.textContent = caseStatusLabel(item.status) + " · " + formatDate(item.updated_at);
+
+      const tags = document.createElement("span");
+      tags.className = "case-list-tags";
+      tags.textContent = (item.tags || []).join(" · ");
+
+      button.append(head, meta, tags);
+      button.addEventListener("click", () => selectCase(item.id));
+      root.append(button);
+    });
+  }
+
+  function setCaseActionState() {
+    const hasCase = Boolean(state.selectedCase?.id);
+    $("case-add-event").disabled = !hasCase || !state.selected?.id;
+    $("case-add-session").disabled = !hasCase || !state.selected?.session_id;
+    $("case-report-json").disabled = !hasCase;
+    $("case-report-csv").disabled = !hasCase;
+    $("case-note").disabled = !hasCase;
+    $("case-note-form").querySelector("button").disabled = !hasCase;
+  }
+
+  function resetCaseEditor(seed = []) {
+    state.selectedCase = null;
+    state.caseSeed = seed;
+    $("case-editor-title").textContent = t("cases.newTitle");
+    $("case-title").value = "";
+    $("case-status").value = "open";
+    $("case-severity").value = "info";
+    $("case-summary").value = "";
+    $("case-tags").value = "";
+    if (state.selected && seed.length) {
+      $("case-title").value = t("cases.seedTitle")
+        .replace("{ip}", state.selected.source_ip || "unknown")
+        .replace("{type}", state.selected.event_type || "event");
+    }
+    $("case-evidence").replaceChildren();
+    $("case-notes").replaceChildren();
+    $("case-history").replaceChildren();
+    $("case-evidence-count").textContent = "0";
+    setCaseActionState();
+    renderCaseList();
+  }
+
+  function renderCaseEvidence(items) {
+    const root = $("case-evidence");
+    root.replaceChildren();
+    $("case-evidence-count").textContent = String(items?.length || 0);
+    if (!items?.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("empty.noData");
+      root.append(empty);
+      return;
+    }
+    items.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "case-evidence-item";
+      const head = document.createElement("div");
+      head.className = "case-evidence-head";
+      const label = document.createElement("strong");
+      label.textContent = item.evidence_type + " · " + item.evidence_id;
+      const availability = document.createElement("span");
+      availability.className = "badge " + (item.available ? "available" : "unavailable");
+      availability.textContent = item.available ? t("cases.available") : t("cases.unavailable");
+      head.append(label, availability);
+      card.append(head);
+      if (item.summary) {
+        const pre = document.createElement("pre");
+        pre.textContent = pretty(item.summary);
+        card.append(pre);
+      }
+      const meta = document.createElement("p");
+      meta.className = "muted";
+      meta.textContent = formatDate(item.added_at);
+      card.append(meta);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "compact danger-quiet";
+      remove.textContent = t("cases.removeEvidence");
+      remove.addEventListener("click", async () => {
+        if (!state.selectedCase) return;
+        try {
+          const updated = await requestJSON(
+            "/api/v1/cases/" + encodeURIComponent(state.selectedCase.id) + "/evidence/" + encodeURIComponent(item.id),
+            "DELETE"
+          );
+          renderCaseDetail(updated);
+          await loadCases();
+        } catch (error) {
+          console.error("AEGIS case evidence removal failed", error);
+        }
+      });
+      card.append(remove);
+      root.append(card);
+    });
+  }
+
+  function renderCaseNotes(items) {
+    const root = $("case-notes");
+    root.replaceChildren();
+    if (!items?.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("empty.noData");
+      root.append(empty);
+      return;
+    }
+    items.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "case-note";
+      const time = document.createElement("time");
+      time.textContent = formatDate(item.created_at);
+      const body = document.createElement("p");
+      body.textContent = item.body;
+      card.append(time, body);
+      root.append(card);
+    });
+  }
+
+  function renderCaseHistory(items) {
+    const root = $("case-history");
+    root.replaceChildren();
+    if (!items?.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("empty.noData");
+      root.append(empty);
+      return;
+    }
+    const actionKeys = {
+      created: "cases.created",
+      updated: "cases.updated",
+      note_added: "cases.noteAdded",
+      evidence_added: "cases.evidenceAdded",
+      evidence_removed: "cases.evidenceRemoved",
+    };
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "case-history-item";
+      const head = document.createElement("div");
+      const action = document.createElement("strong");
+      action.textContent = t(actionKeys[item.action] || item.action);
+      const time = document.createElement("time");
+      time.textContent = formatDate(item.timestamp);
+      head.append(action, time);
+      const pre = document.createElement("pre");
+      pre.textContent = pretty(item.detail);
+      row.append(head, pre);
+      root.append(row);
+    });
+  }
+
+  function renderCaseDetail(item) {
+    state.selectedCase = item;
+    state.caseSeed = [];
+    $("case-editor-title").textContent = item.title;
+    $("case-title").value = item.title || "";
+    $("case-status").value = item.status || "open";
+    $("case-severity").value = item.severity || "info";
+    $("case-summary").value = item.summary || "";
+    $("case-tags").value = (item.tags || []).join(", ");
+    renderCaseEvidence(item.evidence || []);
+    renderCaseNotes(item.notes || []);
+    renderCaseHistory(item.history || []);
+    setCaseActionState();
+    renderCaseList();
+  }
+
+  async function selectCase(caseId) {
+    const item = await safeGet("/api/v1/cases/" + encodeURIComponent(caseId));
+    if (item) renderCaseDetail(item);
+  }
+
+  async function loadCases() {
+    const params = new URLSearchParams();
+    const q = $("case-search").value.trim();
+    const status = $("case-status-filter").value;
+    if (q) params.set("q", q);
+    if (status) params.set("status", status);
+    params.set("limit", "150");
+    const data = await safeGet("/api/v1/cases?" + params.toString());
+    if (!data) return;
+    state.cases = data.items || [];
+    renderCaseList();
+  }
+
+  async function saveCase(event) {
+    event.preventDefault();
+    const payload = {
+      title: $("case-title").value,
+      status: $("case-status").value,
+      severity: $("case-severity").value,
+      summary: $("case-summary").value,
+      tags: $("case-tags").value,
+    };
+    try {
+      let item;
+      if (state.selectedCase?.id) {
+        item = await requestJSON("/api/v1/cases/" + encodeURIComponent(state.selectedCase.id), "PATCH", payload);
+      } else {
+        item = await requestJSON("/api/v1/cases", "POST", payload);
+        for (const evidence of state.caseSeed) {
+          item = await requestJSON(
+            "/api/v1/cases/" + encodeURIComponent(item.id) + "/evidence",
+            "POST",
+            evidence
+          );
+        }
+      }
+      renderCaseDetail(item);
+      await loadCases();
+    } catch (error) {
+      console.error("AEGIS case save failed", error);
+    }
+  }
+
+  async function addSelectedEvidence(type) {
+    if (!state.selectedCase || !state.selected) return;
+    const id = type === "event" ? state.selected.id : state.selected.session_id;
+    if (!id) return;
+    try {
+      const item = await requestJSON(
+        "/api/v1/cases/" + encodeURIComponent(state.selectedCase.id) + "/evidence",
+        "POST",
+        {type, id}
+      );
+      renderCaseDetail(item);
+      await loadCases();
+    } catch (error) {
+      console.error("AEGIS case evidence link failed", error);
+    }
+  }
+
+  async function addCaseNote(event) {
+    event.preventDefault();
+    if (!state.selectedCase) return;
+    const body = $("case-note").value.trim();
+    if (!body) return;
+    try {
+      const item = await requestJSON(
+        "/api/v1/cases/" + encodeURIComponent(state.selectedCase.id) + "/notes",
+        "POST",
+        {body}
+      );
+      $("case-note").value = "";
+      renderCaseDetail(item);
+      await loadCases();
+    } catch (error) {
+      console.error("AEGIS case note failed", error);
+    }
+  }
+
+  function seedCaseFromSelected() {
+    if (!state.selected) return;
+    const seed = [{type: "event", id: state.selected.id}];
+    if (state.selected.session_id) seed.push({type: "session", id: state.selected.session_id});
+    showView("cases");
+    resetCaseEditor(seed);
+    loadCases();
+  }
+
+  async function downloadCaseReportJSON() {
+    if (!state.selectedCase?.id) return;
+    const report = await safeGet("/api/v1/reports/case/" + encodeURIComponent(state.selectedCase.id));
+    if (report) downloadBlob(JSON.stringify(report, null, 2), "aegis-" + state.selectedCase.id + ".json", "application/json");
+  }
+
+  async function downloadCaseReportCSV() {
+    if (!state.selectedCase?.id) return;
+    const response = await fetch(
+      "/api/v1/reports/case/" + encodeURIComponent(state.selectedCase.id) + ".csv",
+      {headers: apiHeaders()}
+    );
+    if (response.status === 401) {
+      showOperatorGate(true);
+      return;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    downloadBlob(await response.blob(), "aegis-" + state.selectedCase.id + ".csv", "text/csv");
+  }
+
   function downloadBlob(content, filename, type) {
     const blob = content instanceof Blob ? content : new Blob([content], {type});
     const url = URL.createObjectURL(blob);
@@ -740,7 +1072,10 @@
   }
 
   document.querySelectorAll("[data-view-target]").forEach((button) => {
-    button.addEventListener("click", () => showView(button.dataset.viewTarget));
+    button.addEventListener("click", () => {
+      showView(button.dataset.viewTarget);
+      if (button.dataset.viewTarget === "cases") loadCases();
+    });
   });
 
   document.querySelectorAll("[data-filter]").forEach((select) => {
@@ -789,6 +1124,8 @@
     state.lang = state.lang === "it" ? "en" : "it";
     localStorage.setItem("aegis-lang", state.lang);
     i18n();
+    renderCaseList();
+    if (state.selectedCase) renderCaseDetail(state.selectedCase);
     if (state.selected) await selectEvent(state.selected, false);
   });
 
@@ -801,6 +1138,21 @@
   $("global-search").addEventListener("input", () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(refresh, 250);
+  });
+
+  $("case-from-event").addEventListener("click", seedCaseFromSelected);
+  $("case-new").addEventListener("click", () => resetCaseEditor([]));
+  $("case-form").addEventListener("submit", saveCase);
+  $("case-add-event").addEventListener("click", () => addSelectedEvidence("event"));
+  $("case-add-session").addEventListener("click", () => addSelectedEvidence("session"));
+  $("case-note-form").addEventListener("submit", addCaseNote);
+  $("case-report-json").addEventListener("click", downloadCaseReportJSON);
+  $("case-report-csv").addEventListener("click", downloadCaseReportCSV);
+  $("case-status-filter").addEventListener("change", loadCases);
+  let caseSearchTimer;
+  $("case-search").addEventListener("input", () => {
+    clearTimeout(caseSearchTimer);
+    caseSearchTimer = setTimeout(loadCases, 250);
   });
 
   $("open-relations").addEventListener("click", () => {
@@ -822,6 +1174,7 @@
     i18n();
     applyMapBox();
     updateFilterCount();
+    resetCaseEditor([]);
     try {
       const status = await getJSON("/api/v1/operator/status");
       if (status.required && !status.authenticated) {
