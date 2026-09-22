@@ -117,6 +117,19 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_cases_updated ON cases(updated_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_case_evidence_case ON case_evidence(case_id, added_at);
                 CREATE INDEX IF NOT EXISTS idx_case_history_case ON case_history(case_id, timestamp);
+
+                CREATE TABLE IF NOT EXISTS ip_enrichments (
+                    id TEXT PRIMARY KEY,
+                    ip TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    source_reference TEXT NOT NULL DEFAULT '',
+                    observed_at TEXT NOT NULL,
+                    stored_at TEXT NOT NULL,
+                    data TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_ip_enrichments_lookup
+                    ON ip_enrichments(ip, source, kind, stored_at DESC);
             """)
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(sessions)")}
             if "protocol" not in columns:
@@ -697,6 +710,71 @@ class Store:
         entries.sort(key=lambda item: str(item.get("observed_at") or ""), reverse=True)
         return entries[:100]
 
+    @staticmethod
+    def _decode_ip_enrichment(row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        item["data"] = json.loads(item["data"])
+        item["provenance"] = "external_enrichment"
+        item["record_origin"] = "standalone_enrichment"
+        return item
+
+    def add_ip_enrichment(self, ip: str, enrichment: dict[str, Any]) -> dict[str, Any]:
+        enrichment_id = "enr_" + uuid.uuid4().hex[:20]
+        stored_at = datetime.now(timezone.utc).isoformat()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO ip_enrichments(
+                    id,ip,kind,source,source_reference,observed_at,stored_at,data
+                ) VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (
+                    enrichment_id,
+                    ip,
+                    enrichment["kind"],
+                    enrichment["source"],
+                    enrichment.get("source_reference", ""),
+                    enrichment["observed_at"],
+                    stored_at,
+                    json.dumps(enrichment["data"], ensure_ascii=False),
+                ),
+            )
+            row = conn.execute("SELECT * FROM ip_enrichments WHERE id=?", (enrichment_id,)).fetchone()
+        return self._decode_ip_enrichment(row)
+
+    def list_ip_enrichments(self, ip: str, limit: int = 100) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM ip_enrichments
+                WHERE ip=?
+                ORDER BY observed_at DESC, stored_at DESC
+                LIMIT ?
+                """,
+                (ip, max(1, min(limit, 500))),
+            ).fetchall()
+        return [self._decode_ip_enrichment(row) for row in rows]
+
+    def recent_ip_enrichment(
+        self,
+        ip: str,
+        source: str,
+        kind: str,
+        max_age_hours: int,
+    ) -> dict[str, Any] | None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(0, max_age_hours))).isoformat()
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM ip_enrichments
+                WHERE ip=? AND source=? AND kind=? AND stored_at>=?
+                ORDER BY stored_at DESC
+                LIMIT 1
+                """,
+                (ip, source, kind, cutoff),
+            ).fetchone()
+        return self._decode_ip_enrichment(row) if row else None
+
     def ip_profile(self, ip: str) -> dict[str, Any]:
         with self.connect() as conn:
             rows = conn.execute(
@@ -707,6 +785,10 @@ class Store:
         first_seen = min((event["timestamp"] for event in events), default=None)
         last_seen = max((event["timestamp"] for event in events), default=None)
         severities = Counter(event["severity"] for event in events)
+        embedded_enrichment = self._extract_threat_intelligence(events)
+        stored_enrichment = self.list_ip_enrichments(ip)
+        threat_intelligence = embedded_enrichment + stored_enrichment
+        threat_intelligence.sort(key=lambda item: str(item.get("observed_at") or ""), reverse=True)
         return {
             "source_ip": ip,
             "event_count": len(events),
@@ -719,7 +801,7 @@ class Store:
             "protocols": sorted({event["protocol"] for event in events if event.get("protocol")}),
             "destination_ports": sorted({event["destination_port"] for event in events if event.get("destination_port")}),
             "severity": dict(severities),
-            "threat_intelligence": self._extract_threat_intelligence(events),
+            "threat_intelligence": threat_intelligence[:200],
             "events": events,
             "attribution_limit": (
                 "IP, ASN, geolocation and reputation enrichment describe infrastructure context; "
