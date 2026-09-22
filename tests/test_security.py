@@ -1,10 +1,12 @@
 import json
 import time
 import uuid
+
+import pytest
 from datetime import datetime, timezone
 
 from aegis_nexus.app import create_app
-from aegis_nexus.model import normalize_event
+from aegis_nexus.model import EventValidationError, normalize_event
 from aegis_nexus.security import SlidingWindowLimiter, sign_payload, verify_signed_payload
 from aegis_nexus.store import Store
 
@@ -20,6 +22,15 @@ def _signed_request(secret: str, sensor: str, payload: dict):
         "X-Aegis-Signature": sign_payload(secret, timestamp, body),
     }
     return body, headers
+
+
+def test_normalize_event_rejects_non_finite_numeric_values():
+    with pytest.raises(EventValidationError, match="non-finite"):
+        normalize_event({
+            "honeypot": "web-1",
+            "event_type": "web.request",
+            "observed": {"source_ip": "203.0.113.90", "score": float("nan")},
+        })
 
 
 def test_signature_verification_and_tamper_detection():
