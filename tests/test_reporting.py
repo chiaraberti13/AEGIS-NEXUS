@@ -36,7 +36,7 @@ def test_session_markdown_redacts_raw_password_and_escapes_hostile_markup(tmp_pa
         "severity": "medium",
         "observed": {
             **common_observed,
-            "payload": "<script>alert(1)</script>\\n# heading\\n\`\`\`html\\n<img src=x onerror=alert(2)>\\n\`\`\`",
+            "payload": "<script>alert(1)</script>\\n# heading\\n```html\\n<img src=x onerror=alert(2)>\\n```",
         },
     }
     first = client.post("/api/v1/events", headers={"X-Aegis-Key": "secret"}, json=credential)
@@ -53,7 +53,7 @@ def test_session_markdown_redacts_raw_password_and_escapes_hostile_markup(tmp_pa
 
     assert "Report investigativo di sessione" in body
     assert "markdown-raw-secret" not in body
-    assert "password_sha256" in body
+    assert "SHA-256 password" in body
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in body
     assert "&lt;img src=x onerror=alert(2)&gt;" in body
     assert "<script>" not in body
