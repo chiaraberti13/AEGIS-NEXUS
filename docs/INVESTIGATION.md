@@ -39,6 +39,12 @@ Commands and payloads are scanned statically for exact URLs, domains, IP literal
 
 The graph can contain event, session, IP, ASN, country, service, protocol, port, honeypot, credential, command, payload, IDS, IOC, MITRE and CVE nodes. Nodes exist only when the underlying data exists. MITRE and CVE nodes therefore appear only when the stored record contains rationale and evidence.
 
+### Historical navigation
+
+The investigation feed uses cursor pagination ordered by event timestamp plus event ID. The cursor freezes the initial time-window boundary and is bound to the active search and exact filters, preventing accidental reuse after the analyst changes scope. New telemetry arriving while older pages are being loaded does not shift already-issued cursors or create offset-style duplicates.
+
+Session listing APIs use the same keyset approach with `last_seen` plus session ID. Cursors are navigation state, not evidence and not authorization tokens.
+
 ### Case management
 
 Cases let an operator preserve the investigation context without duplicating hostile telemetry. Status, severity, summary, tags and notes are analyst-owned metadata. Event/session evidence is linked by identifier and can later become unavailable when normal telemetry retention removes its source. This is shown explicitly rather than interpreted as absence of activity. See [Case management](CASE_MANAGEMENT.md).
@@ -91,6 +97,12 @@ Comandi e payload vengono analizzati staticamente per URL, domini, IP letterali 
 ### Grafo delle relazioni
 
 Il grafo può contenere nodi evento, sessione, IP, ASN, paese, servizio, protocollo, porta, honeypot, credential, comando, payload, IDS, IOC, MITRE e CVE. I nodi esistono solo se esistono i dati corrispondenti. MITRE e CVE compaiono quindi soltanto quando il record contiene razionale ed evidenza.
+
+### Navigazione storica
+
+Il feed investigativo usa paginazione a cursore ordinata per timestamp evento più ID evento. Il cursore congela il limite temporale della prima pagina ed è vincolato a ricerca e filtri esatti attivi, evitando il riuso accidentale dopo un cambio di scope. La nuova telemetria che arriva mentre si caricano pagine precedenti non sposta i cursori già emessi e non produce i duplicati tipici della paginazione a offset.
+
+Le API delle sessioni usano lo stesso approccio keyset con `last_seen` più ID sessione. I cursori sono stato di navigazione, non evidenza e non token di autorizzazione.
 
 ### Gestione casi
 
