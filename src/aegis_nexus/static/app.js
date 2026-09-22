@@ -152,7 +152,7 @@
   }
 
   function refreshFilterLabels() {
-    ["country", "protocol", "service", "honeypot", "severity", "event_type"].forEach((key) => {
+    ["country", "asn", "destination_port", "protocol", "service", "honeypot", "severity", "event_type"].forEach((key) => {
       const id = key === "event_type" ? "filter-event-type" : "filter-" + key;
       const select = $(id);
       if (select && select.options.length) select.options[0].textContent = t("filters.all." + key);
@@ -162,7 +162,7 @@
   async function loadFilterOptions() {
     const data = await safeGet("/api/v1/meta/filters?hours=" + encodeURIComponent($("window").value));
     if (!data) return;
-    ["country", "protocol", "service", "honeypot", "severity", "event_type"].forEach((key) => {
+    ["country", "asn", "destination_port", "protocol", "service", "honeypot", "severity", "event_type"].forEach((key) => {
       populateFilter(key, data[key]);
     });
   }
@@ -1086,8 +1086,8 @@
       map(dashboard.map_points);
       heat(dashboard.heatmap);
       bars("chart-country", dashboard.country, {filterKey: "country"});
-      bars("chart-asn", dashboard.asn, {search: true});
-      bars("chart-port", dashboard.destination_port, {search: true});
+      bars("chart-asn", dashboard.asn, {filterKey: "asn"});
+      bars("chart-port", dashboard.destination_port, {filterKey: "destination_port"});
       bars("chart-protocol", dashboard.protocol, {filterKey: "protocol"});
       bars("chart-honeypot", dashboard.honeypot, {filterKey: "honeypot"});
       bars("chart-service", dashboard.service, {filterKey: "service"});
