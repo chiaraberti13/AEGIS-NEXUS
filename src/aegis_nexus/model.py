@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import math
 import os
 import re
 import uuid
@@ -41,7 +42,13 @@ def _utc_iso(value: Any | None = None) -> str:
 def _bounded(value: Any, depth: int = 0) -> Any:
     if depth > MAX_DEPTH:
         raise EventValidationError("payload nesting too deep")
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise EventValidationError("non-finite numeric value")
         return value
     if isinstance(value, str):
         return value[:MAX_STRING]
