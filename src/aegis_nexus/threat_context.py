@@ -13,7 +13,7 @@ SUPPORTED_TYPES = {"ip", "domain", "url", "md5", "sha1", "sha256"}
 DOMAIN_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$")
 HASH_LENGTHS = {"md5": 32, "sha1": 40, "sha256": 64}
 HEX_RE = re.compile(r"^[A-Fa-f0-9]+$")
-CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class ThreatContextError(ValueError):
