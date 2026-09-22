@@ -151,7 +151,8 @@ class Store:
                 )
                 capacity_deleted = cur.rowcount
                 conn.execute("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM events)")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        with self.connect() as checkpoint_conn:
+            checkpoint_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         return {"retention_deleted": retention_deleted, "capacity_deleted": capacity_deleted}
 
     @staticmethod
