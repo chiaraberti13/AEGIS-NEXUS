@@ -9,14 +9,14 @@ from urllib.parse import urlsplit
 MAX_ARTIFACTS_PER_EVENT = 32
 MAX_SCAN_CHARS = 4096
 
-URL_RE = re.compile(r'''https?://[^\\s<>"'`]{1,2048}''', re.I)
+URL_RE = re.compile(r'''https?://[^\s<>"'`]{1,2048}''', re.I)
 DOMAIN_RE = re.compile(
     r"(?<![A-Za-z0-9_.-])"
-    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
     r"[A-Za-z]{2,63}"
     r"(?![A-Za-z0-9_.-])"
 )
-IPV4_RE = re.compile(r"(?<![A-Za-z0-9_.])(?:\\d{1,3}\\.){3}\\d{1,3}(?![A-Za-z0-9_.])")
+IPV4_RE = re.compile(r"(?<![A-Za-z0-9_.])(?:\d{1,3}\.){3}\d{1,3}(?![A-Za-z0-9_.])")
 IPV6_RE = re.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:])")
 HASH_RE = re.compile(
     r"(?<![A-Fa-f0-9])(?:[A-Fa-f0-9]{64}|[A-Fa-f0-9]{40}|[A-Fa-f0-9]{32})(?![A-Fa-f0-9])"
