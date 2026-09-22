@@ -257,8 +257,9 @@ class Store:
             ))
         self._ingest_since_maintenance += 1
         self.maintain()
+        safe_event = self._export_safe_event(event)
         return {
-            **event,
+            **safe_event,
             "session_id": session_id,
             "received_at": received_at,
             "collector_received_at": received_at,
