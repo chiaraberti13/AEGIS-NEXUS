@@ -23,6 +23,12 @@ The Compose topology is:
 
 The telemetry path is narrow but it is not a hardware data diode. If an Internet-facing sensor were compromised through a software defect, the Docker host firewall remains responsible for preventing access to production networks and for restricting outbound Internet access.
 
+### Sensor identity isolation
+
+The standard Compose deployment assigns distinct ingest secrets to SSH, web and legacy decoys. The collector receives these through `AEGIS_SENSOR_KEYS`, which acts as an allowlist: when the map is configured, the shared `AEGIS_INGEST_API_KEY` is not accepted as a fallback and unknown sensor IDs are rejected. Signed requests therefore authenticate both payload integrity and the expected sensor identity.
+
+Suricata uses the optional `AEGIS_SURICATA_SENSOR_API_KEY`. Custom sensors must be added explicitly to the collector allowlist. Rotate one sensor key independently after suspected compromise instead of rotating every decoy at once.
+
 ### Runtime containment
 
 Sensors run as the non-root image user with:
@@ -64,6 +70,12 @@ La topologia Compose è:
 `legacy_exposure → legacy-decoy → legacy_mgmt → collector`
 
 Il percorso di telemetria è ristretto ma non equivale a un data diode hardware. Se un sensore esposto a Internet venisse compromesso tramite un difetto software, il firewall dell'host deve comunque impedire l'accesso alle reti di produzione e limitare l'uscita verso Internet.
+
+### Isolamento dell'identità sensore
+
+Il deployment Compose standard assegna segreti di ingestione distinti ai decoy SSH, web e legacy. Il collector li riceve tramite `AEGIS_SENSOR_KEYS`, che funziona come allowlist: quando la mappa è configurata, `AEGIS_INGEST_API_KEY` condivisa non viene accettata come fallback e gli ID sensore sconosciuti vengono rifiutati. Le richieste firmate autenticano quindi sia l'integrità del payload sia l'identità attesa del sensore.
+
+Suricata utilizza la chiave opzionale `AEGIS_SURICATA_SENSOR_API_KEY`. I sensori personalizzati devono essere aggiunti esplicitamente all'allowlist del collector. Dopo una compromissione sospetta è possibile ruotare la singola chiave senza dover cambiare quelle di tutti i decoy.
 
 ### Contenimento runtime
 
