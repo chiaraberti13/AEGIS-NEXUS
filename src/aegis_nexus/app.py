@@ -249,10 +249,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                 configured_sensor_ids=list(sensor_keys),
                 recent_hours=request.args.get("hours", 24, type=int),
             )
-        return jsonify({
-            "collector": health,
-            "telemetry": telemetry,
-        })
+        return jsonify({"collector": health, "telemetry": telemetry})
 
     @app.post("/api/v1/events")
     def ingest_event():
