@@ -1,6 +1,6 @@
 import sqlite3
 
-from scripts.backup import backup_database
+from aegis_nexus.backup import backup_database
 
 
 def test_backup_database_copies_data_and_rotates(tmp_path):
