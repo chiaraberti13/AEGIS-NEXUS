@@ -31,7 +31,7 @@ The current implementation provides both the secure telemetry/investigation foun
 - Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw storage is explicit opt-in only.
 - Persistent SQLite session correlation that prefers explicit decoy connection IDs or Suricata flow identity and falls back to source IP, honeypot, service, protocol, destination port and inactivity window when needed.
 - Investigation APIs and dedicated SOC views for events, IP profiles, sessions, timelines, relationship graphs, Threat Intelligence context and Study Mode.
-- Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail and JSON/CSV case reports.
+- Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail, bounded lifecycle/closed-case retention and JSON/CSV case reports.
 - SOC dashboard with global search/filters, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, interactive Attack Map and Live Feed.
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
 - Continuous time-based retention with `AEGIS_RETENTION_DAYS` plus the storage ceiling `AEGIS_MAX_DB_EVENTS`; JSON/CSV investigation exports never include cleartext passwords.
