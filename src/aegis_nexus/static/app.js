@@ -10,7 +10,7 @@
     sessionStudy: null,
     dashboard: null,
     enrichmentStatus: null,
-    threatContextStatus: null,
+    operationsStatus: null,
     events: [],
     eventsCursor: null,
     eventsHasMore: false,
@@ -100,8 +100,48 @@
       $("analytics-warning").textContent = t("analytics.truncated").replace("{limit}", String(state.dashboard.analysis.event_limit));
     }
     renderEnrichmentStatus();
-    renderThreatContextStatus();
+    renderOperationsStatus();
     renderEventPagination();
+  }
+
+  function renderOperationsStatus() {
+    const label = $("collector-status");
+    const dot = $("collector-status-dot");
+    const telemetryNode = $("sensor-telemetry-status");
+    if (!label || !dot || !telemetryNode) return;
+
+    const status = state.operationsStatus;
+    dot.classList.remove("degraded", "unknown");
+    if (!status) {
+      label.textContent = t("status.collectorUnknown");
+      dot.classList.add("unknown");
+      telemetryNode.textContent = "";
+      return;
+    }
+
+    const ready = status.collector?.ready === true;
+    label.textContent = t(ready ? "status.collectorReady" : "status.collectorDegraded");
+    if (!ready) dot.classList.add("degraded");
+
+    const telemetry = status.telemetry || {};
+    const hours = String(telemetry.recent_hours || 24);
+    if ((telemetry.configured_sensors || 0) > 0) {
+      telemetryNode.textContent = t("status.telemetryConfigured")
+        .replace("{hours}", hours)
+        .replace("{recent}", String(telemetry.configured_with_recent_telemetry || 0))
+        .replace("{configured}", String(telemetry.configured_sensors || 0));
+    } else {
+      telemetryNode.textContent = t("status.telemetryObserved")
+        .replace("{hours}", hours)
+        .replace("{observed}", String(telemetry.observed_sensor_ids || 0));
+    }
+    telemetryNode.title = t("status.telemetryHint");
+  }
+
+  async function loadOperationsStatus() {
+    const data = await safeGet("/api/v1/operations/status?hours=24");
+    state.operationsStatus = data;
+    renderOperationsStatus();
   }
 
   function renderEnrichmentStatus() {
@@ -1262,7 +1302,7 @@
         hideOperatorGate();
         await loadFilterOptions();
         await loadEnrichmentStatus();
-        await loadThreatContextStatus();
+        await loadOperationsStatus();
         await refresh();
       } else {
         showOperatorGate(true);
@@ -1346,7 +1386,7 @@
       hideOperatorGate();
       await loadFilterOptions();
       await loadEnrichmentStatus();
-      await loadThreatContextStatus();
+      await loadOperationsStatus();
       await refresh();
     } catch (error) {
       console.error("AEGIS bootstrap failed", error);
@@ -1358,4 +1398,7 @@
   window.setInterval(() => {
     if (!document.hidden && $("operator-gate").hidden) refresh();
   }, 5000);
+  window.setInterval(() => {
+    if (!document.hidden && $("operator-gate").hidden) loadOperationsStatus();
+  }, 30000);
 })();
