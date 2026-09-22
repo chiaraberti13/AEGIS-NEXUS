@@ -29,3 +29,21 @@ def test_enrichment_requires_provenance():
 def test_mitre_mapping_requires_evidence():
     with pytest.raises(EventValidationError):
         normalize_event({"honeypot":"x", "event_type":"command", "derived":{"mitre":[{"technique_id":"T1059"}]}})
+
+
+def test_invalid_destination_port_rejected():
+    with pytest.raises(EventValidationError):
+        normalize_event({
+            "honeypot":"x",
+            "event_type":"connection",
+            "observed":{"source_ip":"203.0.113.10","destination_port":70000},
+        })
+
+
+def test_ioc_requires_explicit_evidence():
+    with pytest.raises(EventValidationError):
+        normalize_event({
+            "honeypot":"x",
+            "event_type":"web.payload",
+            "derived":{"ioc":[{"type":"pattern","value":"example"}]},
+        })
