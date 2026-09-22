@@ -1,0 +1,131 @@
+<p align="center"><a href="README.md">🇬🇧 English</a> · <a href="README.it.md">🇮🇹 Italiano</a></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-active-F2C94C?style=flat-square" alt="Active">
+  <img src="https://img.shields.io/badge/category-CYBERSECURITY-22D3EE?style=flat-square" alt="Cybersecurity">
+  <img src="https://img.shields.io/badge/stack-Python%20%2B%20Flask-8B949E?style=flat-square" alt="Python and Flask">
+  <img src="https://img.shields.io/badge/languages-EN%20%7C%20IT-8B5CF6?style=flat-square" alt="English and Italian">
+  <img src="https://img.shields.io/badge/licence-MIT-2EA043?style=flat-square" alt="MIT">
+</p>
+
+> Telemetria honeypot, investigazione SOC, threat research e studio della cybersecurity in una piattaforma evidence-first.
+
+<p align="center"><a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="LICENSE">Licenza MIT</a></p>
+
+---
+
+## Cos'è AEGIS-NEXUS
+
+AEGIS-NEXUS nasce come **Honeypot + SOC Analysis + Threat Research + Cybersecurity Learning Lab**. Il principio centrale è separare sempre osservazione grezza, enrichment esterni, dati derivati e ipotesi analitiche.
+
+L'implementazione attuale fornisce la base reale e sicura per telemetria e investigazione. I servizi di deception SSH/web/legacy verranno aggiunti sopra questo contratto senza dichiararli completi prima che il relativo codice esista.
+
+## Implementato ora
+
+- Collector Flask con ingestione JSON limitata e API key sensore opzionale.
+- Schema eventi normalizzato con `observed`, `enrichment`, `derived`, `hypotheses` separati.
+- Provenienza obbligatoria per enrichment esterni (`source` e `observed_at`).
+- Mapping MITRE ATT&CK e CVE accettati solo con `rationale` ed `evidence`.
+- Password redatte per default, con fingerprint SHA-256 e lunghezza; memorizzazione raw solo tramite opt-in esplicito.
+- Correlazione persistente delle sessioni su SQLite per IP sorgente, honeypot, servizio e finestra di inattività.
+- API di investigazione per eventi, IP, sessioni, relazioni, Study Mode e report JSON evidence-preserving.
+- Dashboard SOC con timeline, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, IDS, MITRE, heatmap temporale, Attack Map e Live Feed.
+- Interfaccia IT/EN tramite dizionario i18n centrale; la telemetria viene sempre resa come testo e mai come HTML controllato dall'attaccante.
+- Retention configurabile con `AEGIS_RETENTION_DAYS`.
+- Runtime Docker hardenizzato: utente non-root, capability rimosse, root filesystem read-only, `no-new-privileges`, rete management privata e porta operatore esposta solo su localhost.
+- CI per test Python e build Docker.
+
+## Contratto dati
+
+Ogni evento mantiene separate le quattro classi di provenienza. Nessuna CVE, threat actor, malware family o tecnica MITRE viene inventata automaticamente: se l'evidenza non è sufficiente, il campo rimane vuoto.
+
+```json
+{
+  "honeypot": "ssh-01",
+  "event_type": "command",
+  "severity": "medium",
+  "observed": {
+    "source_ip": "203.0.113.10",
+    "service": "ssh",
+    "protocol": "tcp",
+    "destination_port": 22,
+    "command": "uname -a"
+  },
+  "enrichment": {
+    "geo": {
+      "source": "provider-name",
+      "observed_at": "2026-09-22T18:00:00Z",
+      "data": {"country": "IT", "latitude": 41.9, "longitude": 12.5}
+    }
+  },
+  "derived": {
+    "mitre": [{
+      "technique_id": "T1059",
+      "rationale": "Command interpreter activity was directly observed",
+      "evidence": ["observed.command"]
+    }]
+  },
+  "hypotheses": []
+}
+```
+
+## Flusso investigativo
+
+`Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → enrichment → MITRE/IOC → relazioni → report`
+
+Il grafo usa esclusivamente i dati realmente presenti nella sessione selezionata. Study Mode spiega perché un evento è interessante e cosa dovrebbe verificare un SOC Analyst, mantenendo visibili i limiti dell'analisi.
+
+## Avvio rapido
+
+Richiede Python 3.12+ oppure Docker Compose.
+
+```bash
+cp .env.example .env
+# Sostituisci AEGIS_INGEST_API_KEY con un valore casuale lungo.
+docker compose up -d --build
+# Dashboard: http://127.0.0.1:8600
+```
+
+Sviluppo:
+
+```bash
+python -m pip install -e '.[dev]'
+pytest -q
+AEGIS_DATABASE_PATH=./data/aegis.db flask --app aegis_nexus.app run --host 127.0.0.1 --port 8600
+```
+
+## Struttura
+
+```text
+src/aegis_nexus/
+├── app.py          API Flask, security header e route
+├── model.py        normalizzazione hostile-input e validazione provenienza
+├── correlation.py regole di correlazione sessioni
+├── store.py        persistenza, analytics, relazioni e report
+├── study.py        Study Mode deterministico IT/EN
+├── templates/      console SOC
+└── static/         i18n, grafici, mappa, live feed e investigazione
+docs/
+├── DATA_PROVENANCE.md
+├── PRIVACY.md
+└── THREAT_MODEL.md
+tests/
+```
+
+## Privacy e limiti di attribuzione
+
+La telemetria honeypot può contenere IP, credenziali e payload. Definisci finalità e periodo di conservazione, limita l'accesso degli operatori e non pubblicare dati sensibili raw. Geolocalizzazione IP, ASN e reputazione Threat Intelligence possono riferirsi a VPN, proxy, hosting, NAT o sistemi compromessi e non dimostrano l'identità della persona che ha originato l'attività.
+
+Consulta [Privacy e retention](docs/PRIVACY.md) e [Threat model](docs/THREAT_MODEL.md).
+
+## Roadmap
+
+I prossimi cicli implementativi sono dedicati a servizi honeypot isolati, identità firmata dei sensori, adapter di enrichment controllati, ingestione Suricata, case management, formati di export e ulteriori workflow SOC/Study. Le funzionalità vengono documentate quando sono realmente presenti nel codice.
+
+## Licenza e uso responsabile
+
+Distribuito con [licenza MIT](LICENSE). Utilizzalo esclusivamente su infrastrutture di tua proprietà o per le quali possiedi un'autorizzazione esplicita. Non usare AEGIS-NEXUS per contro-attaccare, accedere a sistemi di terzi o pubblicare credenziali/dati personali raccolti.
+
+---
+
+© Chiara Berti — 2026
