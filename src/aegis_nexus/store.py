@@ -24,10 +24,17 @@ _EVENT_FILTERS = (
 
 
 class Store:
-    def __init__(self, path: str, retention_days: int = 30, max_events: int = 500_000):
+    def __init__(
+        self,
+        path: str,
+        retention_days: int = 30,
+        max_events: int = 500_000,
+        analytics_max_events: int = 20_000,
+    ):
         self.path = path
         self.retention_days = max(0, retention_days)
         self.max_events = max(1_000, max_events)
+        self.analytics_max_events = max(100, min(analytics_max_events, self.max_events))
         self._ingest_since_maintenance = 0
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._init()
@@ -427,18 +434,31 @@ class Store:
     ) -> dict[str, Any]:
         bounded_hours = max(1, min(hours, 720))
         since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+        clauses = ["timestamp >= ?"]
+        params: list[Any] = [since]
+        filter_clauses, filter_params = self._sql_filters(filters)
+        clauses.extend(filter_clauses)
+        params.extend(filter_params)
+        if q:
+            clauses.append(
+                "(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR protocol LIKE ? OR "
+                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR observed LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
+            )
+            needle = f"%{q[:128]}%"
+            params.extend([needle] * 10)
+        params.append(self.analytics_max_events + 1)
+        where = " AND ".join(clauses)
         with self.connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM events WHERE timestamp >= ? ORDER BY timestamp ASC",
-                (since,),
+                f"SELECT * FROM events WHERE {where} ORDER BY timestamp DESC LIMIT ?",
+                params,
             ).fetchall()
-        events = [self._decode(row) for row in rows]
+        truncated = len(rows) > self.analytics_max_events
+        if truncated:
+            rows = rows[:self.analytics_max_events]
+        events = [self._decode(row) for row in reversed(rows)]
         if not include_simulation:
             events = [event for event in events if event["derived"].get("data_mode") != "simulation"]
-        events = [
-            event for event in events
-            if self._matches_q(event, q) and self._event_matches_filters(event, filters)
-        ]
 
         timeline: dict[str, int] = defaultdict(int)
         heatmap = [[0 for _ in range(24)] for _ in range(7)]

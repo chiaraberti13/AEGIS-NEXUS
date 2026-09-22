@@ -7,6 +7,17 @@
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+<div id="operator-gate" class="operator-gate" hidden>
+  <form id="operator-form" class="operator-card" autocomplete="off">
+    <span class="brand-mark auth-mark">A</span>
+    <p class="eyebrow">AEGIS-NEXUS</p>
+    <h1 data-i18n="auth.title"></h1>
+    <p class="muted" data-i18n="auth.subtitle"></p>
+    <input id="operator-key" type="password" data-i18n-placeholder="auth.placeholder" autocomplete="current-password">
+    <button class="compact auth-submit" type="submit" data-i18n="auth.submit"></button>
+    <p id="operator-error" class="auth-error" hidden data-i18n="auth.invalid"></p>
+  </form>
+</div>
 <div class="shell">
   <aside class="sidebar">
     <div class="brand">
@@ -33,17 +44,18 @@
           <span aria-hidden="true">⌕</span>
           <input id="global-search" type="search" data-i18n-placeholder="search.placeholder" autocomplete="off">
         </label>
-        <select id="window" data-i18n-aria="aria.timeWindow">
+        <select id="window" data-i18n-aria="time.window">
           <option value="24">24h</option>
           <option value="72">72h</option>
           <option value="168">7d</option>
           <option value="720">30d</option>
         </select>
         <button id="lang-toggle" class="compact" type="button">EN</button>
+        <button id="operator-lock" class="compact" type="button" data-i18n-title="auth.lock" data-i18n-aria="auth.lock">⌁</button>
       </div>
     </header>
 
-    <section class="filterbar" data-i18n-aria="aria.globalFilters">
+    <section class="filterbar" data-i18n-aria="filters.global">
       <select id="filter-country" data-filter="country"></select>
       <select id="filter-protocol" data-filter="protocol"></select>
       <select id="filter-service" data-filter="service"></select>
@@ -53,6 +65,7 @@
       <button id="reset-filters" class="compact" type="button" data-i18n="filters.reset"></button>
       <span id="active-filter-count" class="badge">0</span>
     </section>
+    <p id="analytics-warning" class="analytics-warning" hidden></p>
 
     <section class="workspace active" data-view="dashboard">
       <section class="kpis">

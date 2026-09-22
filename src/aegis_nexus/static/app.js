@@ -12,14 +12,34 @@
     events: [],
     filters: {},
     mapBox: [0, 0, 800, 390],
+    operatorKey: sessionStorage.getItem("aegis-operator-key") || "",
   };
 
   const $ = (id) => document.getElementById(id);
   const t = (key) => (window.AEGIS_I18N[state.lang] || {})[key] || key;
   const pretty = (value) => JSON.stringify(value ?? {}, null, 2);
 
+  function apiHeaders(extra = {}) {
+    const headers = {Accept: "application/json", ...extra};
+    if (state.operatorKey) headers["X-Aegis-Operator-Key"] = state.operatorKey;
+    return headers;
+  }
+
+  function showOperatorGate(invalid = false) {
+    $("operator-gate").hidden = false;
+    $("operator-error").hidden = !invalid;
+    window.setTimeout(() => $("operator-key").focus(), 0);
+  }
+
+  function hideOperatorGate() {
+    $("operator-gate").hidden = true;
+    $("operator-error").hidden = true;
+    $("operator-key").value = "";
+  }
+
   async function getJSON(url) {
-    const response = await fetch(url, {headers: {Accept: "application/json"}});
+    const response = await fetch(url, {headers: apiHeaders()});
+    if (response.status === 401 && url !== "/api/v1/operator/status") showOperatorGate(true);
     if (!response.ok) throw new Error("HTTP " + response.status);
     return response.json();
   }
@@ -49,6 +69,9 @@
     });
     $("lang-toggle").textContent = state.lang === "it" ? "EN" : "IT";
     refreshFilterLabels();
+    if (state.dashboard?.analysis?.truncated) {
+      $("analytics-warning").textContent = t("analytics.truncated").replace("{limit}", String(state.dashboard.analysis.event_limit));
+    }
   }
 
   function showView(name) {
@@ -658,14 +681,18 @@
     if (report) downloadBlob(JSON.stringify(report, null, 2), "aegis-" + state.selected.session_id + ".json", "application/json");
   }
 
-  function downloadReportCSV() {
+  async function downloadReportCSV() {
     if (!state.selected?.session_id) return;
-    const anchor = document.createElement("a");
-    anchor.href = "/api/v1/reports/session/" + encodeURIComponent(state.selected.session_id) + ".csv";
-    anchor.download = "aegis-" + state.selected.session_id + ".csv";
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
+    const response = await fetch(
+      "/api/v1/reports/session/" + encodeURIComponent(state.selected.session_id) + ".csv",
+      {headers: apiHeaders()}
+    );
+    if (response.status === 401) {
+      showOperatorGate(true);
+      return;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    downloadBlob(await response.blob(), "aegis-" + state.selected.session_id + ".csv", "text/csv");
   }
 
   function exportStats() {
@@ -687,6 +714,11 @@
       $("kpi-ips").textContent = String(dashboard.totals.unique_source_ip);
       $("kpi-sessions").textContent = String(dashboard.totals.sessions);
       $("kpi-critical").textContent = String(dashboard.totals.critical);
+      const analyticsWarning = $("analytics-warning");
+      analyticsWarning.hidden = !dashboard.analysis?.truncated;
+      if (dashboard.analysis?.truncated) {
+        analyticsWarning.textContent = t("analytics.truncated").replace("{limit}", String(dashboard.analysis.event_limit));
+      }
       timeline(dashboard.timeline);
       map(dashboard.map_points);
       heat(dashboard.heatmap);
@@ -727,6 +759,32 @@
     refresh();
   });
 
+  $("operator-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const candidate = $("operator-key").value.trim();
+    state.operatorKey = candidate;
+    if (candidate) sessionStorage.setItem("aegis-operator-key", candidate);
+    else sessionStorage.removeItem("aegis-operator-key");
+    try {
+      const status = await getJSON("/api/v1/operator/status");
+      if (status.authenticated) {
+        hideOperatorGate();
+        await loadFilterOptions();
+        await refresh();
+      } else {
+        showOperatorGate(true);
+      }
+    } catch {
+      showOperatorGate(true);
+    }
+  });
+
+  $("operator-lock").addEventListener("click", () => {
+    state.operatorKey = "";
+    sessionStorage.removeItem("aegis-operator-key");
+    showOperatorGate(false);
+  });
+
   $("lang-toggle").addEventListener("click", async () => {
     state.lang = state.lang === "it" ? "en" : "it";
     localStorage.setItem("aegis-lang", state.lang);
@@ -760,11 +818,27 @@
     applyMapBox();
   });
 
-  i18n();
-  applyMapBox();
-  updateFilterCount();
-  loadFilterOptions().then(refresh);
+  async function bootstrap() {
+    i18n();
+    applyMapBox();
+    updateFilterCount();
+    try {
+      const status = await getJSON("/api/v1/operator/status");
+      if (status.required && !status.authenticated) {
+        showOperatorGate(Boolean(state.operatorKey));
+        return;
+      }
+      hideOperatorGate();
+      await loadFilterOptions();
+      await refresh();
+    } catch (error) {
+      console.error("AEGIS bootstrap failed", error);
+      showOperatorGate(Boolean(state.operatorKey));
+    }
+  }
+
+  bootstrap();
   window.setInterval(() => {
-    if (!document.hidden) refresh();
+    if (!document.hidden && $("operator-gate").hidden) refresh();
   }, 5000);
 })();
