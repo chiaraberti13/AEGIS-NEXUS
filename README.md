@@ -18,11 +18,11 @@
 
 AEGIS-NEXUS is being built as a **Honeypot + SOC Analysis + Threat Research + Cybersecurity Learning Lab**. Its core rule is to keep raw observations, external enrichment, derived analysis and hypotheses separate.
 
-The current implementation provides the real secure telemetry and investigation foundation. Dedicated SSH/web/legacy deception services will be added on top of this contract instead of being presented as complete before their code exists.
+The current implementation provides both the secure telemetry/investigation foundation and isolated low/intermediate-interaction SSH, web, FTP and Telnet decoys. Captured commands and payloads are emulated or recorded only; they are never executed.
 
 ## Implemented now
 
-- Flask collector with bounded JSON ingestion and an optional sensor API key.
+- Isolated SSH, web, FTP and Telnet decoys plus a Flask collector with bounded JSON ingestion and a sensor API key.
 - Normalized event schema with separate `observed`, `enrichment`, `derived` and `hypotheses` classes.
 - External enrichment requires provenance through `source` and `observed_at`.
 - MITRE ATT&CK and CVE derived mappings are accepted only when they include both `rationale` and `evidence`.
@@ -33,6 +33,7 @@ The current implementation provides the real secure telemetry and investigation 
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
 - Configurable retention with `AEGIS_RETENTION_DAYS`.
 - Hardened Docker runtime: non-root user, dropped capabilities, read-only root filesystem, `no-new-privileges`, private management network and localhost-only operator port.
+- Sensor containers with read-only filesystems, dropped capabilities, resource limits and a separate DMZ/telemetry network path.
 - CI for Python tests and Docker image build.
 
 ## Data contract
@@ -103,6 +104,7 @@ src/aegis_nexus/
 ├── correlation.py session correlation rules
 ├── store.py        persistence, analytics, relations and reports
 ├── study.py        deterministic IT/EN Study Mode
+├── sensors/        SSH, web, FTP/Telnet decoys and telemetry client
 ├── templates/      SOC console
 └── static/         i18n, charts, map, live feed and investigation
 docs/
@@ -116,11 +118,11 @@ tests/
 
 Honeypot telemetry may contain IP addresses, credentials and payloads. Define a lawful purpose and retention period, restrict operator access and avoid publishing raw sensitive telemetry. IP geolocation, ASN ownership and Threat Intelligence reputation may point to VPNs, proxies, hosting infrastructure, NAT gateways or compromised systems and do not establish the identity of the human behind the activity.
 
-See [Privacy & retention](docs/PRIVACY.md) and the [Threat model](docs/THREAT_MODEL.md).
+See [Privacy & retention](docs/PRIVACY.md), the [Threat model](docs/THREAT_MODEL.md) and [Sensor isolation](docs/SENSOR_ISOLATION.md).
 
 ## Roadmap
 
-Next implementation cycles focus on isolated honeypot services, signed sensor identity, controlled enrichment adapters, Suricata ingestion, case management, export formats and additional SOC/Study workflows. Capabilities are documented when they are implemented, not ahead of the code.
+Next implementation cycles focus on stronger per-sensor identity, controlled enrichment adapters, native Suricata ingestion, case management, export formats and additional SOC/Study workflows. Capabilities are documented when they are implemented, not ahead of the code.
 
 ## Licence & responsible use
 
