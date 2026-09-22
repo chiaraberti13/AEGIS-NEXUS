@@ -15,6 +15,8 @@ from .correlation import explicit_session_token, session_id_for, session_id_for_
 
 _EVENT_FILTERS = (
     "country",
+    "asn",
+    "destination_port",
     "protocol",
     "service",
     "honeypot",
@@ -807,7 +809,7 @@ class Store:
         bounded_hours = max(1, min(hours, 720))
         since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
         result: dict[str, list[str]] = {}
-        columns = ("country", "protocol", "service", "honeypot", "severity", "event_type")
+        columns = ("country", "asn", "destination_port", "protocol", "service", "honeypot", "severity", "event_type")
         with self.connect() as conn:
             for column in columns:
                 rows = conn.execute(

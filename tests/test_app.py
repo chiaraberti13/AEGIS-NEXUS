@@ -337,3 +337,58 @@ def test_json_report_never_exports_opted_in_raw_password(tmp_path, monkeypatch):
     report_text = report.get_data(as_text=True)
     assert "raw-opt-in-secret" not in report_text
     assert "password_sha256" in report_text
+
+
+def test_exact_asn_and_destination_port_filters(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "secret",
+    })
+    client = app.test_client()
+
+    def ingest(event_id, ip, port, asn):
+        return client.post(
+            "/api/v1/events",
+            headers={"X-Aegis-Key": "secret"},
+            json={
+                "id": event_id,
+                "honeypot": "multi-decoy",
+                "event_type": "connection",
+                "observed": {
+                    "source_ip": ip,
+                    "service": "tcp",
+                    "protocol": "tcp",
+                    "destination_port": port,
+                },
+                "enrichment": {
+                    "asn": {
+                        "source": "test-enricher",
+                        "observed_at": "2026-09-22T20:00:00Z",
+                        "data": {"asn": asn},
+                    }
+                },
+            },
+        )
+
+    assert ingest("0188127e-ae4d-4b73-93af-24cedf704f5b", "203.0.113.140", 22, "AS64500").status_code == 201
+    assert ingest("aa267aa7-f43e-41b9-a05c-6ac6b7969be4", "203.0.113.141", 80, "AS64501").status_code == 201
+
+    exact = client.get("/api/v1/dashboard?asn=AS64500&destination_port=22&include_simulation=true").get_json()
+    assert exact["totals"]["events"] == 1
+    assert exact["filters"]["asn"] == "AS64500"
+    assert exact["filters"]["destination_port"] == "22"
+
+    no_cross_match = client.get(
+        "/api/v1/dashboard?asn=AS64500&destination_port=80&include_simulation=true"
+    ).get_json()
+    assert no_cross_match["totals"]["events"] == 0
+
+    event_list = client.get("/api/v1/events?asn=AS64501&destination_port=80").get_json()
+    assert len(event_list["items"]) == 1
+    assert event_list["items"][0]["asn"] == "AS64501"
+    assert event_list["items"][0]["destination_port"] == 80
+
+    options = client.get("/api/v1/meta/filters").get_json()
+    assert "AS64500" in options["asn"]
+    assert "22" in options["destination_port"]
