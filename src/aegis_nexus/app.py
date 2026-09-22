@@ -285,6 +285,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             ):
                 return jsonify({"error": "rate_limited"}), 429
             event = normalize_event(normalize_eve_event(request.get_json(), sensor_id))
+            collector_received_at = utc_now_iso()
+            validate_event_clock(
+                event["timestamp"],
+                collector_received_at,
+                max_future_skew_seconds=int(app.config.get("MAX_FUTURE_EVENT_SKEW_SECONDS", 300)),
+            )
             event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
