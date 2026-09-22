@@ -77,6 +77,7 @@ class Store:
                     country TEXT, asn TEXT, latitude REAL, longitude REAL,
                     observed TEXT NOT NULL, enrichment TEXT NOT NULL, derived TEXT NOT NULL,
                     hypotheses TEXT NOT NULL, schema_version TEXT NOT NULL,
+                    collector_received_at TEXT NOT NULL,
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp DESC);
@@ -129,16 +130,12 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_case_history_case ON case_history(case_id, timestamp);
             """)
             event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(events)")}
-            if "received_at" not in event_columns:
-                conn.execute("ALTER TABLE events ADD COLUMN received_at TEXT")
-                conn.execute("UPDATE events SET received_at=timestamp WHERE received_at IS NULL OR received_at=''")
+            if "collector_received_at" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN collector_received_at TEXT")
+                conn.execute("UPDATE events SET collector_received_at=timestamp WHERE collector_received_at IS NULL")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_events_received "
-                "ON events(received_at DESC, id DESC)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_events_sensor_received "
-                "ON events(honeypot, received_at DESC)"
+                "ON events(collector_received_at ASC, id ASC)"
             )
 
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(sessions)")}
@@ -226,16 +223,18 @@ class Store:
         asn_data = asn.get("data") if isinstance(asn.get("data"), dict) else {}
         return data.get("country"), asn_data.get("asn"), data.get("latitude"), data.get("longitude")
 
-    def ingest(self, event: dict[str, Any]) -> dict[str, Any]:
+    def ingest(self, event: dict[str, Any], collector_received_at: str | None = None) -> dict[str, Any]:
         observed = event["observed"]
+        received_at = collector_received_at or datetime.now(timezone.utc).isoformat()
         country, asn, latitude, longitude = self._geo(event["enrichment"])
         received_at = datetime.now(timezone.utc).isoformat()
         with self.connect() as conn:
             session_id = self._select_or_create_session(conn, event)
             conn.execute("""
                 INSERT INTO events(
-                    id,timestamp,received_at,honeypot,event_type,severity,source_ip,session_id,protocol,service,
-                    destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version
+                    id,timestamp,honeypot,event_type,severity,source_ip,session_id,protocol,service,
+                    destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version,
+                    collector_received_at
                 ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 event["id"], event["timestamp"], received_at, event["honeypot"], event["event_type"], event["severity"],
@@ -244,11 +243,11 @@ class Store:
                 json.dumps(event["observed"], ensure_ascii=False),
                 json.dumps(event["enrichment"], ensure_ascii=False),
                 json.dumps(event["derived"], ensure_ascii=False),
-                json.dumps(event["hypotheses"], ensure_ascii=False), event["schema_version"],
+                json.dumps(event["hypotheses"], ensure_ascii=False), event["schema_version"], received_at,
             ))
         self._ingest_since_maintenance += 1
         self.maintain()
-        return {**event, "session_id": session_id, "received_at": received_at}
+        return {**event, "session_id": session_id, "collector_received_at": received_at}
 
     def maintain(self, force: bool = False) -> dict[str, int]:
         if not force and self._ingest_since_maintenance < 100:
@@ -262,7 +261,7 @@ class Store:
             overflow = max(0, int(count) - self.max_events)
             if overflow:
                 cur = conn.execute(
-                    "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY received_at ASC, id ASC LIMIT ?)",
+                    "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY collector_received_at ASC, id ASC LIMIT ?)",
                     (overflow,),
                 )
                 capacity_deleted = cur.rowcount
@@ -287,7 +286,7 @@ class Store:
             return 0
         cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
         with self.connect() as conn:
-            cur = conn.execute("DELETE FROM events WHERE received_at < ?", (cutoff,))
+            cur = conn.execute("DELETE FROM events WHERE collector_received_at < ?", (cutoff,))
             deleted = cur.rowcount
             conn.execute("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM events)")
         return deleted
@@ -1227,6 +1226,16 @@ class Store:
                 "destination_ports": sorted({
                     event["destination_port"] for event in events if event.get("destination_port")
                 }),
+                "sensor_first_timestamp": min((event["timestamp"] for event in events), default=None),
+                "sensor_last_timestamp": max((event["timestamp"] for event in events), default=None),
+                "collector_first_received": min(
+                    (event["collector_received_at"] for event in events if event.get("collector_received_at")),
+                    default=None,
+                ),
+                "collector_last_received": max(
+                    (event["collector_received_at"] for event in events if event.get("collector_received_at")),
+                    default=None,
+                ),
             },
             "credentials": credentials,
             "commands": commands,
@@ -1240,6 +1249,8 @@ class Store:
                 "External enrichment is contextual and may be stale or inaccurate.",
                 "Derived MITRE/CVE entries are included only when rationale and evidence were stored with the event.",
                 "Credential exports never include cleartext passwords, even when raw credential storage was explicitly enabled.",
+                "collector_received_at is collector-controlled receipt metadata; event timestamp remains sensor-reported.",
+                "Rows created before collector receipt tracking was introduced may have collector_received_at backfilled from the event timestamp.",
             ],
         }
 

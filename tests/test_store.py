@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import sqlite3
 
 from aegis_nexus.model import normalize_event
 from aegis_nexus.store import Store
@@ -388,3 +389,115 @@ def test_closed_case_delete_cascades_case_data_but_preserves_source_telemetry(tm
         assert conn.execute("SELECT COUNT(*) FROM case_evidence WHERE case_id=?", (case["id"],)).fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM case_notes WHERE case_id=?", (case["id"],)).fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM case_history WHERE case_id=?", (case["id"],)).fetchone()[0] == 0
+
+
+def test_retention_uses_collector_receive_time_not_sensor_timestamp(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"), retention_days=1)
+    now = datetime.now(timezone.utc)
+    historical = normalize_event({
+        "id": "51000000-0000-4000-8000-000000000001",
+        "timestamp": "2020-01-01T00:00:00Z",
+        "honeypot": "archive-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.221",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+        },
+    })
+    saved = store.ingest(historical, collector_received_at=now.isoformat())
+    assert saved["collector_received_at"] == now.isoformat()
+    assert store.prune(1) == 0
+    assert store.get_event(historical["id"]) is not None
+
+    stale_receipt = normalize_event({
+        "id": "51000000-0000-4000-8000-000000000002",
+        "timestamp": now.isoformat(),
+        "honeypot": "archive-2",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.222",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+    })
+    store.ingest(stale_receipt, collector_received_at=(now - timedelta(days=2)).isoformat())
+    assert store.prune(1) == 1
+    assert store.get_event(stale_receipt["id"]) is None
+    assert store.get_event(historical["id"]) is not None
+
+
+def test_capacity_evicts_by_collector_receive_time(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"), retention_days=0)
+    store.max_events = 2
+
+    fixtures = [
+        ("52000000-0000-4000-8000-000000000001", "2026-01-01T00:00:00Z", "2026-09-22T20:03:00+00:00"),
+        ("52000000-0000-4000-8000-000000000002", "2026-03-01T00:00:00Z", "2026-09-22T20:01:00+00:00"),
+        ("52000000-0000-4000-8000-000000000003", "2026-02-01T00:00:00Z", "2026-09-22T20:02:00+00:00"),
+    ]
+    for index, (event_id, sensor_time, received_time) in enumerate(fixtures):
+        event = normalize_event({
+            "id": event_id,
+            "timestamp": sensor_time,
+            "honeypot": f"capacity-{index}",
+            "event_type": "connection",
+            "observed": {
+                "source_ip": f"203.0.113.{230 + index}",
+                "service": "tcp",
+                "protocol": "tcp",
+                "destination_port": 10000 + index,
+            },
+        })
+        store.ingest(event, collector_received_at=received_time)
+
+    result = store.maintain(force=True)
+    assert result["capacity_deleted"] == 1
+    assert store.get_event("52000000-0000-4000-8000-000000000002") is None
+    assert store.get_event("52000000-0000-4000-8000-000000000001") is not None
+    assert store.get_event("52000000-0000-4000-8000-000000000003") is not None
+
+
+def test_existing_database_backfills_collector_receive_time_from_sensor_timestamp(tmp_path):
+    path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(path)
+    conn.executescript("""
+        CREATE TABLE sessions (
+            id TEXT PRIMARY KEY, source_ip TEXT NOT NULL, honeypot TEXT NOT NULL,
+            service TEXT NOT NULL, protocol TEXT NOT NULL DEFAULT 'unknown',
+            destination_port INTEGER NOT NULL DEFAULT 0,
+            started_at TEXT NOT NULL, last_seen TEXT NOT NULL,
+            event_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE events (
+            id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, honeypot TEXT NOT NULL,
+            event_type TEXT NOT NULL, severity TEXT NOT NULL, source_ip TEXT,
+            session_id TEXT NOT NULL, protocol TEXT, service TEXT, destination_port INTEGER,
+            country TEXT, asn TEXT, latitude REAL, longitude REAL,
+            observed TEXT NOT NULL, enrichment TEXT NOT NULL, derived TEXT NOT NULL,
+            hypotheses TEXT NOT NULL, schema_version TEXT NOT NULL,
+            FOREIGN KEY(session_id) REFERENCES sessions(id)
+        );
+    """)
+    timestamp = "2026-08-01T10:00:00+00:00"
+    conn.execute(
+        "INSERT INTO sessions VALUES(?,?,?,?,?,?,?,?,?)",
+        ("ses_legacy", "203.0.113.240", "legacy-1", "ssh", "tcp", 22, timestamp, timestamp, 1),
+    )
+    conn.execute(
+        "INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "53000000-0000-4000-8000-000000000001", timestamp, "legacy-1", "connection", "info",
+            "203.0.113.240", "ses_legacy", "tcp", "ssh", 22, None, None, None, None,
+            '{"source_ip":"203.0.113.240","service":"ssh","protocol":"tcp","destination_port":22}',
+            "{}", "{}", "[]", "1.1",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    store = Store(str(path), retention_days=0)
+    migrated = store.get_event("53000000-0000-4000-8000-000000000001")
+    assert migrated["collector_received_at"] == timestamp

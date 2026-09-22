@@ -794,7 +794,10 @@
     $("event-details").hidden = false;
     $("investigation-context").hidden = false;
     $("detail-title").textContent = event.event_type || "—";
-    $("detail-meta").textContent = formatDate(event.timestamp) + " · " + (event.source_ip || "—") + " · " + (event.service || "—") + " · " + (event.honeypot || "—");
+    $("detail-meta").textContent =
+      t("details.sensorTime") + ": " + formatDate(event.timestamp) +
+      " · " + t("details.collectorReceived") + ": " + formatDate(event.collector_received_at) +
+      " · " + (event.source_ip || "—") + " · " + (event.service || "—") + " · " + (event.honeypot || "—");
     $("detail-observed").textContent = pretty(event.observed);
     $("detail-enrichment").textContent = pretty(event.enrichment);
     $("detail-derived").textContent = pretty(event.derived);

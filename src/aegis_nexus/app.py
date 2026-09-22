@@ -24,6 +24,7 @@ from .store import Store
 from .study import explain, explain_session
 from .suricata import SuricataValidationError, normalize_eve_event
 from .threat_context import LocalThreatContextEnricher
+from .time_integrity import EventClockError, utc_now_iso, validate_event_clock
 
 
 FILTER_KEYS = ("country", "asn", "destination_port", "protocol", "service", "honeypot", "severity", "source_ip", "session_id", "event_type")
@@ -97,6 +98,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         THREAT_CONTEXT_MAX_BYTES=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_BYTES", str(20 * 1024 * 1024))),
         THREAT_CONTEXT_MAX_INDICATORS=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_INDICATORS", "100000")),
         THREAT_CONTEXT_MAX_MATCHES=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_MATCHES", "32")),
+        MAX_FUTURE_EVENT_SKEW_SECONDS=int(os.getenv("AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS", "300")),
     )
     if test_config:
         app.config.update(test_config)
@@ -268,12 +270,20 @@ def create_app(test_config: dict | None = None) -> Flask:
             ):
                 return jsonify({"error": "rate_limited"}), 429
             event = normalize_event(payload)
+            collector_received_at = utc_now_iso()
+            validate_event_clock(
+                event["timestamp"],
+                collector_received_at,
+                max_future_skew_seconds=int(app.config.get("MAX_FUTURE_EVENT_SKEW_SECONDS", 300)),
+            )
             event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
-            stored = store.ingest(event)
+            stored = store.ingest(event, collector_received_at=collector_received_at)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
+        except EventClockError as exc:
+            return jsonify({"error": "clock_validation_error", "detail": str(exc)}), 422
         except EventValidationError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         except Exception:
@@ -297,12 +307,20 @@ def create_app(test_config: dict | None = None) -> Flask:
             ):
                 return jsonify({"error": "rate_limited"}), 429
             event = normalize_event(normalize_eve_event(request.get_json(), sensor_id))
+            collector_received_at = utc_now_iso()
+            validate_event_clock(
+                event["timestamp"],
+                collector_received_at,
+                max_future_skew_seconds=int(app.config.get("MAX_FUTURE_EVENT_SKEW_SECONDS", 300)),
+            )
             event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
-            stored = store.ingest(event)
+            stored = store.ingest(event, collector_received_at=collector_received_at)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
+        except EventClockError as exc:
+            return jsonify({"error": "clock_validation_error", "detail": str(exc)}), 422
         except (SuricataValidationError, EventValidationError) as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         except Exception:
@@ -581,6 +599,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         writer = csv.writer(output)
         writer.writerow([
             "timestamp",
+            "collector_received_at",
             "event_id",
             "event_type",
             "severity",
@@ -600,6 +619,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             alert = observed.get("alert") if isinstance(observed.get("alert"), dict) else {}
             writer.writerow([
                 _csv_safe(event.get("timestamp")),
+                _csv_safe(event.get("collector_received_at")),
                 _csv_safe(event.get("id")),
                 _csv_safe(event.get("event_type")),
                 _csv_safe(event.get("severity")),

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from aegis_nexus.app import create_app
 
 
@@ -427,3 +429,81 @@ def test_case_delete_requires_closed_status_and_case_capacity_is_bounded(tmp_pat
     deleted = client.delete(f"/api/v1/cases/{case_id}")
     assert deleted.status_code == 204
     assert client.get(f"/api/v1/cases/{case_id}").status_code == 404
+
+
+def test_future_sensor_timestamp_is_rejected_but_historical_import_is_allowed(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "secret",
+        "MAX_FUTURE_EVENT_SKEW_SECONDS": 60,
+    })
+    client = app.test_client()
+
+    future = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    rejected = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "secret"},
+        json={
+            "honeypot": "clock-1",
+            "event_type": "connection",
+            "timestamp": future,
+            "observed": {
+                "source_ip": "203.0.113.250",
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+            },
+        },
+    )
+    assert rejected.status_code == 422
+    assert rejected.get_json()["error"] == "clock_validation_error"
+
+    historical = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "secret"},
+        json={
+            "honeypot": "clock-2",
+            "event_type": "connection",
+            "timestamp": "2020-01-01T00:00:00Z",
+            "observed": {
+                "source_ip": "203.0.113.251",
+                "service": "http",
+                "protocol": "tcp",
+                "destination_port": 80,
+            },
+        },
+    )
+    assert historical.status_code == 201
+    stored = client.get(f"/api/v1/events/{historical.get_json()['id']}").get_json()
+    assert stored["timestamp"].startswith("2020-01-01")
+    assert stored["collector_received_at"] != stored["timestamp"]
+
+
+def test_future_suricata_timestamp_is_rejected(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "secret",
+        "MAX_FUTURE_EVENT_SKEW_SECONDS": 30,
+    })
+    client = app.test_client()
+    future = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+
+    response = client.post(
+        "/api/v1/integrations/suricata/eve",
+        headers={"X-Aegis-Key": "secret", "X-Aegis-Sensor": "suricata-01"},
+        json={
+            "timestamp": future,
+            "event_type": "alert",
+            "src_ip": "203.0.113.252",
+            "src_port": 40000,
+            "dest_ip": "192.0.2.10",
+            "dest_port": 22,
+            "proto": "TCP",
+            "app_proto": "ssh",
+            "alert": {"signature": "Clock test", "signature_id": 9001, "severity": 2},
+        },
+    )
+    assert response.status_code == 422
+    assert response.get_json()["error"] == "clock_validation_error"
