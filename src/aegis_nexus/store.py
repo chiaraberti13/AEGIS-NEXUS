@@ -36,6 +36,7 @@ class Store:
         retention_days: int = 30,
         max_events: int = 500_000,
         analytics_max_events: int = 20_000,
+        session_max_events: int = 5_000,
         max_cases: int = 10_000,
         case_retention_days: int = 0,
     ):
@@ -43,6 +44,7 @@ class Store:
         self.retention_days = max(0, retention_days)
         self.max_events = max(1_000, max_events)
         self.analytics_max_events = max(100, min(analytics_max_events, self.max_events))
+        self.session_max_events = max(100, min(int(session_max_events), self.max_events))
         self.max_cases = max(1, min(int(max_cases), 1_000_000))
         self.case_retention_days = max(0, min(int(case_retention_days), 3650))
         self._ingest_since_maintenance = 0
@@ -505,19 +507,36 @@ class Store:
         }
 
     def get_session(self, session_id: str) -> dict[str, Any] | None:
+        limit = self.session_max_events
         with self.connect() as conn:
             session = conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
             if not session:
                 return None
             rows = conn.execute(
-                "SELECT * FROM events WHERE session_id=? ORDER BY timestamp ASC",
-                (session_id,),
+                """
+                SELECT * FROM events
+                WHERE session_id=?
+                ORDER BY timestamp DESC, id DESC
+                LIMIT ?
+                """,
+                (session_id, limit + 1),
             ).fetchall()
-        events = [self._decode(row) for row in rows]
+        truncated = len(rows) > limit
+        selected = list(rows[:limit])
+        selected.reverse()
+        events = [self._decode(row) for row in selected]
+        summary = self._session_summary(events)
+        summary["events_returned"] = len(events)
+        summary["truncated"] = truncated
         return {
             "session": dict(session),
-            "summary": self._session_summary(events),
+            "summary": summary,
             "events": events,
+            "analysis": {
+                "truncated": truncated,
+                "event_limit": limit,
+                "scope": "latest_session_events" if truncated else "complete_retained_session",
+            },
         }
 
     @staticmethod
@@ -1381,6 +1400,7 @@ class Store:
         return {
             "report_type": "investigation_session",
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "analysis": bundle.get("analysis", {}),
             "session": bundle["session"],
             "summary": bundle["summary"],
             "facts": {
@@ -1551,6 +1571,7 @@ class Store:
                         edges.add((event_node, ti_node, "external_threat_context"))
 
         return {
+            "analysis": bundle.get("analysis", {}),
             "nodes": list(nodes.values()),
             "edges": [
                 {"source": source, "target": target, "relation": relation}
