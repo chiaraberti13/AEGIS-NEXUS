@@ -85,6 +85,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         ANALYTICS_MAX_EVENTS=int(os.getenv("AEGIS_ANALYTICS_MAX_EVENTS", "20000")),
         MAX_CASES=int(os.getenv("AEGIS_MAX_CASES", "10000")),
         CASE_RETENTION_DAYS=int(os.getenv("AEGIS_CASE_RETENTION_DAYS", "0")),
+        MIN_FREE_BYTES=int(os.getenv("AEGIS_MIN_FREE_BYTES", "67108864")),
         OPERATOR_API_KEY=os.getenv("AEGIS_OPERATOR_API_KEY", ""),
         REQUIRE_SENSOR_SIGNATURE=os.getenv("AEGIS_REQUIRE_SENSOR_SIGNATURE", "false").lower() in {"1", "true", "yes"},
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
@@ -209,7 +210,9 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.get("/health")
     def health():
-        return jsonify({"status": "ok"})
+        probe = store.operational_health(int(app.config.get("MIN_FREE_BYTES", 67_108_864)))
+        status = "ok" if probe["ready"] else "degraded"
+        return jsonify({"status": status}), 200 if probe["ready"] else 503
 
     @app.get("/api/v1/operator/status")
     def operator_status():
@@ -228,6 +231,28 @@ def create_app(test_config: dict | None = None) -> Flask:
             )
             payload["sensor_allowlist_count"] = len(sensor_keys)
         return jsonify(payload)
+
+    @app.get("/api/v1/operations/status")
+    def operations_status():
+        health = store.operational_health(int(app.config.get("MIN_FREE_BYTES", 67_108_864)))
+        telemetry = {
+            "recent_hours": max(1, min(request.args.get("hours", 24, type=int), 720)),
+            "configured_sensors": 0,
+            "configured_with_recent_telemetry": 0,
+            "observed_sensor_ids": 0,
+            "items": [],
+            "interpretation": "Telemetry freshness unavailable because the collector database is not ready.",
+        }
+        if health["database_ready"]:
+            sensor_keys = app.config.get("SENSOR_KEYS") or {}
+            telemetry = store.sensor_telemetry_observation(
+                configured_sensor_ids=list(sensor_keys),
+                recent_hours=request.args.get("hours", 24, type=int),
+            )
+        return jsonify({
+            "collector": health,
+            "telemetry": telemetry,
+        })
 
     @app.post("/api/v1/events")
     def ingest_event():
