@@ -746,8 +746,8 @@
     $("case-tags").value = "";
     if (state.selected && seed.length) {
       $("case-title").value = t("cases.seedTitle")
-        .replace("{ip}", state.selected.source_ip || "unknown")
-        .replace("{type}", state.selected.event_type || "event");
+        .replace("{ip}", state.selected.source_ip || t("common.unknown"))
+        .replace("{type}", state.selected.event_type || t("common.event"));
     }
     $("case-evidence").replaceChildren();
     $("case-notes").replaceChildren();
