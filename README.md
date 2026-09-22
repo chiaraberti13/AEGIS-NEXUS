@@ -32,10 +32,10 @@ The current implementation provides both the secure telemetry/investigation foun
 - Persistent SQLite session correlation that prefers explicit decoy connection IDs or Suricata flow identity and falls back to source IP, honeypot, service, protocol, destination port and inactivity window when needed.
 - Investigation APIs and dedicated SOC views for events, IP profiles, sessions, timelines, relationship graphs, Threat Intelligence context and Study Mode.
 - Stable cursor pagination for historical event/session navigation; the live dashboard stays on current data while Investigation can append older matching telemetry.
-- Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail, bounded lifecycle/closed-case retention and JSON/CSV case reports.
+- Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail, bounded lifecycle/closed-case retention and JSON/CSV/Markdown case reports.
 - SOC dashboard with global search/filters, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, interactive Attack Map and Live Feed.
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
-- Continuous time-based retention with `AEGIS_RETENTION_DAYS` plus the storage ceiling `AEGIS_MAX_DB_EVENTS`; JSON/CSV investigation exports never include cleartext passwords.
+- Continuous time-based retention with `AEGIS_RETENTION_DAYS` plus the storage ceiling `AEGIS_MAX_DB_EVENTS`; JSON/CSV/Markdown investigation exports never include cleartext passwords.
 - Hardened Docker runtime: non-root user, dropped capabilities, read-only root filesystem, `no-new-privileges`, bounded concurrent TCP connections, per-sensor management networks and localhost-only operator port.
 - Sensor containers with CPU/memory/PID/file-descriptor limits and separate exposure/management networks so SSH, web and legacy sensors do not share a lateral management segment.
 - Native evidence-first Suricata EVE JSON ingestion for IDS telemetry; alert signatures are preserved as observed IDS output without inventing MITRE or CVE mappings.
@@ -117,6 +117,7 @@ src/aegis_nexus/
 ├── casework.py     bounded analyst-case validation
 ├── backup.py       reusable SQLite backup logic
 ├── store.py        persistence, analytics, cases, relations and reports
+├── reporting.py    safe IT/EN Markdown investigation rendering
 ├── study.py        deterministic IT/EN Study Mode
 ├── sensors/        SSH, web, FTP/Telnet decoys and telemetry client
 ├── templates/      SOC console
@@ -127,6 +128,7 @@ docs/
 ├── ENRICHMENT.md
 ├── INVESTIGATION.md
 ├── PRIVACY.md
+├── REPORTING.md
 ├── SENSOR_ISOLATION.md
 └── THREAT_MODEL.md
 tests/
@@ -140,7 +142,7 @@ See [Privacy & retention](docs/PRIVACY.md), [Local enrichment](docs/ENRICHMENT.m
 
 ## Roadmap
 
-Next implementation cycles focus on additional controlled threat-context adapters, richer investigation exports and additional sensor/IDS integrations. Capabilities are documented when they are implemented, not ahead of the code.
+Next implementation cycles focus on additional controlled threat-context adapters, export interoperability and additional sensor/IDS integrations. Capabilities are documented when they are implemented, not ahead of the code.
 
 ## Licence & responsible use
 

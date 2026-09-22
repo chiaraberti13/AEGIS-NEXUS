@@ -8,7 +8,7 @@ A case stores analyst-owned metadata: title, status, severity, summary, tags and
 
 Evidence is linked by reference to an existing event or correlated session. The case store does not copy commands, payloads, credentials or enrichment into a second long-lived evidence store. This avoids silently extending telemetry retention. When the source event/session is removed by the configured retention policy, the case keeps the identifier and marks the evidence reference as unavailable.
 
-The case audit trail records creation, analyst updates, notes, evidence links and evidence removal. Notes are append-only through the current UI/API. Case reports include provenance labels and evidence availability.
+The case audit trail records creation, analyst updates, notes, evidence links and evidence removal. Notes are append-only through the current UI/API. Case reports include provenance labels and evidence availability. JSON preserves the structured case model, CSV exports evidence references, and Markdown provides an escaped human-readable handoff without copying source telemetry.
 
 Resource and lifecycle controls:
 - maximum 1,000 evidence references per case;
@@ -33,7 +33,7 @@ Un caso conserva metadati dell'analista: titolo, stato, severità, sintesi, tag 
 
 Le evidenze vengono collegate tramite riferimento a un evento esistente o a una sessione correlata. Il case store non copia comandi, payload, credenziali o enrichment in un secondo archivio persistente. In questo modo il caso non prolunga implicitamente la retention della telemetria. Quando evento/sessione sorgente vengono eliminati dalla policy di retention, il caso conserva l'identificativo e marca il riferimento come non più disponibile.
 
-L'audit trail registra creazione, modifiche analista, note, collegamenti e rimozioni di evidenza. Le note sono append-only nell'interfaccia/API attuale. I report del caso includono provenienza e disponibilità dei riferimenti.
+L'audit trail registra creazione, modifiche analista, note, collegamenti e rimozioni di evidenza. Le note sono append-only nell'interfaccia/API attuale. I report del caso includono provenienza e disponibilità dei riferimenti. JSON conserva il modello strutturato del caso, CSV esporta i riferimenti alle evidenze e Markdown fornisce un handoff leggibile ed escapato senza copiare la telemetria sorgente.
 
 Controlli su risorse e lifecycle:
 - massimo 1.000 riferimenti di evidenza per caso;
