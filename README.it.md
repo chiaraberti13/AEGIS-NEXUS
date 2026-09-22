@@ -35,7 +35,9 @@ L'implementazione attuale fornisce sia la base sicura per telemetria e investiga
 - Gestione casi SOC evidence-preserving con classificazione dell’analista, note, tag, riferimenti a eventi/sessioni, audit trail, lifecycle bounded/retention dei soli casi chiusi e report JSON/CSV/Markdown.
 - Dashboard SOC con ricerca/filtri globali, timeline, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, IDS, MITRE, heatmap temporale, Attack Map interattiva e Live Feed.
 - Interfaccia IT/EN tramite dizionario i18n centrale; la telemetria viene sempre resa come testo e mai come HTML controllato dall'attaccante.
+- La provenienza `received_at` generata dal collector separa il momento di ricezione dal tempo evento del sensore; `AEGIS_RETENTION_DAYS` e il cleanup di capacità usano il tempo di ricezione, mentre le timeline mantengono il `timestamp` originale.
 - Retention temporale continua con `AEGIS_RETENTION_DAYS` più limite di capacità `AEGIS_MAX_DB_EVENTS`; gli export investigativi JSON/CSV/Markdown non includono mai password in chiaro.
+- La readiness verifica accesso SQLite e soglia minima di spazio libero; lo stato operativo autenticato mostra la ricezione telemetria senza dichiarare automaticamente i sensori online/offline.
 - Runtime Docker hardenizzato: utente non-root, capability rimosse, root filesystem read-only, `no-new-privileges`, connessioni TCP concorrenti limitate, reti management separate per sensore e porta operatore solo su localhost.
 - Container sensore con limiti CPU/memoria/PID/file descriptor e reti di esposizione/management separate, evitando un segmento management laterale condiviso tra SSH, web e legacy.
 - Ingestione nativa evidence-first di eventi Suricata EVE JSON per la telemetria IDS; le signature vengono conservate come output IDS osservato senza inventare mapping MITRE o CVE.
