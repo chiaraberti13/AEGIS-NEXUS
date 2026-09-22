@@ -6,7 +6,7 @@ from typing import Any
 CASE_STATUSES = {"open", "investigating", "monitoring", "closed"}
 CASE_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 EVIDENCE_TYPES = {"event", "session"}
-_CONTROL = re.compile(r"[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]")
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 class CaseValidationError(ValueError):
