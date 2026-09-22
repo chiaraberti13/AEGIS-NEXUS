@@ -1,4 +1,4 @@
-.PHONY: install test run up down smoke logs
+.PHONY: install test run up down smoke logs backup
 install:
 	python -m pip install -e '.[dev]'
 test:
@@ -13,3 +13,4 @@ smoke:
 	python scripts/smoke_test.py
 logs:
 	docker compose logs -f collector
+\nbackup:\n\tpython scripts/backup.py\n
