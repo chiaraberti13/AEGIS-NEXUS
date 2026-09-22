@@ -14,6 +14,7 @@ Key threats and current controls:
 - Pivoting -> separate exposure and management networks per sensor; sensors do not share a lateral management segment. Host/VLAN firewalling remains required for production isolation and egress control.
 - Persistent-storage exhaustion -> time retention, event-count ceiling, WAL checkpointing and backup rotation.
 - False analytical certainty -> `observed`, `enrichment`, `derived` and `hypotheses` remain separate; MITRE/CVE mappings require rationale and evidence.
+- Threat-feed poisoning/staleness -> local threat context is opt-in, exact-match only, bounded, source/timestamp preserving and never changes severity or attribution automatically; feed trust and update policy remain operator responsibilities.
 - Attribution errors -> IP/geolocation/ASN/reputation are contextual only and never become threat-actor attribution automatically.
 - Case-management confusion -> case status/severity/notes are explicitly analyst classifications; evidence links reference source telemetry and do not copy it into the case store.
 - Evidence loss through retention -> cases preserve identifiers and expose evidence availability; operators must treat unavailable references as missing source telemetry, not as negative evidence.

@@ -26,6 +26,7 @@ The current implementation provides both the secure telemetry/investigation foun
 - Normalized event schema with separate `observed`, `enrichment`, `derived` and `hypotheses` classes.
 - External enrichment requires provenance through `source` and `observed_at`.
 - Offline local GeoIP/ASN enrichment from operator-supplied MaxMind MMDB files; public source IPs are enriched at the collector without sending captured IPs to a third-party API.
+- Offline exact-match threat context from an operator-supplied JSON feed for observed IPs and derived URL/domain/hash artifacts; matches remain external context and never become automatic attribution, CVE or MITRE claims.
 - MITRE ATT&CK and CVE derived mappings are accepted only when they include both `rationale` and `evidence`.
 - Deterministic static artifact extraction from observed commands/payloads for URLs, domains, IP literals and common hash formats; extracted values remain evidence-backed derived artifacts, not automatic maliciousness claims.
 - Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw storage is explicit opt-in only.
@@ -114,6 +115,7 @@ src/aegis_nexus/
 ├── correlation.py session correlation rules
 ├── enrichment.py  offline local GeoIP/ASN enrichment
 ├── derivation.py  bounded static observed-artifact extraction
+├── threat_context.py offline exact-match external context
 ├── casework.py     bounded analyst-case validation
 ├── backup.py       reusable SQLite backup logic
 ├── store.py        persistence, analytics, cases, relations and reports
@@ -130,6 +132,7 @@ docs/
 ├── PRIVACY.md
 ├── REPORTING.md
 ├── SENSOR_ISOLATION.md
+├── THREAT_CONTEXT.md
 └── THREAT_MODEL.md
 tests/
 ```
