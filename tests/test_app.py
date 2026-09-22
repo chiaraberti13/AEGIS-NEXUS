@@ -239,6 +239,7 @@ def test_per_sensor_allowlist_rejects_cross_sensor_spoofing(tmp_path):
         "TESTING": True,
         "DATABASE_PATH": str(tmp_path / "aegis.db"),
         "INGEST_API_KEY": "legacy-shared-key",
+        "OPERATOR_API_KEY": "operator-secret",
         "SENSOR_KEYS": {
             "ssh-decoy-01": "ssh-secret",
             "web-decoy-01": "web-secret",
@@ -288,6 +289,15 @@ def test_per_sensor_allowlist_rejects_cross_sensor_spoofing(tmp_path):
     )
     assert unknown_sensor.status_code == 401
 
-    status = client.get("/api/v1/operator/status").get_json()
+    public_status = client.get("/api/v1/operator/status").get_json()
+    assert public_status["authenticated"] is False
+    assert "sensor_auth_mode" not in public_status
+    assert "sensor_allowlist_count" not in public_status
+
+    status = client.get(
+        "/api/v1/operator/status",
+        headers={"X-Aegis-Operator-Key": "operator-secret"},
+    ).get_json()
+    assert status["authenticated"] is True
     assert status["sensor_auth_mode"] == "per_sensor_allowlist"
     assert status["sensor_allowlist_count"] == 2
