@@ -6,13 +6,13 @@ AEGIS-NEXUS is designed to keep the operator console on a management interface a
 
 ### Secrets
 
-Generate independent high-entropy values for sensor ingestion and operator access:
+Generate independent high-entropy values for every sensor and for operator access:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Use different values for `AEGIS_INGEST_API_KEY` and `AEGIS_OPERATOR_API_KEY`. For stronger separation, configure `AEGIS_SENSOR_KEYS` with one key per sensor. Never commit the resulting `.env`.
+The default Compose stack uses separate `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_SENSOR_API_KEY` and `AEGIS_LEGACY_SENSOR_API_KEY` values and builds the collector-side sensor allowlist from them. Configure `AEGIS_SURICATA_SENSOR_API_KEY` when Suricata ingestion is enabled. `AEGIS_INGEST_API_KEY` is a legacy/shared fallback for direct deployments and should remain empty when the allowlist is in use. Keep `AEGIS_OPERATOR_API_KEY` independent from all sensor secrets and never commit the resulting `.env`.
 
 ### Signed telemetry
 
@@ -70,13 +70,13 @@ AEGIS-NEXUS è progettato per mantenere la console operatore su un'interfaccia d
 
 ### Segreti
 
-Genera valori indipendenti e ad alta entropia per ingestione sensori e accesso operatore:
+Genera valori indipendenti e ad alta entropia per ogni sensore e per l'accesso operatore:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Usa valori differenti per `AEGIS_INGEST_API_KEY` e `AEGIS_OPERATOR_API_KEY`. Per una separazione più forte configura `AEGIS_SENSOR_KEYS` con una chiave per sensore. Non committare mai il file `.env` risultante.
+Lo stack Compose predefinito usa valori distinti `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_SENSOR_API_KEY` e `AEGIS_LEGACY_SENSOR_API_KEY` e costruisce da questi l'allowlist del collector. Configura `AEGIS_SURICATA_SENSOR_API_KEY` quando abiliti l'ingestione Suricata. `AEGIS_INGEST_API_KEY` è un fallback legacy/condiviso per deployment diretti e dovrebbe restare vuoto quando è attiva l'allowlist. Mantieni `AEGIS_OPERATOR_API_KEY` distinta da tutte le chiavi sensore e non committare mai il file `.env` risultante.
 
 ### Telemetria firmata
 
