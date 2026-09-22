@@ -84,10 +84,12 @@ def create_app(test_config: dict | None = None) -> Flask:
         RETENTION_DAYS=int(os.getenv("AEGIS_RETENTION_DAYS", "30")),
         MAX_DB_EVENTS=int(os.getenv("AEGIS_MAX_DB_EVENTS", "500000")),
         ANALYTICS_MAX_EVENTS=int(os.getenv("AEGIS_ANALYTICS_MAX_EVENTS", "20000")),
+        SESSION_MAX_EVENTS=int(os.getenv("AEGIS_SESSION_MAX_EVENTS", "5000")),
         MAX_CASES=int(os.getenv("AEGIS_MAX_CASES", "10000")),
         CASE_RETENTION_DAYS=int(os.getenv("AEGIS_CASE_RETENTION_DAYS", "0")),
         MIN_FREE_BYTES=int(os.getenv("AEGIS_MIN_FREE_BYTES", "67108864")),
         OPERATOR_API_KEY=os.getenv("AEGIS_OPERATOR_API_KEY", ""),
+        ALLOW_UNAUTHENTICATED_OPERATOR=os.getenv("AEGIS_ALLOW_UNAUTHENTICATED_OPERATOR", "false").lower() in {"1", "true", "yes"},
         REQUIRE_SENSOR_SIGNATURE=os.getenv("AEGIS_REQUIRE_SENSOR_SIGNATURE", "false").lower() in {"1", "true", "yes"},
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
         INGEST_RATE_LIMIT=int(os.getenv("AEGIS_INGEST_RATE_LIMIT_PER_MINUTE", "600")),
@@ -108,6 +110,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         retention_days=int(app.config.get("RETENTION_DAYS", 30)),
         max_events=int(app.config.get("MAX_DB_EVENTS", 500000)),
         analytics_max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)),
+        session_max_events=int(app.config.get("SESSION_MAX_EVENTS", 5000)),
         max_cases=int(app.config.get("MAX_CASES", 10000)),
         case_retention_days=int(app.config.get("CASE_RETENTION_DAYS", 0)),
     )
@@ -175,7 +178,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     def operator_authorized() -> bool:
         expected = str(app.config.get("OPERATOR_API_KEY", ""))
         if not expected:
-            return True
+            return bool(app.config.get("TESTING")) or bool(app.config.get("ALLOW_UNAUTHENTICATED_OPERATOR"))
         supplied = request.headers.get("X-Aegis-Operator-Key", "")
         return bool(supplied) and hmac.compare_digest(expected, supplied)
 
@@ -222,9 +225,13 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not limiter.allow(f"operator-status:{remote}", 60, 60):
             return jsonify({"error": "rate_limited"}), 429
         authenticated = operator_authorized()
+        operator_key_configured = bool(app.config.get("OPERATOR_API_KEY"))
+        insecure_opt_in = bool(app.config.get("ALLOW_UNAUTHENTICATED_OPERATOR"))
         payload = {
-            "required": bool(app.config.get("OPERATOR_API_KEY")),
+            "required": operator_key_configured or not (bool(app.config.get("TESTING")) or insecure_opt_in),
+            "configured": operator_key_configured,
             "authenticated": authenticated,
+            "insecure_unauthenticated_opt_in": insecure_opt_in and not operator_key_configured,
         }
         if authenticated:
             sensor_keys = app.config.get("SENSOR_KEYS") or {}

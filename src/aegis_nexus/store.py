@@ -36,6 +36,7 @@ class Store:
         retention_days: int = 30,
         max_events: int = 500_000,
         analytics_max_events: int = 20_000,
+        session_max_events: int = 5_000,
         max_cases: int = 10_000,
         case_retention_days: int = 0,
     ):
@@ -43,6 +44,7 @@ class Store:
         self.retention_days = max(0, retention_days)
         self.max_events = max(1_000, max_events)
         self.analytics_max_events = max(100, min(analytics_max_events, self.max_events))
+        self.session_max_events = max(100, min(int(session_max_events), self.max_events))
         self.max_cases = max(1, min(int(max_cases), 1_000_000))
         self.case_retention_days = max(0, min(int(case_retention_days), 3650))
         self._ingest_since_maintenance = 0
@@ -130,9 +132,20 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_case_history_case ON case_history(case_id, timestamp);
             """)
             event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(events)")}
+            if "received_at" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN received_at TEXT")
+                conn.execute("UPDATE events SET received_at=timestamp WHERE received_at IS NULL")
+                event_columns.add("received_at")
             if "collector_received_at" not in event_columns:
                 conn.execute("ALTER TABLE events ADD COLUMN collector_received_at TEXT")
-                conn.execute("UPDATE events SET collector_received_at=timestamp WHERE collector_received_at IS NULL")
+                conn.execute(
+                    "UPDATE events SET collector_received_at=COALESCE(received_at, timestamp) "
+                    "WHERE collector_received_at IS NULL"
+                )
+            conn.execute(
+                "UPDATE events SET received_at=collector_received_at "
+                "WHERE received_at IS NULL AND collector_received_at IS NOT NULL"
+            )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_events_received "
                 "ON events(collector_received_at ASC, id ASC)"
@@ -227,15 +240,14 @@ class Store:
         observed = event["observed"]
         received_at = collector_received_at or datetime.now(timezone.utc).isoformat()
         country, asn, latitude, longitude = self._geo(event["enrichment"])
-        received_at = datetime.now(timezone.utc).isoformat()
         with self.connect() as conn:
             session_id = self._select_or_create_session(conn, event)
             conn.execute("""
                 INSERT INTO events(
-                    id,timestamp,honeypot,event_type,severity,source_ip,session_id,protocol,service,
+                    id,timestamp,received_at,honeypot,event_type,severity,source_ip,session_id,protocol,service,
                     destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version,
                     collector_received_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 event["id"], event["timestamp"], received_at, event["honeypot"], event["event_type"], event["severity"],
                 observed.get("source_ip"), session_id, observed.get("protocol"), observed.get("service"),
@@ -247,7 +259,13 @@ class Store:
             ))
         self._ingest_since_maintenance += 1
         self.maintain()
-        return {**event, "session_id": session_id, "collector_received_at": received_at}
+        safe_event = self._export_safe_event(event)
+        return {
+            **safe_event,
+            "session_id": session_id,
+            "received_at": received_at,
+            "collector_received_at": received_at,
+        }
 
     def maintain(self, force: bool = False) -> dict[str, int]:
         if not force and self._ingest_since_maintenance < 100:
@@ -279,6 +297,14 @@ class Store:
         data = dict(row)
         for field in ("observed", "enrichment", "derived", "hypotheses"):
             data[field] = json.loads(data[field])
+        observed = data.get("observed")
+        if isinstance(observed, dict):
+            credential = observed.get("credential")
+            if isinstance(credential, dict):
+                # Cleartext credential storage is an explicit database-retention choice only.
+                # Operator APIs/UI always receive the deterministic fingerprint and length,
+                # never the collected secret itself.
+                credential.pop("password", None)
         return data
 
     def prune(self, retention_days: int) -> int:
@@ -481,19 +507,36 @@ class Store:
         }
 
     def get_session(self, session_id: str) -> dict[str, Any] | None:
+        limit = self.session_max_events
         with self.connect() as conn:
             session = conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
             if not session:
                 return None
             rows = conn.execute(
-                "SELECT * FROM events WHERE session_id=? ORDER BY timestamp ASC",
-                (session_id,),
+                """
+                SELECT * FROM events
+                WHERE session_id=?
+                ORDER BY timestamp DESC, id DESC
+                LIMIT ?
+                """,
+                (session_id, limit + 1),
             ).fetchall()
-        events = [self._decode(row) for row in rows]
+        truncated = len(rows) > limit
+        selected = list(rows[:limit])
+        selected.reverse()
+        events = [self._decode(row) for row in selected]
+        summary = self._session_summary(events)
+        summary["events_returned"] = len(events)
+        summary["truncated"] = truncated
         return {
             "session": dict(session),
-            "summary": self._session_summary(events),
+            "summary": summary,
             "events": events,
+            "analysis": {
+                "truncated": truncated,
+                "event_limit": limit,
+                "scope": "latest_session_events" if truncated else "complete_retained_session",
+            },
         }
 
     @staticmethod
@@ -854,7 +897,7 @@ class Store:
         }
 
     @staticmethod
-    def _extract_threat_intelligence(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _extract_external_enrichment(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         entries: list[dict[str, Any]] = []
         seen: set[str] = set()
         for event in events:
@@ -883,9 +926,14 @@ class Store:
                     "data": data,
                     "event_id": event["id"],
                     "provenance": "external_enrichment",
+                    "classification": "threat_intelligence" if kind == "threat_context" else "context_enrichment",
                 })
         entries.sort(key=lambda item: str(item.get("observed_at") or ""), reverse=True)
         return entries[:100]
+
+    @staticmethod
+    def _counter_items(counter: Counter, limit: int = 10) -> list[dict[str, Any]]:
+        return [{"label": str(label), "value": int(value)} for label, value in counter.most_common(limit)]
 
     def ip_profile(self, ip: str) -> dict[str, Any]:
         with self.connect() as conn:
@@ -897,6 +945,52 @@ class Store:
         first_seen = min((event["timestamp"] for event in events), default=None)
         last_seen = max((event["timestamp"] for event in events), default=None)
         severities = Counter(event["severity"] for event in events)
+        event_types = Counter(event["event_type"] for event in events)
+        honeypots = Counter(event["honeypot"] for event in events)
+        usernames: Counter[str] = Counter()
+        credential_secrets: Counter[str] = Counter()
+        commands: Counter[str] = Counter()
+        payloads: Counter[str] = Counter()
+        ids_alerts: Counter[str] = Counter()
+        mitre: Counter[str] = Counter()
+        cves: Counter[str] = Counter()
+        iocs: Counter[str] = Counter()
+
+        for event in events:
+            observed = event.get("observed") or {}
+            derived = event.get("derived") or {}
+            credential = observed.get("credential")
+            if isinstance(credential, dict):
+                if credential.get("username"):
+                    usernames[str(credential["username"])[:160]] += 1
+                secret_hash = credential.get("password_sha256")
+                if secret_hash:
+                    length = credential.get("password_length")
+                    credential_secrets[f"sha256:{str(secret_hash)[:16]} · len:{length if length is not None else '?'}"] += 1
+            if observed.get("command"):
+                commands[str(observed["command"])[:160]] += 1
+            if observed.get("payload"):
+                payloads[str(observed["payload"])[:160]] += 1
+            if event.get("event_type") == "ids.alert":
+                alert = observed.get("alert") if isinstance(observed.get("alert"), dict) else {}
+                signature = observed.get("signature") or alert.get("signature")
+                if signature:
+                    ids_alerts[str(signature)[:180]] += 1
+            for item in derived.get("mitre", []) or []:
+                if isinstance(item, dict) and item.get("technique_id"):
+                    mitre[str(item["technique_id"])] += 1
+            for item in derived.get("cve", []) or []:
+                if isinstance(item, dict) and item.get("cve_id"):
+                    cves[str(item["cve_id"])] += 1
+            for item in derived.get("ioc", []) or []:
+                if isinstance(item, dict) and item.get("type") and item.get("value") not in (None, ""):
+                    iocs[f"{item['type']}: {str(item['value'])[:160]}"] += 1
+
+        external_enrichment = self._extract_external_enrichment(events)
+        threat_intelligence = [
+            item for item in external_enrichment
+            if item.get("classification") == "threat_intelligence"
+        ]
         return {
             "source_ip": ip,
             "event_count": len(events),
@@ -909,7 +1003,20 @@ class Store:
             "protocols": sorted({event["protocol"] for event in events if event.get("protocol")}),
             "destination_ports": sorted({event["destination_port"] for event in events if event.get("destination_port")}),
             "severity": dict(severities),
-            "threat_intelligence": self._extract_threat_intelligence(events),
+            "activity": {
+                "event_types": self._counter_items(event_types),
+                "honeypots": self._counter_items(honeypots),
+                "usernames": self._counter_items(usernames),
+                "credential_secret_fingerprints": self._counter_items(credential_secrets),
+                "commands": self._counter_items(commands),
+                "payloads": self._counter_items(payloads),
+                "ids_alerts": self._counter_items(ids_alerts),
+                "mitre": self._counter_items(mitre),
+                "cves": self._counter_items(cves),
+                "iocs": self._counter_items(iocs),
+            },
+            "external_enrichment": external_enrichment,
+            "threat_intelligence": threat_intelligence,
             "events": events,
             "attribution_limit": (
                 "IP, ASN, geolocation and reputation enrichment describe infrastructure context; "
@@ -921,10 +1028,16 @@ class Store:
         profile = self.ip_profile(ip)
         return {
             "source_ip": ip,
-            "items": profile["threat_intelligence"],
+            "items": profile["external_enrichment"],
+            "threat_intelligence_items": profile["threat_intelligence"],
+            "context_enrichment_items": [
+                item for item in profile["external_enrichment"]
+                if item.get("classification") != "threat_intelligence"
+            ],
             "limitations": [
                 "External enrichment may be stale, incomplete or inaccurate.",
                 "VPNs, proxies, NAT, hosting providers and compromised systems can obscure origin.",
+                "GeoIP/ASN context is enrichment, not threat intelligence by itself.",
                 "No threat actor or campaign attribution is inferred by AEGIS-NEXUS.",
             ],
         }
@@ -966,10 +1079,10 @@ class Store:
                 """
                 SELECT
                     honeypot,
-                    MAX(received_at) AS last_received_at,
+                    MAX(collector_received_at) AS last_received_at,
                     MAX(timestamp) AS latest_event_timestamp,
                     COUNT(*) AS total_events,
-                    SUM(CASE WHEN received_at >= ? THEN 1 ELSE 0 END) AS recent_events
+                    SUM(CASE WHEN collector_received_at >= ? THEN 1 ELSE 0 END) AS recent_events
                 FROM events
                 GROUP BY honeypot
                 ORDER BY honeypot COLLATE NOCASE
@@ -1109,20 +1222,38 @@ class Store:
             events = [event for event in events if event["derived"].get("data_mode") != "simulation"]
 
         timeline: dict[str, int] = defaultdict(int)
+        unique_source_timeline: dict[str, set[str]] = defaultdict(set)
         heatmap = [[0 for _ in range(24)] for _ in range(7)]
-        credentials, commands, mitre, ids, iocs = Counter(), Counter(), Counter(), Counter(), Counter()
+        credentials, credential_secrets = Counter(), Counter()
+        commands, payloads = Counter(), Counter()
+        mitre, cves, ids, iocs = Counter(), Counter(), Counter(), Counter()
+        map_groups: dict[tuple[str, float, float], dict[str, Any]] = {}
+
         for event in events:
             ts = datetime.fromisoformat(event["timestamp"])
-            timeline[ts.strftime("%Y-%m-%dT%H:00Z")] += 1
+            bucket = ts.strftime("%Y-%m-%dT%H:00Z")
+            timeline[bucket] += 1
+            if event.get("source_ip"):
+                unique_source_timeline[bucket].add(str(event["source_ip"]))
             heatmap[ts.weekday()][ts.hour] += 1
             credential = event["observed"].get("credential")
-            if isinstance(credential, dict) and credential.get("username"):
-                credentials[str(credential["username"])] += 1
+            if isinstance(credential, dict):
+                if credential.get("username"):
+                    credentials[str(credential["username"])] += 1
+                if credential.get("password_sha256"):
+                    length = credential.get("password_length")
+                    label = f"sha256:{str(credential['password_sha256'])[:16]} · len:{length if length is not None else '?'}"
+                    credential_secrets[label] += 1
             if event["observed"].get("command"):
                 commands[str(event["observed"]["command"])[:120]] += 1
+            if event["observed"].get("payload"):
+                payloads[str(event["observed"]["payload"])[:120]] += 1
             for item in event["derived"].get("mitre", []) or []:
                 if isinstance(item, dict) and item.get("technique_id"):
                     mitre[str(item["technique_id"])] += 1
+            for item in event["derived"].get("cve", []) or []:
+                if isinstance(item, dict) and item.get("cve_id"):
+                    cves[str(item["cve_id"])] += 1
             for item in event["derived"].get("ioc", []) or []:
                 if isinstance(item, dict) and item.get("type") and item.get("value") not in (None, ""):
                     label = f"{item['type']}: {str(item['value'])[:140]}"
@@ -1133,6 +1264,55 @@ class Store:
                 if signature:
                     ids[str(signature)[:160]] += 1
 
+            if (
+                event.get("source_ip")
+                and event.get("latitude") is not None
+                and event.get("longitude") is not None
+            ):
+                lat = round(float(event["latitude"]), 4)
+                lon = round(float(event["longitude"]), 4)
+                map_key = (str(event["source_ip"]), lat, lon)
+                point = map_groups.setdefault(map_key, {
+                    "lat": lat,
+                    "lon": lon,
+                    "source_ip": event["source_ip"],
+                    "country": event.get("country"),
+                    "asn": event.get("asn"),
+                    "count": 0,
+                    "session_ids": set(),
+                    "services": set(),
+                    "destination_ports": set(),
+                    "honeypots": set(),
+                    "last_seen": event["timestamp"],
+                })
+                point["count"] += 1
+                point["session_ids"].add(event["session_id"])
+                if event.get("service"):
+                    point["services"].add(event["service"])
+                if event.get("destination_port"):
+                    point["destination_ports"].add(event["destination_port"])
+                if event.get("honeypot"):
+                    point["honeypots"].add(event["honeypot"])
+                if event["timestamp"] > point["last_seen"]:
+                    point["last_seen"] = event["timestamp"]
+
+        map_points = []
+        for point in map_groups.values():
+            map_points.append({
+                "lat": point["lat"],
+                "lon": point["lon"],
+                "source_ip": point["source_ip"],
+                "country": point["country"],
+                "asn": point["asn"],
+                "count": point["count"],
+                "session_count": len(point["session_ids"]),
+                "services": sorted(point["services"])[:8],
+                "destination_ports": sorted(point["destination_ports"])[:16],
+                "honeypots": sorted(point["honeypots"])[:8],
+                "last_seen": point["last_seen"],
+            })
+        map_points.sort(key=lambda item: (int(item["count"]), str(item["last_seen"])), reverse=True)
+
         return {
             "window_hours": bounded_hours,
             "query": q or "",
@@ -1141,6 +1321,12 @@ class Store:
                 "truncated": truncated,
                 "event_limit": self.analytics_max_events,
                 "scope": "latest_matching_events",
+                "provenance": {
+                    "observed": ["events", "source_ip", "destination_port", "protocol", "service", "honeypot", "credentials", "commands", "payloads", "ids_alerts"],
+                    "enrichment": ["country", "asn", "map_points"],
+                    "derived": ["sessions", "credential_secret_fingerprints", "iocs", "mitre", "cves"],
+                    "hypotheses_in_analytics": False,
+                },
             },
             "totals": {
                 "events": len(events),
@@ -1149,30 +1335,29 @@ class Store:
                 "critical": sum(1 for event in events if event["severity"] == "critical"),
             },
             "timeline": [{"label": key, "value": timeline[key]} for key in sorted(timeline)],
+            "unique_source_ip_timeline": [
+                {"label": key, "value": len(unique_source_timeline[key])}
+                for key in sorted(unique_source_timeline)
+            ],
             "heatmap": heatmap,
+            "source_ip": self._top(events, "source_ip"),
+            "event_type": self._top(events, "event_type"),
+            "severity": self._top(events, "severity"),
             "country": self._top(events, "country"),
             "asn": self._top(events, "asn"),
             "destination_port": self._top(events, "destination_port"),
             "protocol": self._top(events, "protocol"),
             "service": self._top(events, "service"),
             "honeypot": self._top(events, "honeypot"),
-            "credentials": [{"label": key, "value": value} for key, value in credentials.most_common(10)],
-            "commands": [{"label": key, "value": value} for key, value in commands.most_common(10)],
-            "ids_alerts": [{"label": key, "value": value} for key, value in ids.most_common(10)],
-            "iocs": [{"label": key, "value": value} for key, value in iocs.most_common(10)],
-            "mitre": [{"label": key, "value": value} for key, value in mitre.most_common(10)],
-            "map_points": [
-                {
-                    "lat": event["latitude"],
-                    "lon": event["longitude"],
-                    "source_ip": event["source_ip"],
-                    "country": event["country"],
-                    "event_id": event["id"],
-                    "session_id": event["session_id"],
-                }
-                for event in events
-                if event.get("latitude") is not None and event.get("longitude") is not None
-            ][-400:],
+            "credentials": self._counter_items(credentials),
+            "credential_secret_fingerprints": self._counter_items(credential_secrets),
+            "commands": self._counter_items(commands),
+            "payloads": self._counter_items(payloads),
+            "ids_alerts": self._counter_items(ids),
+            "iocs": self._counter_items(iocs),
+            "mitre": self._counter_items(mitre),
+            "cves": self._counter_items(cves),
+            "map_points": map_points[:400],
         }
 
     @staticmethod
@@ -1212,9 +1397,22 @@ class Store:
             for family in ("mitre", "cve"):
                 for item in event["derived"].get(family, []) or []:
                     mappings.append({"event_id": event["id"], "family": family, "mapping": item})
+        limitations = [
+            "IP, ASN and geolocation do not establish human identity or attribution.",
+            "External enrichment is contextual and may be stale or inaccurate.",
+            "Derived MITRE/CVE entries are included only when rationale and evidence were stored with the event.",
+            "Credential exports never include cleartext passwords, even when raw credential storage was explicitly enabled.",
+            "collector_received_at is collector-controlled receipt metadata; event timestamp remains sensor-reported.",
+            "Rows created before collector receipt tracking was introduced may have collector_received_at backfilled from the event timestamp.",
+        ]
+        if bundle.get("analysis", {}).get("truncated"):
+            limitations.append(
+                "Session analysis was truncated to the configured latest-event limit; this report is not a complete retained-session timeline."
+            )
         return {
             "report_type": "investigation_session",
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "analysis": bundle.get("analysis", {}),
             "session": bundle["session"],
             "summary": bundle["summary"],
             "facts": {
@@ -1244,14 +1442,7 @@ class Store:
             "derived_iocs": iocs,
             "evidence_backed_mappings": mappings,
             "events": events,
-            "limitations": [
-                "IP, ASN and geolocation do not establish human identity or attribution.",
-                "External enrichment is contextual and may be stale or inaccurate.",
-                "Derived MITRE/CVE entries are included only when rationale and evidence were stored with the event.",
-                "Credential exports never include cleartext passwords, even when raw credential storage was explicitly enabled.",
-                "collector_received_at is collector-controlled receipt metadata; event timestamp remains sensor-reported.",
-                "Rows created before collector receipt tracking was introduced may have collector_received_at backfilled from the event timestamp.",
-            ],
+            "limitations": limitations,
         }
 
     def relations(self, session_id: str) -> dict[str, Any]:
@@ -1262,34 +1453,56 @@ class Store:
         nodes: dict[str, dict[str, Any]] = {}
         edges: set[tuple[str, str, str]] = set()
 
-        def add(kind: str, value: Any) -> str | None:
+        def add(kind: str, value: Any, provenance: str, metadata: dict[str, Any] | None = None) -> str | None:
             if value in (None, ""):
                 return None
             label = str(value)
             digest = hashlib.sha256(f"{kind}\0{label}".encode("utf-8", "replace")).hexdigest()[:20]
             node_id = f"{kind}:{digest}"
-            nodes[node_id] = {"id": node_id, "kind": kind, "label": label[:180]}
+            node = {
+                "id": node_id,
+                "kind": kind,
+                "label": label[:180],
+                "provenance": provenance,
+            }
+            if metadata:
+                node["metadata"] = deepcopy(metadata)
+            nodes[node_id] = node
             return node_id
 
         for event in bundle["events"]:
-            event_node = add("event", event["id"])
-            session_node = add("session", event["session_id"])
-            ip_node = add("ip", event.get("source_ip"))
-            asn_node = add("asn", event.get("asn"))
-            country_node = add("country", event.get("country"))
-            port_node = add("port", event.get("destination_port"))
-            protocol_node = add("protocol", event.get("protocol"))
-            service_node = add("service", event.get("service"))
-            honeypot_node = add("honeypot", event.get("honeypot"))
+            event_node = add("event", event["id"], "observed")
+            session_node = add("session", event["session_id"], "derived", {
+                "correlation": bundle.get("summary", {}).get("correlation_method", "temporal_fallback")
+            })
+            ip_node = add("ip", event.get("source_ip"), "observed")
+            asn_node = add("asn", event.get("asn"), "enrichment")
+            country_node = add("country", event.get("country"), "enrichment")
+            port_node = add("port", event.get("destination_port"), "observed")
+            protocol_node = add("protocol", event.get("protocol"), "observed")
+            service_node = add("service", event.get("service"), "observed")
+            honeypot_node = add("honeypot", event.get("honeypot"), "observed")
             credential = event["observed"].get("credential")
             credential = credential if isinstance(credential, dict) else {}
-            user_node = add("credential", credential.get("username"))
-            command_node = add("command", event["observed"].get("command"))
-            payload_node = add("payload", event["observed"].get("payload"))
+            user_node = add("credential", credential.get("username"), "observed")
+            secret_node = None
+            if credential.get("password_sha256"):
+                length = credential.get("password_length")
+                secret_node = add(
+                    "credential_secret_fingerprint",
+                    f"sha256:{str(credential['password_sha256'])[:16]} · len:{length if length is not None else '?'}",
+                    "derived",
+                    {"algorithm": "sha256", "password_length": length},
+                )
+            command_node = add("command", event["observed"].get("command"), "observed")
+            payload_node = add("payload", event["observed"].get("payload"), "observed")
 
             alert = event["observed"].get("alert")
             alert = alert if isinstance(alert, dict) else {}
-            alert_node = add("ids", alert.get("signature"))
+            alert_node = add("ids", alert.get("signature"), "observed", {
+                "category": alert.get("category"),
+                "signature_id": alert.get("signature_id"),
+            })
 
             for target, relation in [
                 (session_node, "belongs_to"),
@@ -1301,6 +1514,7 @@ class Store:
                 (service_node, "targets_service"),
                 (honeypot_node, "observed_by"),
                 (user_node, "uses_username"),
+                (secret_node, "credential_secret_fingerprint"),
                 (command_node, "observed_command"),
                 (payload_node, "observed_payload"),
                 (alert_node, "ids_alert"),
@@ -1309,24 +1523,68 @@ class Store:
                     edges.add((event_node, target, relation))
 
             for item in event["derived"].get("mitre", []) or []:
-                mitre_node = add("mitre", item.get("technique_id") if isinstance(item, dict) else None)
+                if not isinstance(item, dict):
+                    continue
+                mitre_node = add("mitre", item.get("technique_id"), "derived", {
+                    "rationale": item.get("rationale"),
+                    "evidence": item.get("evidence"),
+                })
                 if event_node and mitre_node:
                     edges.add((event_node, mitre_node, "mapped_with_evidence"))
 
             for item in event["derived"].get("cve", []) or []:
-                cve_node = add("cve", item.get("cve_id") if isinstance(item, dict) else None)
+                if not isinstance(item, dict):
+                    continue
+                cve_node = add("cve", item.get("cve_id"), "derived", {
+                    "rationale": item.get("rationale"),
+                    "evidence": item.get("evidence"),
+                })
                 if event_node and cve_node:
                     edges.add((event_node, cve_node, "correlated_with_evidence"))
 
             for ioc in event["derived"].get("ioc", []) or []:
-                ioc_node = add("ioc", ioc.get("value") if isinstance(ioc, dict) else ioc)
+                if not isinstance(ioc, dict):
+                    continue
+                ioc_type = ioc.get("type")
+                ioc_value = ioc.get("value")
+                ioc_node = add("ioc", ioc_value, "derived", {
+                    "type": ioc_type,
+                    "evidence": ioc.get("evidence"),
+                    "classification": ioc.get("classification"),
+                })
                 if event_node and ioc_node:
                     edges.add((event_node, ioc_node, "derived_ioc"))
 
+            threat_context = (event.get("enrichment") or {}).get("threat_context")
+            if isinstance(threat_context, dict):
+                source = threat_context.get("source")
+                data = threat_context.get("data") if isinstance(threat_context.get("data"), dict) else {}
+                for match in (data.get("matches") or [])[:16]:
+                    if not isinstance(match, dict):
+                        continue
+                    kind = match.get("type")
+                    value = match.get("value")
+                    label = f"{kind}: {value}" if kind and value not in (None, "") else value
+                    ti_node = add("threat_intel", label, "enrichment", {
+                        "source": source,
+                        "confidence": match.get("confidence"),
+                        "labels": match.get("labels"),
+                        "reference": match.get("reference"),
+                        "evidence": match.get("evidence"),
+                    })
+                    if event_node and ti_node:
+                        edges.add((event_node, ti_node, "external_threat_context"))
+
         return {
+            "analysis": bundle.get("analysis", {}),
             "nodes": list(nodes.values()),
             "edges": [
                 {"source": source, "target": target, "relation": relation}
                 for source, target, relation in sorted(edges)
             ],
+            "provenance": {
+                "observed": "direct sensor or IDS telemetry",
+                "enrichment": "external or operator-supplied context",
+                "derived": "deterministic correlation or evidence-backed derivation",
+            },
         }

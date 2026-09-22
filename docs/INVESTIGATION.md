@@ -8,9 +8,9 @@ AEGIS-NEXUS is evidence-first. The operator workflow is:
 
 ### Dashboard
 
-Global search and filters apply to both analytics and the Live Feed for the selected time window. Charts are analytical controls, not decoration: country, protocol, service and honeypot bars can be used to apply filters, while ASN, port, credential, command, IDS and MITRE values can drive a focused search.
+Global search and filters apply to both analytics and the Live Feed for the selected time window. Charts are analytical controls, not decoration: attacks over time, unique source IPs over time, top sources, event type, severity, country, ASN, destination port, protocol, service, honeypot, usernames, safe password fingerprints, commands, payloads, IDS, IOC, evidence-backed MITRE/CVE and the temporal heatmap are all derived from the active scope. Filterable dimensions apply exact filters; artifact panels drive focused searches.
 
-The Attack Map uses only geolocation enrichment already attached to events. A point can be selected to focus the investigation on its source IP. Map placement is contextual infrastructure information, not attribution.
+The Attack Map uses only geolocation enrichment already attached to events and aggregates repeated observations for the same source/location. Point metadata can include count, sessions, services, ports, ASN and last-seen context. Selecting a point focuses the investigation on its source IP. Map placement is contextual infrastructure information, not attribution.
 
 ### Event investigation
 
@@ -23,13 +23,13 @@ Selecting an event preserves four separate evidence classes:
 
 ### IP and session analysis
 
-The IP profile summarizes first/last observation, services, ports, sessions, ASN/country context and stored external enrichment. The session panel reconstructs the correlated sequence and exposes credential attempts, commands, payloads, IDS alerts and evidence-backed mappings.
+The IP profile summarizes first/last observation, services, ports, sessions, ASN/country context, event types, honeypots, usernames, safe password fingerprints, commands, payloads, IDS, IOC/MITRE/CVE activity and stored external enrichment. The session panel reconstructs the correlated sequence and exposes credential attempts, commands, payloads, IDS alerts and evidence-backed mappings.
 
 Session correlation prefers an explicit per-connection sensor ID when a decoy provides one, or a Suricata `flow_id` combined with `flow.start` when available. Only when neither is present does AEGIS fall back to source IP, honeypot, service, protocol, destination port and an inactivity window. The UI exposes the method used. Correlation groups telemetry; it never proves common human identity.
 
 ### Threat Intelligence
 
-AEGIS does not invent reputation, malware family, actor or campaign information. The Threat Intelligence panel displays only enrichment present in the dataset and always keeps provider and timestamp visible. Empty enrichment produces an empty panel rather than an inferred classification.
+AEGIS does not invent reputation, malware family, actor or campaign information. The external-context panel keeps provider and timestamp visible and distinguishes contextual enrichment such as GeoIP/ASN from true Threat Intelligence records originating from `enrichment.threat_context`. Empty data produces an empty panel rather than an inferred classification.
 
 Local threat context exact matches, when configured, appear as external enrichment. They mean that an observed value is present in the operator-supplied feed; they do not change event severity and are not automatic evidence of compromise, attribution, MITRE technique or CVE.
 
@@ -39,13 +39,17 @@ Commands and payloads are scanned statically for exact URLs, domains, IP literal
 
 ### Relationship graph
 
-The graph can contain event, session, IP, ASN, country, service, protocol, port, honeypot, credential, command, payload, IDS, IOC, MITRE and CVE nodes. Nodes exist only when the underlying data exists. MITRE and CVE nodes therefore appear only when the stored record contains rationale and evidence.
+The graph can contain event, session, IP, ASN, country, service, protocol, port, honeypot, username, safe credential-secret fingerprint, command, payload, IDS, IOC, external Threat Intelligence, MITRE and CVE nodes. Every node carries provenance (`observed`, `enrichment` or `derived`) and may expose bounded evidence metadata in the inspector. Nodes exist only when the underlying data exists. MITRE and CVE nodes therefore appear only when the stored record contains rationale and evidence.
 
 ### Historical navigation
 
 The investigation feed uses cursor pagination ordered by event timestamp plus event ID. The cursor freezes the initial time-window boundary and is bound to the active search and exact filters, preventing accidental reuse after the analyst changes scope. New telemetry arriving while older pages are being loaded does not shift already-issued cursors or create offset-style duplicates.
 
 Session listing APIs use the same keyset approach with `last_seen` plus session ID. Cursors are navigation state, not evidence and not authorization tokens.
+
+### Large-session analysis bounds
+
+A single correlated session can be attacker-amplified. `AEGIS_SESSION_MAX_EVENTS` therefore bounds how many session events are loaded into one timeline, relationship graph, report or Study Mode request. If the retained session is larger, AEGIS uses the latest bounded subset and returns explicit `analysis.truncated`, `event_limit` and scope metadata. The console and generated analysis surface that limitation; a truncated view must not be described as the complete session.
 
 ### Case management
 
@@ -69,9 +73,9 @@ AEGIS-NEXUS segue un approccio evidence-first. Il flusso operativo è:
 
 ### Dashboard
 
-Ricerca globale e filtri vengono applicati sia alle statistiche sia al Live Feed nella finestra temporale selezionata. I grafici sono controlli analitici, non elementi decorativi: paese, protocollo, servizio e honeypot possono applicare filtri; ASN, porta, credential, comando, IDS e MITRE possono avviare ricerche mirate.
+Ricerca globale e filtri vengono applicati sia alle statistiche sia al Live Feed nella finestra temporale selezionata. I grafici sono controlli analitici, non elementi decorativi: attacks over time, IP sorgente unici nel tempo, top source, tipo evento, severità, paese, ASN, porta destinazione, protocollo, servizio, honeypot, username, fingerprint password sicuri, comandi, payload, IDS, IOC, MITRE/CVE supportati da evidenza e heatmap temporale derivano tutti dallo scope attivo. Le dimensioni filtrabili applicano filtri esatti; i pannelli artefatto avviano ricerche mirate.
 
-L'Attack Map utilizza esclusivamente la geolocalizzazione già presente negli enrichment. Un punto può essere selezionato per concentrare l'investigazione sul relativo IP sorgente. La posizione è contesto infrastrutturale e non attribuzione.
+L'Attack Map utilizza esclusivamente la geolocalizzazione già presente negli enrichment e aggrega osservazioni ripetute della stessa sorgente/posizione. I metadata del punto possono includere conteggio, sessioni, servizi, porte, ASN e ultima osservazione. Selezionare un punto concentra l'investigazione sul relativo IP sorgente. La posizione è contesto infrastrutturale e non attribuzione.
 
 ### Investigazione dell'evento
 
@@ -84,13 +88,13 @@ La selezione di un evento mantiene separate quattro classi:
 
 ### Analisi IP e sessione
 
-Il profilo IP riassume prima/ultima osservazione, servizi, porte, sessioni, contesto ASN/paese ed enrichment esterni memorizzati. Il pannello sessione ricostruisce la sequenza correlata ed evidenzia tentativi di credenziali, comandi, payload, alert IDS e mapping supportati da evidenza.
+Il profilo IP riassume prima/ultima osservazione, servizi, porte, sessioni, contesto ASN/paese, tipi evento, honeypot, username, fingerprint password sicuri, comandi, payload, IDS, attività IOC/MITRE/CVE ed enrichment esterni memorizzati. Il pannello sessione ricostruisce la sequenza correlata ed evidenzia tentativi di credenziali, comandi, payload, alert IDS e mapping supportati da evidenza.
 
 La correlazione preferisce un ID esplicito per connessione quando fornito dal decoy, oppure il `flow_id` Suricata combinato con `flow.start` quando disponibile. Solo in assenza di entrambi AEGIS usa il fallback con IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività. L'interfaccia mostra il metodo utilizzato. La correlazione raggruppa telemetria e non dimostra un'identità umana comune.
 
 ### Threat Intelligence
 
-AEGIS non inventa reputazione, malware family, actor o campagne. Il pannello Threat Intelligence visualizza soltanto enrichment presenti nel dataset e mantiene sempre visibili provider e timestamp. In assenza di enrichment il pannello resta vuoto invece di produrre classificazioni inferite.
+AEGIS non inventa reputazione, malware family, actor o campagne. Il pannello di contesto esterno mantiene sempre visibili provider e timestamp e distingue enrichment contestuale come GeoIP/ASN dalla vera Threat Intelligence proveniente da `enrichment.threat_context`. In assenza di dati il pannello resta vuoto invece di produrre classificazioni inferite.
 
 I match esatti del threat context locale, quando configurati, compaiono come enrichment esterno. Indicano che un valore osservato è presente nel feed fornito dall'operatore; non cambiano la severità e non costituiscono automaticamente prova di compromissione, attribuzione, tecnica MITRE o CVE.
 
@@ -100,13 +104,17 @@ Comandi e payload vengono analizzati staticamente per URL, domini, IP letterali 
 
 ### Grafo delle relazioni
 
-Il grafo può contenere nodi evento, sessione, IP, ASN, paese, servizio, protocollo, porta, honeypot, credential, comando, payload, IDS, IOC, MITRE e CVE. I nodi esistono solo se esistono i dati corrispondenti. MITRE e CVE compaiono quindi soltanto quando il record contiene razionale ed evidenza.
+Il grafo può contenere nodi evento, sessione, IP, ASN, paese, servizio, protocollo, porta, honeypot, username, fingerprint sicuro del segreto credential, comando, payload, IDS, IOC, Threat Intelligence esterna, MITRE e CVE. Ogni nodo espone la provenienza (`observed`, `enrichment` o `derived`) e può mostrare metadata di evidenza limitati nell'inspector. I nodi esistono solo se esistono i dati corrispondenti. MITRE e CVE compaiono quindi soltanto quando il record contiene razionale ed evidenza.
 
 ### Navigazione storica
 
 Il feed investigativo usa paginazione a cursore ordinata per timestamp evento più ID evento. Il cursore congela il limite temporale della prima pagina ed è vincolato a ricerca e filtri esatti attivi, evitando il riuso accidentale dopo un cambio di scope. La nuova telemetria che arriva mentre si caricano pagine precedenti non sposta i cursori già emessi e non produce i duplicati tipici della paginazione a offset.
 
 Le API delle sessioni usano lo stesso approccio keyset con `last_seen` più ID sessione. I cursori sono stato di navigazione, non evidenza e non token di autorizzazione.
+
+### Limiti per sessioni molto grandi
+
+Una singola sessione correlata può essere amplificata dall'attaccante. `AEGIS_SESSION_MAX_EVENTS` limita quindi il numero di eventi caricati in una singola richiesta di timeline, grafo relazionale, report o Study Mode. Se la sessione conservata è più grande, AEGIS usa il sottoinsieme più recente entro il limite e restituisce metadata espliciti `analysis.truncated`, `event_limit` e scope. Console e analisi generate mostrano questa limitazione; una vista troncata non deve essere descritta come sessione completa.
 
 ### Gestione casi
 

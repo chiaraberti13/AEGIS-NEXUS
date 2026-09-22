@@ -114,7 +114,23 @@
         </article>
       </section>
 
+      <section class="grid signal-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <div><span class="eyebrow" data-i18n="panel.uniqueIp.eyebrow"></span><h2 data-i18n="panel.uniqueIp.title"></h2></div>
+            <span class="badge">UTC</span>
+          </div>
+          <svg id="unique-ip-timeline" class="timeline" viewBox="0 0 900 260" role="img"></svg>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><span class="eyebrow" data-i18n="panel.sources.eyebrow"></span><h2 data-i18n="panel.sources.title"></h2></div></div>
+          <div id="chart-source-ip" class="bar-chart"></div>
+        </article>
+      </section>
+
       <section class="grid chart-grid">
+        <article class="panel"><div class="panel-head"><h3 data-i18n="chart.eventType"></h3></div><div id="chart-event-type" class="bar-chart"></div></article>
+        <article class="panel"><div class="panel-head"><h3 data-i18n="chart.severity"></h3></div><div id="chart-severity" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.country"></h3></div><div id="chart-country" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.asn"></h3></div><div id="chart-asn" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.port"></h3></div><div id="chart-port" class="bar-chart"></div></article>
@@ -122,10 +138,13 @@
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.honeypot"></h3></div><div id="chart-honeypot" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.service"></h3></div><div id="chart-service" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.credentials"></h3></div><div id="chart-credentials" class="bar-chart"></div></article>
+        <article class="panel"><div class="panel-head"><h3 data-i18n="chart.credentialSecrets"></h3></div><div id="chart-credential-secrets" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.commands"></h3></div><div id="chart-commands" class="bar-chart"></div></article>
+        <article class="panel"><div class="panel-head"><h3 data-i18n="chart.payloads"></h3></div><div id="chart-payloads" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.ids"></h3></div><div id="chart-ids" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.ioc"></h3></div><div id="chart-ioc" class="bar-chart"></div></article>
         <article class="panel"><div class="panel-head"><h3 data-i18n="chart.mitre"></h3></div><div id="chart-mitre" class="bar-chart"></div></article>
+        <article class="panel"><div class="panel-head"><h3 data-i18n="chart.cve"></h3></div><div id="chart-cve" class="bar-chart"></div></article>
         <article class="panel heatmap-panel"><div class="panel-head"><h3 data-i18n="chart.heatmap"></h3></div><div id="heatmap" class="heatmap"></div></article>
       </section>
 
@@ -306,6 +325,8 @@
             <span class="eyebrow" data-i18n="relations.inspector"></span>
             <strong id="graph-node-kind">—</strong>
             <p id="graph-node-label" class="muted" data-i18n="relations.selectNode"></p>
+            <span id="graph-node-provenance" class="provenance"></span>
+            <pre id="graph-node-metadata"></pre>
             <div id="graph-legend" class="legend"></div>
           </aside>
         </div>

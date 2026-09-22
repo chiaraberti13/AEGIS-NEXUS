@@ -32,10 +32,17 @@ def verify_signed_payload(
 
 
 class SlidingWindowLimiter:
-    def __init__(self, max_keys: int = 4096):
+    def __init__(self, max_keys: int = 4096, cleanup_interval_seconds: float = 10.0):
         self.max_keys = max(128, max_keys)
+        self.cleanup_interval_seconds = max(1.0, min(float(cleanup_interval_seconds), 60.0))
         self._buckets: dict[str, deque[float]] = {}
         self._lock = Lock()
+        self._last_cleanup = 0.0
+
+    @staticmethod
+    def _prune_bucket(bucket: deque[float], cutoff: float) -> None:
+        while bucket and bucket[0] <= cutoff:
+            bucket.popleft()
 
     def allow(self, key: str, limit: int, window_seconds: int = 60) -> bool:
         limit = max(1, limit)
@@ -43,17 +50,32 @@ class SlidingWindowLimiter:
         now = time.monotonic()
         cutoff = now - window_seconds
         with self._lock:
-            stale = []
-            for existing, bucket in self._buckets.items():
-                while bucket and bucket[0] <= cutoff:
-                    bucket.popleft()
+            bucket = self._buckets.get(key)
+            if bucket is not None:
+                self._prune_bucket(bucket, cutoff)
                 if not bucket:
-                    stale.append(existing)
-            for existing in stale[:256]:
-                self._buckets.pop(existing, None)
-            if key not in self._buckets and len(self._buckets) >= self.max_keys:
-                return False
-            bucket = self._buckets.setdefault(key, deque())
+                    self._buckets.pop(key, None)
+                    bucket = None
+
+            cleanup_due = now - self._last_cleanup >= self.cleanup_interval_seconds
+            capacity_pressure = bucket is None and len(self._buckets) >= self.max_keys
+            if cleanup_due or capacity_pressure:
+                stale = []
+                for existing, existing_bucket in self._buckets.items():
+                    if existing == key:
+                        continue
+                    self._prune_bucket(existing_bucket, cutoff)
+                    if not existing_bucket:
+                        stale.append(existing)
+                for existing in stale:
+                    self._buckets.pop(existing, None)
+                self._last_cleanup = now
+
+            if bucket is None:
+                if len(self._buckets) >= self.max_keys:
+                    return False
+                bucket = deque()
+                self._buckets[key] = bucket
             if len(bucket) >= limit:
                 return False
             bucket.append(now)

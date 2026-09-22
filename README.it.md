@@ -29,14 +29,15 @@ L'implementazione attuale fornisce sia la base sicura per telemetria e investiga
 - Threat context locale offline con match esatti da feed JSON fornito dall'operatore per IP osservati e artefatti URL/dominio/hash derivati; i match restano contesto esterno e non diventano automaticamente attribuzioni, CVE o mapping MITRE.
 - Mapping MITRE ATT&CK e CVE accettati solo con `rationale` ed `evidence`.
 - Estrazione statica deterministica da comandi/payload osservati di URL, domini, IP letterali e formati hash comuni; i valori restano artefatti derivati supportati da evidenza e non diventano automaticamente indicatori malevoli.
-- Password redatte per default, con fingerprint SHA-256 e lunghezza; memorizzazione raw solo tramite opt-in esplicito.
+- Password redatte per default, con fingerprint SHA-256 e lunghezza; lo storage raw nel database richiede opt-in esplicito e API/UI/report operatore non restituiscono mai il segreto in chiaro.
 - Correlazione persistente delle sessioni su SQLite che preferisce ID espliciti di connessione dei decoy o identità flow Suricata e usa come fallback IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività.
 - API e viste SOC dedicate per eventi, profili IP, sessioni, timeline, relazioni, contesto Threat Intelligence e Study Mode.
 - Paginazione stabile a cursore per navigazione storica di eventi/sessioni; la dashboard resta sui dati correnti mentre Investigazione può aggiungere telemetria precedente coerente con i filtri.
+- Le investigazioni su singole sessioni molto grandi sono limitate da `AEGIS_SESSION_MAX_EVENTS`; quando la sessione conservata supera il limite, UI, grafo, report e Study Mode dichiarano esplicitamente di lavorare sul sottoinsieme più recente.
 - Gestione casi SOC evidence-preserving con classificazione dell’analista, note, tag, riferimenti a eventi/sessioni, audit trail, lifecycle bounded/retention dei soli casi chiusi e report JSON/CSV/Markdown.
-- Dashboard SOC con ricerca/filtri globali, timeline, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, IDS, MITRE, heatmap temporale, Attack Map interattiva e Live Feed.
+- Dashboard SOC con ricerca/filtri globali, attacks over time, timeline degli IP sorgente unici, top source IP, tipi evento, severità, paesi, ASN, porte, protocolli, servizi, honeypot, username, fingerprint password, comandi, payload, IDS, IOC, MITRE/CVE supportati da evidenza, heatmap temporale, Attack Map aggregata interattiva e Live Feed.
 - Interfaccia IT/EN tramite dizionario i18n centrale; la telemetria viene sempre resa come testo e mai come HTML controllato dall'attaccante.
-- La provenienza `received_at` generata dal collector separa il momento di ricezione dal tempo evento del sensore; `AEGIS_RETENTION_DAYS` e il cleanup di capacità usano il tempo di ricezione, mentre le timeline mantengono il `timestamp` originale.
+- La provenienza di ricezione del collector separa il tempo evento sensore dal momento di accettazione: `collector_received_at` è canonico per retention/freschezza operativa e `received_at` resta un alias di compatibilità sincronizzato; le timeline mantengono il `timestamp` originale.
 - Retention temporale continua con `AEGIS_RETENTION_DAYS` più limite di capacità `AEGIS_MAX_DB_EVENTS`; gli export investigativi JSON/CSV/Markdown non includono mai password in chiaro.
 - La readiness verifica accesso SQLite e soglia minima di spazio libero; lo stato operativo autenticato mostra la ricezione telemetria senza dichiarare automaticamente i sensori online/offline.
 - Runtime Docker hardenizzato: utente non-root, capability rimosse, root filesystem read-only, `no-new-privileges`, connessioni TCP concorrenti limitate, reti management separate per sensore e porta operatore solo su localhost.
@@ -86,7 +87,7 @@ Invia un singolo evento Suricata EVE JSON a `POST /api/v1/integrations/suricata/
 
 `Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relazioni → caso → report → Study Mode`
 
-Il grafo usa esclusivamente i dati realmente presenti nella sessione selezionata. La Threat Intelligence visualizza soltanto enrichment esterni memorizzati, mantenendo fonte e timestamp. Study Mode lavora sia sull'evento sia sull'intera sessione correlata, rendendo visibili i limiti dell'analisi. Consulta il [flusso investigativo](docs/INVESTIGATION.md).
+Il grafo usa esclusivamente i dati realmente presenti nella sessione selezionata e mostra la provenienza dei nodi. Il contesto esterno distingue esplicitamente enrichment contestuale (ad esempio GeoIP/ASN) dai veri match `threat_context`, mantenendo fonte e timestamp. Study Mode lavora sia sull'evento sia sull'intera sessione correlata, rendendo visibili i limiti dell'analisi. Consulta il [flusso investigativo](docs/INVESTIGATION.md).
 
 ## Avvio rapido
 
@@ -105,7 +106,7 @@ Sviluppo:
 ```bash
 python -m pip install -e '.[dev]'
 pytest -q
-AEGIS_DATABASE_PATH=./data/aegis.db flask --app aegis_nexus.app run --host 127.0.0.1 --port 8600
+AEGIS_DATABASE_PATH=./data/aegis.db AEGIS_OPERATOR_API_KEY='sostituisci-con-un-segreto-casuale-lungo' flask --app aegis_nexus.app run --host 127.0.0.1 --port 8600
 ```
 
 ## Struttura

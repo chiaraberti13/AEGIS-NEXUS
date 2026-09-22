@@ -314,8 +314,8 @@
     });
   }
 
-  function timeline(items) {
-    const svg = $("timeline");
+  function timeline(id, items) {
+    const svg = $(id);
     svg.replaceChildren();
     if (!items?.length) return;
     const W = 900, H = 260, P = 28;
@@ -376,7 +376,8 @@
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
       const key = lat.toFixed(1) + "|" + lon.toFixed(1) + "|" + (point.source_ip || "");
       const existing = grouped.get(key) || {...point, count: 0, lon, lat};
-      existing.count += 1;
+      existing.count += Math.max(1, Number(point.count) || 1);
+      if (!existing.session_count && point.session_count) existing.session_count = point.session_count;
       grouped.set(key, existing);
     });
     grouped.forEach((point) => {
@@ -387,7 +388,16 @@
       circle.setAttribute("class", "map-point");
       circle.setAttribute("tabindex", "0");
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = t("map.point") + ": " + (point.source_ip || "—") + " · " + (point.country || "—") + " · " + point.count;
+      const mapDetails = [
+        t("map.point") + ": " + (point.source_ip || "—"),
+        point.country || "—",
+        (point.asn || "—"),
+        t("common.count") + ": " + point.count,
+        t("map.sessions") + ": " + (point.session_count || "—"),
+        t("map.services") + ": " + ((point.services || []).join(", ") || "—"),
+        t("map.ports") + ": " + ((point.destination_ports || []).join(", ") || "—"),
+      ];
+      title.textContent = mapDetails.join(" · ");
       circle.append(title);
       const activate = () => {
         if (!point.source_ip) return;
@@ -527,6 +537,10 @@
     root.append(item);
   }
 
+  function rankedLabels(items) {
+    return (items || []).map((item) => String(item.label) + " (" + String(item.value) + ")");
+  }
+
   function renderIp(profile) {
     const root = $("ip-profile");
     root.replaceChildren();
@@ -542,6 +556,17 @@
     fact(root, t("ip.ports"), profile.destination_ports || []);
     fact(root, t("ip.asn"), profile.asns || []);
     fact(root, t("ip.country"), profile.countries || []);
+    const activity = profile.activity || {};
+    fact(root, t("ip.eventTypes"), rankedLabels(activity.event_types));
+    fact(root, t("ip.honeypots"), rankedLabels(activity.honeypots));
+    fact(root, t("ip.usernames"), rankedLabels(activity.usernames));
+    fact(root, t("ip.passwordFingerprints"), rankedLabels(activity.credential_secret_fingerprints));
+    fact(root, t("ip.commands"), rankedLabels(activity.commands));
+    fact(root, t("ip.payloads"), rankedLabels(activity.payloads));
+    fact(root, t("ip.ids"), rankedLabels(activity.ids_alerts));
+    fact(root, t("ip.mitre"), rankedLabels(activity.mitre));
+    fact(root, t("ip.cve"), rankedLabels(activity.cves));
+    fact(root, t("ip.ioc"), rankedLabels(activity.iocs));
   }
 
   function renderSession(bundle) {
@@ -560,6 +585,13 @@
     fact(root, t("session.ids"), summary.ids_alerts || 0);
     fact(root, t("session.mitre"), summary.mitre || []);
     fact(root, t("session.ioc"), summary.iocs || 0);
+    if (summary.truncated) {
+      fact(
+        root,
+        t("session.analysisScope"),
+        t("session.latestEventsOnly").replace("{limit}", String(bundle.analysis?.event_limit || summary.events_returned || "—")),
+      );
+    }
   }
 
   function renderThreatIntelligence(data) {
@@ -582,7 +614,9 @@
       kind.textContent = item.kind || "enrichment";
       const badge = document.createElement("span");
       badge.className = "provenance enrichment";
-      badge.textContent = t("provenance.enrichment");
+      badge.textContent = item.classification === "threat_intelligence"
+        ? t("ti.threatIntelligence")
+        : t("ti.contextEnrichment");
       head.append(kind, badge);
       const meta = document.createElement("p");
       meta.className = "muted";
@@ -698,6 +732,18 @@
     renderStudySection(root, t("study.limitations"), data.limitations);
   }
 
+  function graphKindLabel(kind) {
+    const key = "relations.kind." + String(kind || "unknown");
+    const label = t(key);
+    return label === key ? String(kind || t("common.unknown")) : label;
+  }
+
+  function graphRelationLabel(relation) {
+    const key = "relations.edge." + String(relation || "unknown");
+    const label = t(key);
+    return label === key ? String(relation || t("common.unknown")) : label;
+  }
+
   function graphPosition(nodes) {
     const positions = new Map();
     const session = nodes.find((node) => node.kind === "session");
@@ -725,7 +771,7 @@
       const dot = document.createElement("i");
       dot.className = "legend-dot kind-" + kind;
       const label = document.createElement("span");
-      label.textContent = kind;
+      label.textContent = graphKindLabel(kind);
       item.append(dot, label);
       root.append(item);
     });
@@ -755,7 +801,7 @@
       [["x1", source.x], ["y1", source.y], ["x2", target.x], ["y2", target.y]].forEach(([key, value]) => line.setAttribute(key, String(value)));
       line.setAttribute("class", "relation-edge");
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = edge.relation;
+      title.textContent = graphRelationLabel(edge.relation);
       line.append(title);
       svg.append(line);
     });
@@ -764,7 +810,7 @@
       const position = positions.get(node.id);
       if (!position) return;
       const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      group.setAttribute("class", "relation-node kind-" + node.kind);
+      group.setAttribute("class", "relation-node kind-" + node.kind + " provenance-" + (node.provenance || "observed"));
       group.setAttribute("tabindex", "0");
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", String(position.x));
@@ -775,8 +821,13 @@
       label.setAttribute("y", String(position.y + 4));
       label.textContent = String(node.label).slice(0, 22);
       const inspect = () => {
-        $("graph-node-kind").textContent = node.kind;
+        $("graph-node-kind").textContent = graphKindLabel(node.kind);
         $("graph-node-label").textContent = node.label;
+        const provenance = node.provenance || "observed";
+        const provenanceNode = $("graph-node-provenance");
+        provenanceNode.className = "provenance " + provenance;
+        provenanceNode.textContent = t("provenance." + provenance);
+        $("graph-node-metadata").textContent = node.metadata ? pretty(node.metadata) : "";
       };
       group.addEventListener("click", inspect);
       group.addEventListener("keydown", (event) => {
@@ -1246,9 +1297,13 @@
       if (dashboard.analysis?.truncated) {
         analyticsWarning.textContent = t("analytics.truncated").replace("{limit}", String(dashboard.analysis.event_limit));
       }
-      timeline(dashboard.timeline);
+      timeline("timeline", dashboard.timeline);
+      timeline("unique-ip-timeline", dashboard.unique_source_ip_timeline);
       map(dashboard.map_points);
       heat(dashboard.heatmap);
+      bars("chart-source-ip", dashboard.source_ip, {search: true});
+      bars("chart-event-type", dashboard.event_type, {filterKey: "event_type"});
+      bars("chart-severity", dashboard.severity, {filterKey: "severity"});
       bars("chart-country", dashboard.country, {filterKey: "country"});
       bars("chart-asn", dashboard.asn, {filterKey: "asn"});
       bars("chart-port", dashboard.destination_port, {filterKey: "destination_port"});
@@ -1256,10 +1311,13 @@
       bars("chart-honeypot", dashboard.honeypot, {filterKey: "honeypot"});
       bars("chart-service", dashboard.service, {filterKey: "service"});
       bars("chart-credentials", dashboard.credentials, {search: true});
+      bars("chart-credential-secrets", dashboard.credential_secret_fingerprints, {search: true});
       bars("chart-commands", dashboard.commands, {search: true});
+      bars("chart-payloads", dashboard.payloads, {search: true});
       bars("chart-ids", dashboard.ids_alerts, {search: true});
       bars("chart-ioc", dashboard.iocs, {search: true});
       bars("chart-mitre", dashboard.mitre, {search: true});
+      bars("chart-cve", dashboard.cves, {search: true});
       renderFeed("event-feed", state.events);
       renderFeed("dashboard-feed", state.events, 12);
     } catch (error) {

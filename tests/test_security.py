@@ -1,10 +1,12 @@
 import json
 import time
 import uuid
+
+import pytest
 from datetime import datetime, timezone
 
 from aegis_nexus.app import create_app
-from aegis_nexus.model import normalize_event
+from aegis_nexus.model import EventValidationError, normalize_event
 from aegis_nexus.security import SlidingWindowLimiter, sign_payload, verify_signed_payload
 from aegis_nexus.store import Store
 
@@ -20,6 +22,15 @@ def _signed_request(secret: str, sensor: str, payload: dict):
         "X-Aegis-Signature": sign_payload(secret, timestamp, body),
     }
     return body, headers
+
+
+def test_normalize_event_rejects_non_finite_numeric_values():
+    with pytest.raises(EventValidationError, match="non-finite"):
+        normalize_event({
+            "honeypot": "web-1",
+            "event_type": "web.request",
+            "observed": {"source_ip": "203.0.113.90", "score": float("nan")},
+        })
 
 
 def test_signature_verification_and_tamper_detection():
@@ -77,6 +88,38 @@ def test_signed_ingest_rejects_bad_signature(tmp_path):
     assert client.post("/api/v1/events", data=body, headers=headers).status_code == 401
 
 
+def test_operator_api_fails_closed_without_key_outside_testing(tmp_path):
+    app = create_app({
+        "TESTING": False,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "OPERATOR_API_KEY": "",
+        "ALLOW_UNAUTHENTICATED_OPERATOR": False,
+    })
+    client = app.test_client()
+    status = client.get("/api/v1/operator/status").get_json()
+    assert status["required"] is True
+    assert status["configured"] is False
+    assert status["authenticated"] is False
+    assert status["insecure_unauthenticated_opt_in"] is False
+    assert client.get("/api/v1/dashboard").status_code == 401
+
+
+def test_operator_api_allows_explicit_unauthenticated_development_opt_in(tmp_path):
+    app = create_app({
+        "TESTING": False,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "OPERATOR_API_KEY": "",
+        "ALLOW_UNAUTHENTICATED_OPERATOR": True,
+    })
+    client = app.test_client()
+    status = client.get("/api/v1/operator/status").get_json()
+    assert status["required"] is False
+    assert status["configured"] is False
+    assert status["authenticated"] is True
+    assert status["insecure_unauthenticated_opt_in"] is True
+    assert client.get("/api/v1/dashboard").status_code == 200
+
+
 def test_operator_api_is_protected_when_key_is_configured(tmp_path):
     app = create_app({
         "TESTING": True,
@@ -86,7 +129,10 @@ def test_operator_api_is_protected_when_key_is_configured(tmp_path):
     })
     client = app.test_client()
     status = client.get("/api/v1/operator/status").get_json()
-    assert status == {"required": True, "authenticated": False}
+    assert status["required"] is True
+    assert status["configured"] is True
+    assert status["authenticated"] is False
+    assert status["insecure_unauthenticated_opt_in"] is False
     assert client.get("/api/v1/dashboard").status_code == 401
     headers = {"X-Aegis-Operator-Key": "operator-secret"}
     authenticated = client.get("/api/v1/operator/status", headers=headers).get_json()

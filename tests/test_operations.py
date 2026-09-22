@@ -37,7 +37,10 @@ def test_collector_received_at_is_distinct_from_sensor_event_time_and_drives_ret
 
     old_receipt = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
     with store.connect() as conn:
-        conn.execute("UPDATE events SET received_at=? WHERE id=?", (old_receipt, saved["id"]))
+        conn.execute(
+            "UPDATE events SET received_at=?, collector_received_at=? WHERE id=?",
+            (old_receipt, old_receipt, saved["id"]),
+        )
 
     assert store.prune(1) == 1
     assert store.get_event(saved["id"]) is None
