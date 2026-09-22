@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .correlation import session_id_for, session_identity, should_join
+from .correlation import explicit_session_token, session_id_for, session_id_for_explicit, session_identity, should_join
 
 
 _EVENT_FILTERS = (
@@ -130,6 +130,41 @@ class Store:
 
     def _select_or_create_session(self, conn: sqlite3.Connection, event: dict[str, Any]) -> str:
         source_ip, honeypot, service, protocol, destination_port = session_identity(event)
+        identity = (source_ip, honeypot, service, protocol, destination_port)
+        explicit = explicit_session_token(event)
+
+        if explicit:
+            session_id = session_id_for_explicit(identity, explicit)
+            row = conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+            if row:
+                conn.execute(
+                    """
+                    UPDATE sessions
+                    SET started_at=CASE WHEN started_at > ? THEN ? ELSE started_at END,
+                        last_seen=CASE WHEN last_seen < ? THEN ? ELSE last_seen END,
+                        event_count=event_count+1
+                    WHERE id=?
+                    """,
+                    (
+                        event["timestamp"], event["timestamp"],
+                        event["timestamp"], event["timestamp"],
+                        session_id,
+                    ),
+                )
+                return session_id
+            conn.execute(
+                """
+                INSERT INTO sessions(
+                    id,source_ip,honeypot,service,protocol,destination_port,started_at,last_seen,event_count
+                ) VALUES(?,?,?,?,?,?,?,?,1)
+                """,
+                (
+                    session_id, source_ip, honeypot, service, protocol, destination_port,
+                    event["timestamp"], event["timestamp"],
+                ),
+            )
+            return session_id
+
         row = conn.execute(
             """
             SELECT * FROM sessions
@@ -144,7 +179,7 @@ class Store:
                 (event["timestamp"], row["id"]),
             )
             return row["id"]
-        identity = (source_ip, honeypot, service, protocol, destination_port)
+
         session_id = session_id_for(identity, event["timestamp"])
         conn.execute(
             """
