@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import atexit
 import csv
+import hashlib
 import hmac
 import io
 import ipaddress
@@ -16,6 +17,7 @@ from .casework import CaseValidationError, normalize_case_create, normalize_case
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .model import EventValidationError, normalize_event
+from .pagination import CursorError
 from .security import SlidingWindowLimiter, verify_signed_payload
 from .store import Store
 from .study import explain, explain_session
@@ -56,6 +58,17 @@ def _filters_from_request() -> dict[str, str]:
         for key in FILTER_KEYS
         if (value := request.args.get(key, type=str))
     }
+
+
+def _pagination_scope(resource: str, *, q: str | None = None, filters: dict[str, str] | None = None, hours: int | None = None) -> str:
+    payload = {
+        "resource": resource,
+        "q": (q or "")[:128],
+        "filters": {key: value for key, value in sorted((filters or {}).items()) if value},
+        "hours": hours,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:24]
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -259,14 +272,25 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.get("/api/v1/events")
     def events():
-        return jsonify({
-            "items": store.list_events(
-                limit=request.args.get("limit", 100, type=int),
-                q=request.args.get("q", type=str),
-                filters=_filters_from_request(),
-                hours=request.args.get("hours", type=int),
+        limit = request.args.get("limit", 100, type=int)
+        q = request.args.get("q", type=str)
+        filters = _filters_from_request()
+        hours = request.args.get("hours", type=int)
+        if hours is not None:
+            hours = max(1, min(hours, 720))
+        scope = _pagination_scope("events", q=q, filters=filters, hours=hours)
+        try:
+            page = store.page_events(
+                limit=limit,
+                q=q,
+                filters=filters,
+                hours=hours,
+                cursor=request.args.get("cursor", type=str),
+                scope=scope,
             )
-        })
+        except CursorError:
+            return jsonify({"error": "invalid_cursor"}), 422
+        return jsonify(page)
 
     @app.get("/api/v1/events/<event_id>")
     def event_detail(event_id: str):
@@ -275,12 +299,19 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.get("/api/v1/sessions")
     def sessions():
-        return jsonify({
-            "items": store.list_sessions(
-                limit=request.args.get("limit", 100, type=int),
-                q=request.args.get("q", type=str),
+        limit = request.args.get("limit", 100, type=int)
+        q = request.args.get("q", type=str)
+        scope = _pagination_scope("sessions", q=q)
+        try:
+            page = store.page_sessions(
+                limit=limit,
+                q=q,
+                cursor=request.args.get("cursor", type=str),
+                scope=scope,
             )
-        })
+        except CursorError:
+            return jsonify({"error": "invalid_cursor"}), 422
+        return jsonify(page)
 
     @app.get("/api/v1/sessions/<session_id>")
     def session_detail(session_id: str):
