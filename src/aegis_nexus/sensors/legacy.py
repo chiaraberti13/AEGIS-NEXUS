@@ -6,6 +6,7 @@ import threading
 from typing import BinaryIO
 
 from .client import SensorClient
+from .server import BoundedThreadingTCPServer
 
 MAX_LINE = 512
 TIMEOUT = 15.0
@@ -79,19 +80,15 @@ class TelnetHandler(BaseHandler):
         self.wfile.write(b"Login incorrect\r\n")
 
 
-class ThreadingServer(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
-    daemon_threads = True
-
-
 def main():
     host = "0.0.0.0"
     ftp_port = int(os.getenv("AEGIS_FTP_PORT", "2121"))
     telnet_port = int(os.getenv("AEGIS_TELNET_PORT", "2323"))
+    max_connections = int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32"))
     FTPHandler.sensor = SensorClient(os.getenv("AEGIS_HONEYPOT_ID", "legacy-01"))
     TelnetHandler.sensor = FTPHandler.sensor
-    ftp = ThreadingServer((host, ftp_port), FTPHandler)
-    telnet = ThreadingServer((host, telnet_port), TelnetHandler)
+    ftp = BoundedThreadingTCPServer((host, ftp_port), FTPHandler, max_connections=max_connections)
+    telnet = BoundedThreadingTCPServer((host, telnet_port), TelnetHandler, max_connections=max_connections)
     threads = [
         threading.Thread(target=ftp.serve_forever, daemon=True),
         threading.Thread(target=telnet.serve_forever, daemon=True),

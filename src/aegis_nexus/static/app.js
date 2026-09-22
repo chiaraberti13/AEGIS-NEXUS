@@ -1,2 +1,770 @@
 "use strict";
-(()=>{const state={lang:localStorage.getItem("aegis-lang")||"it",selected:null};const $=id=>document.getElementById(id);const t=k=>(AEGIS_I18N[state.lang]||{})[k]||k;const text=(id,v)=>{$(id).textContent=String(v??"")};async function getJSON(url){const r=await fetch(url,{headers:{Accept:"application/json"}});if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}function i18n(){document.documentElement.lang=state.lang;document.querySelectorAll("[data-i18n]").forEach(e=>e.textContent=t(e.dataset.i18n));document.querySelectorAll("[data-i18n-placeholder]").forEach(e=>e.placeholder=t(e.dataset.i18nPlaceholder));$("lang-toggle").textContent=state.lang==="it"?"EN":"IT"}function bars(id,items){const root=$(id);root.replaceChildren();if(!items?.length){const e=document.createElement("div");e.className="mini-empty";e.textContent=t("empty.noData");root.append(e);return}const max=Math.max(...items.map(x=>+x.value||0),1);items.slice(0,8).forEach(x=>{const row=document.createElement("div");row.className="bar-row";const l=document.createElement("span");l.className="bar-label";l.textContent=String(x.label);const tr=document.createElement("div");tr.className="bar-track";const f=document.createElement("div");f.className="bar-fill";f.style.width=Math.max(2,(+x.value/max)*100)+"%";const v=document.createElement("strong");v.textContent=String(x.value);tr.append(f);row.append(l,tr,v);root.append(row)})}function timeline(items){const svg=$("timeline");svg.replaceChildren();if(!items?.length)return;const W=900,H=260,P=28,max=Math.max(...items.map(x=>+x.value||0),1);const pts=items.map((x,i)=>[P+i*(W-P*2)/Math.max(items.length-1,1),H-P-(+x.value/max)*(H-P*2)]);const g=document.createElementNS("http://www.w3.org/2000/svg","g");g.setAttribute("class","timeline-grid");for(let i=0;i<5;i++){const l=document.createElementNS("http://www.w3.org/2000/svg","line"),y=P+i*((H-P*2)/4);for(const [k,v] of [["x1",P],["x2",W-P],["y1",y],["y2",y]])l.setAttribute(k,v);g.append(l)}const p=document.createElementNS("http://www.w3.org/2000/svg","polyline");p.setAttribute("points",pts.map(x=>x.join(",")).join(" "));p.setAttribute("class","timeline-line");svg.append(g,p);pts.forEach(([x,y],i)=>{const c=document.createElementNS("http://www.w3.org/2000/svg","circle");c.setAttribute("cx",x);c.setAttribute("cy",y);c.setAttribute("r","3");c.setAttribute("class","timeline-dot");const title=document.createElementNS("http://www.w3.org/2000/svg","title");title.textContent=items[i].label+": "+items[i].value;c.append(title);svg.append(c)})}function map(points){const g=$("map-points");g.replaceChildren();text("map-count",points?.length||0);(points||[]).forEach(p=>{const lon=+p.lon,lat=+p.lat;if(!Number.isFinite(lon)||!Number.isFinite(lat))return;const c=document.createElementNS("http://www.w3.org/2000/svg","circle");c.setAttribute("cx",((lon+180)/360)*800);c.setAttribute("cy",((90-lat)/180)*390);c.setAttribute("r","5");c.setAttribute("class","map-point");const title=document.createElementNS("http://www.w3.org/2000/svg","title");title.textContent=t("map.point")+": "+(p.source_ip||"—")+" · "+(p.country||"—");c.append(title);g.append(c)})}function heat(m){const root=$("heatmap");root.replaceChildren();const max=Math.max(...(m||[]).flat(),1);(m||[]).forEach((row,d)=>row.forEach((v,h)=>{const c=document.createElement("div");c.className="heat-cell";c.style.opacity=.14+.86*(+v/max);c.title=`D${d+1} ${h}:00 · ${v}`;root.append(c)}))}function sev(v){const s=document.createElement("span");s.className="severity "+(v||"info");s.textContent=v||"info";return s}function feed(events){const b=$("event-feed");b.replaceChildren();(events||[]).forEach(e=>{const tr=document.createElement("tr");tr.tabIndex=0;tr.onclick=()=>select(e);tr.onkeydown=x=>{if(x.key==="Enter")select(e)};[new Date(e.timestamp).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"}),e.source_ip||"—",e.event_type,e.service||e.observed?.service||"—"].forEach(v=>{const td=document.createElement("td");td.textContent=String(v);tr.append(td)});const td=document.createElement("td");td.append(sev(e.severity));tr.append(td);b.append(tr)})}const pretty=v=>JSON.stringify(v??{},null,2);async function select(e){state.selected=e;$("event-empty").hidden=true;$("event-details").hidden=false;text("detail-observed",pretty(e.observed));text("detail-enrichment",pretty(e.enrichment));text("detail-derived",pretty(e.derived));text("detail-hypotheses",pretty(e.hypotheses));try{const s=await getJSON("/api/v1/study/"+encodeURIComponent(e.id)+"?lang="+state.lang);text("study-title",s.title);text("study-why",s.why_interesting);const l=$("study-list");l.replaceChildren();(s.soc_checklist||[]).forEach(x=>{const li=document.createElement("li");li.textContent=x;l.append(li)})}catch{text("study-title",t("study.noData"))}relations(e.session_id)}async function relations(id){const svg=$("relation-graph");svg.replaceChildren();if(!id)return;const graph=await getJSON("/api/v1/relations?session_id="+encodeURIComponent(id)),nodes=(graph.nodes||[]).slice(0,32),edges=graph.edges||[];if(!nodes.length)return;const m=new Map(),cx=360,cy=165,rx=290,ry=125;nodes.forEach((n,i)=>{const a=2*Math.PI*i/nodes.length;m.set(n.id,{...n,x:cx+Math.cos(a)*rx,y:cy+Math.sin(a)*ry})});edges.forEach(e=>{const a=m.get(e.source),b=m.get(e.target);if(!a||!b)return;const l=document.createElementNS("http://www.w3.org/2000/svg","line");for(const[k,v]of[["x1",a.x],["y1",a.y],["x2",b.x],["y2",b.y]])l.setAttribute(k,v);l.setAttribute("class","relation-edge");svg.append(l)});m.forEach(n=>{const c=document.createElementNS("http://www.w3.org/2000/svg","circle");c.setAttribute("cx",n.x);c.setAttribute("cy",n.y);c.setAttribute("r","10");const g=document.createElementNS("http://www.w3.org/2000/svg","g");g.setAttribute("class","relation-node "+n.kind);const title=document.createElementNS("http://www.w3.org/2000/svg","title");title.textContent=n.kind+": "+n.label;c.append(title);g.append(c);svg.append(g)})}async function refresh(){const q=$("global-search").value.trim(),hours=$("window").value;try{const[d,f]=await Promise.all([getJSON("/api/v1/dashboard?hours="+encodeURIComponent(hours)+(q?"&q="+encodeURIComponent(q):"")),getJSON("/api/v1/events?limit=80"+(q?"&q="+encodeURIComponent(q):""))]);text("kpi-events",d.totals.events);text("kpi-ips",d.totals.unique_source_ip);text("kpi-sessions",d.totals.sessions);text("kpi-critical",d.totals.critical);timeline(d.timeline);map(d.map_points);heat(d.heatmap);[["country",d.country],["asn",d.asn],["port",d.destination_port],["protocol",d.protocol],["honeypot",d.honeypot],["service",d.service],["credentials",d.credentials],["commands",d.commands],["ids",d.ids_alerts],["mitre",d.mitre]].forEach(([k,v])=>bars("chart-"+k,v));feed(f.items)}catch(e){console.error("AEGIS refresh failed",e)}}$("lang-toggle").onclick=()=>{state.lang=state.lang==="it"?"en":"it";localStorage.setItem("aegis-lang",state.lang);i18n();if(state.selected)select(state.selected)};$("window").onchange=refresh;let timer;$("global-search").oninput=()=>{clearTimeout(timer);timer=setTimeout(refresh,250)};$("open-ip").onclick=async()=>{if(state.selected?.source_ip)text("detail-observed",pretty(await getJSON("/api/v1/ips/"+encodeURIComponent(state.selected.source_ip))))};$("open-session").onclick=async()=>{if(state.selected?.session_id)text("detail-observed",pretty(await getJSON("/api/v1/sessions/"+encodeURIComponent(state.selected.session_id))))};$("open-relations").onclick=()=>state.selected?.session_id&&relations(state.selected.session_id);$("open-report").onclick=async()=>{if(!state.selected?.session_id)return;const r=await getJSON("/api/v1/reports/session/"+encodeURIComponent(state.selected.session_id)),blob=new Blob([JSON.stringify(r,null,2)],{type:"application/json"}),u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="aegis-"+state.selected.session_id+".json";document.body.append(a);a.click();a.remove();URL.revokeObjectURL(u)};i18n();refresh();setInterval(refresh,5000)})();
+
+(() => {
+  const state = {
+    lang: localStorage.getItem("aegis-lang") || "it",
+    selected: null,
+    session: null,
+    ipProfile: null,
+    eventStudy: null,
+    sessionStudy: null,
+    dashboard: null,
+    events: [],
+    filters: {},
+    mapBox: [0, 0, 800, 390],
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const t = (key) => (window.AEGIS_I18N[state.lang] || {})[key] || key;
+  const pretty = (value) => JSON.stringify(value ?? {}, null, 2);
+
+  async function getJSON(url) {
+    const response = await fetch(url, {headers: {Accept: "application/json"}});
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    return response.json();
+  }
+
+  async function safeGet(url) {
+    try {
+      return await getJSON(url);
+    } catch (error) {
+      console.error("AEGIS request failed", error);
+      return null;
+    }
+  }
+
+  function i18n() {
+    document.documentElement.lang = state.lang;
+    document.querySelectorAll("[data-i18n]").forEach((node) => {
+      node.textContent = t(node.dataset.i18n);
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+      node.placeholder = t(node.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll("[data-i18n-title]").forEach((node) => {
+      node.title = t(node.dataset.i18nTitle);
+    });
+    document.querySelectorAll("[data-i18n-aria]").forEach((node) => {
+      node.setAttribute("aria-label", t(node.dataset.i18nAria));
+    });
+    $("lang-toggle").textContent = state.lang === "it" ? "EN" : "IT";
+    refreshFilterLabels();
+  }
+
+  function showView(name) {
+    document.querySelectorAll("[data-view]").forEach((node) => {
+      node.classList.toggle("active", node.dataset.view === name);
+    });
+    document.querySelectorAll("[data-view-target]").forEach((node) => {
+      node.classList.toggle("active", node.dataset.viewTarget === name);
+    });
+  }
+
+  function option(value, label) {
+    const node = document.createElement("option");
+    node.value = value;
+    node.textContent = label;
+    return node;
+  }
+
+  function populateFilter(key, values) {
+    const id = key === "event_type" ? "filter-event-type" : "filter-" + key;
+    const select = $(id);
+    if (!select) return;
+    const current = state.filters[key] || "";
+    select.replaceChildren(option("", t("filters.all." + key)));
+    (values || []).forEach((value) => select.append(option(value, value)));
+    if ([...select.options].some((item) => item.value === current)) select.value = current;
+  }
+
+  function refreshFilterLabels() {
+    ["country", "protocol", "service", "honeypot", "severity", "event_type"].forEach((key) => {
+      const id = key === "event_type" ? "filter-event-type" : "filter-" + key;
+      const select = $(id);
+      if (select && select.options.length) select.options[0].textContent = t("filters.all." + key);
+    });
+  }
+
+  async function loadFilterOptions() {
+    const data = await safeGet("/api/v1/meta/filters?hours=" + encodeURIComponent($("window").value));
+    if (!data) return;
+    ["country", "protocol", "service", "honeypot", "severity", "event_type"].forEach((key) => {
+      populateFilter(key, data[key]);
+    });
+  }
+
+  function currentParams() {
+    const params = new URLSearchParams();
+    const q = $("global-search").value.trim();
+    if (q) params.set("q", q);
+    params.set("hours", $("window").value);
+    Object.entries(state.filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    return params;
+  }
+
+  function feedParams() {
+    const params = currentParams();
+    params.set("limit", "120");
+    return params;
+  }
+
+  function activeFilterCount() {
+    return Object.values(state.filters).filter(Boolean).length;
+  }
+
+  function updateFilterCount() {
+    $("active-filter-count").textContent = String(activeFilterCount());
+  }
+
+  function setFilter(key, value) {
+    state.filters[key] = value || "";
+    const id = key === "event_type" ? "filter-event-type" : "filter-" + key;
+    if ($(id)) $(id).value = state.filters[key];
+    updateFilterCount();
+    refresh();
+  }
+
+  function bars(id, items, behavior = {}) {
+    const root = $(id);
+    root.replaceChildren();
+    if (!items?.length) {
+      const empty = document.createElement("div");
+      empty.className = "mini-empty";
+      empty.textContent = t("empty.noData");
+      root.append(empty);
+      return;
+    }
+    const max = Math.max(...items.map((item) => Number(item.value) || 0), 1);
+    items.slice(0, 9).forEach((item) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "bar-row";
+      const label = document.createElement("span");
+      label.className = "bar-label";
+      label.textContent = String(item.label);
+      const track = document.createElement("span");
+      track.className = "bar-track";
+      const fill = document.createElement("span");
+      fill.className = "bar-fill";
+      fill.style.width = Math.max(2, (Number(item.value) / max) * 100) + "%";
+      const value = document.createElement("strong");
+      value.textContent = String(item.value);
+      track.append(fill);
+      row.append(label, track, value);
+      if (behavior.filterKey) {
+        row.addEventListener("click", () => setFilter(behavior.filterKey, String(item.label)));
+      } else if (behavior.search) {
+        row.addEventListener("click", () => {
+          $("global-search").value = String(item.label);
+          refresh();
+        });
+      } else {
+        row.disabled = true;
+      }
+      root.append(row);
+    });
+  }
+
+  function timeline(items) {
+    const svg = $("timeline");
+    svg.replaceChildren();
+    if (!items?.length) return;
+    const W = 900, H = 260, P = 28;
+    const max = Math.max(...items.map((item) => Number(item.value) || 0), 1);
+    const points = items.map((item, index) => [
+      P + index * (W - P * 2) / Math.max(items.length - 1, 1),
+      H - P - (Number(item.value) / max) * (H - P * 2),
+    ]);
+    const grid = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    grid.setAttribute("class", "timeline-grid");
+    for (let i = 0; i < 5; i += 1) {
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      const y = P + i * ((H - P * 2) / 4);
+      [["x1", P], ["x2", W - P], ["y1", y], ["y2", y]].forEach(([key, value]) => line.setAttribute(key, String(value)));
+      grid.append(line);
+    }
+    const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    polyline.setAttribute("points", points.map((point) => point.join(",")).join(" "));
+    polyline.setAttribute("class", "timeline-line");
+    svg.append(grid, polyline);
+    points.forEach(([x, y], index) => {
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", String(x));
+      circle.setAttribute("cy", String(y));
+      circle.setAttribute("r", "3");
+      circle.setAttribute("class", "timeline-dot");
+      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = items[index].label + ": " + items[index].value;
+      circle.append(title);
+      svg.append(circle);
+    });
+  }
+
+  function applyMapBox() {
+    $("attack-map").setAttribute("viewBox", state.mapBox.join(" "));
+  }
+
+  function zoomMap(factor) {
+    const [x, y, width, height] = state.mapBox;
+    const nextWidth = Math.min(800, Math.max(220, width * factor));
+    const nextHeight = Math.min(390, Math.max(110, height * factor));
+    state.mapBox = [
+      Math.max(0, Math.min(800 - nextWidth, x + (width - nextWidth) / 2)),
+      Math.max(0, Math.min(390 - nextHeight, y + (height - nextHeight) / 2)),
+      nextWidth,
+      nextHeight,
+    ];
+    applyMapBox();
+  }
+
+  function map(points) {
+    const root = $("map-points");
+    root.replaceChildren();
+    $("map-count").textContent = String(points?.length || 0);
+    const grouped = new Map();
+    (points || []).forEach((point) => {
+      const lon = Number(point.lon), lat = Number(point.lat);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      const key = lat.toFixed(1) + "|" + lon.toFixed(1) + "|" + (point.source_ip || "");
+      const existing = grouped.get(key) || {...point, count: 0, lon, lat};
+      existing.count += 1;
+      grouped.set(key, existing);
+    });
+    grouped.forEach((point) => {
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", String(((point.lon + 180) / 360) * 800));
+      circle.setAttribute("cy", String(((90 - point.lat) / 180) * 390));
+      circle.setAttribute("r", String(Math.min(10, 3.5 + Math.sqrt(point.count))));
+      circle.setAttribute("class", "map-point");
+      circle.setAttribute("tabindex", "0");
+      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = t("map.point") + ": " + (point.source_ip || "—") + " · " + (point.country || "—") + " · " + point.count;
+      circle.append(title);
+      const activate = () => {
+        if (!point.source_ip) return;
+        $("global-search").value = point.source_ip;
+        showView("investigate");
+        refresh();
+      };
+      circle.addEventListener("click", activate);
+      circle.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") activate();
+      });
+      root.append(circle);
+    });
+  }
+
+  function heat(matrix) {
+    const root = $("heatmap");
+    root.replaceChildren();
+    const values = (matrix || []).flat();
+    const max = Math.max(...values, 1);
+    (matrix || []).forEach((row, day) => row.forEach((value, hour) => {
+      const cell = document.createElement("div");
+      cell.className = "heat-cell";
+      cell.style.opacity = String(.14 + .86 * (Number(value) / max));
+      cell.title = String(day + 1) + " · " + hour + ":00 · " + value;
+      root.append(cell);
+    }));
+  }
+
+  function severityBadge(value) {
+    const node = document.createElement("span");
+    node.className = "severity " + (value || "info");
+    node.textContent = value || "info";
+    return node;
+  }
+
+  function formatTime(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
+  }
+
+  function formatDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString();
+  }
+
+  function renderFeed(rootId, events, limit = 120) {
+    const body = $(rootId);
+    body.replaceChildren();
+    const selected = (events || []).slice(0, limit);
+    if (!selected.length) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 5;
+      cell.className = "mini-empty";
+      cell.textContent = t("empty.noData");
+      row.append(cell);
+      body.append(row);
+      return;
+    }
+    selected.forEach((event) => {
+      const row = document.createElement("tr");
+      row.tabIndex = 0;
+      if (state.selected?.id === event.id) row.classList.add("selected");
+      const cells = [
+        formatTime(event.timestamp),
+        event.source_ip || "—",
+        event.event_type,
+        event.service || event.observed?.service || "—",
+      ];
+      cells.forEach((value) => {
+        const cell = document.createElement("td");
+        cell.textContent = String(value);
+        row.append(cell);
+      });
+      const severityCell = document.createElement("td");
+      severityCell.append(severityBadge(event.severity));
+      row.append(severityCell);
+      const activate = () => selectEvent(event, true);
+      row.addEventListener("click", activate);
+      row.addEventListener("keydown", (keyboardEvent) => {
+        if (keyboardEvent.key === "Enter") activate();
+      });
+      body.append(row);
+    });
+  }
+
+  function fact(root, label, value) {
+    const item = document.createElement("div");
+    item.className = "fact";
+    const key = document.createElement("span");
+    key.textContent = label;
+    const val = document.createElement("strong");
+    val.textContent = Array.isArray(value) ? (value.join(", ") || "—") : String(value ?? "—");
+    item.append(key, val);
+    root.append(item);
+  }
+
+  function renderIp(profile) {
+    const root = $("ip-profile");
+    root.replaceChildren();
+    if (!profile) {
+      fact(root, t("empty.noData"), "—");
+      return;
+    }
+    fact(root, t("ip.events"), profile.event_count);
+    fact(root, t("ip.sessions"), profile.sessions?.length || 0);
+    fact(root, t("ip.firstSeen"), formatDate(profile.first_seen));
+    fact(root, t("ip.lastSeen"), formatDate(profile.last_seen));
+    fact(root, t("ip.services"), profile.services || []);
+    fact(root, t("ip.ports"), profile.destination_ports || []);
+    fact(root, t("ip.asn"), profile.asns || []);
+    fact(root, t("ip.country"), profile.countries || []);
+  }
+
+  function renderSession(bundle) {
+    const root = $("session-summary");
+    root.replaceChildren();
+    if (!bundle) {
+      fact(root, t("empty.noSession"), "—");
+      return;
+    }
+    const summary = bundle.summary || {};
+    fact(root, t("session.events"), summary.event_count || 0);
+    fact(root, t("session.credentials"), summary.credentials || 0);
+    fact(root, t("session.commands"), summary.commands || 0);
+    fact(root, t("session.payloads"), summary.payloads || 0);
+    fact(root, t("session.ids"), summary.ids_alerts || 0);
+    fact(root, t("session.mitre"), summary.mitre || []);
+    fact(root, t("session.ioc"), summary.iocs || 0);
+  }
+
+  function renderThreatIntelligence(data) {
+    const root = $("ti-list");
+    root.replaceChildren();
+    const items = data?.items || [];
+    if (!items.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("empty.noTI");
+      root.append(empty);
+      return;
+    }
+    items.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "ti-item";
+      const head = document.createElement("div");
+      head.className = "ti-head";
+      const kind = document.createElement("strong");
+      kind.textContent = item.kind || "enrichment";
+      const badge = document.createElement("span");
+      badge.className = "provenance enrichment";
+      badge.textContent = t("provenance.enrichment");
+      head.append(kind, badge);
+      const meta = document.createElement("p");
+      meta.className = "muted";
+      meta.textContent = t("common.source") + ": " + (item.source || "—") + " · " + t("common.observedAt") + ": " + formatDate(item.observed_at);
+      const pre = document.createElement("pre");
+      pre.textContent = pretty(item.data);
+      card.append(head, meta, pre);
+      root.append(card);
+    });
+  }
+
+  function eventArtifact(event) {
+    const observed = event.observed || {};
+    const credential = observed.credential;
+    if (credential && typeof credential === "object" && credential.username) return "user=" + credential.username;
+    if (observed.command) return String(observed.command).slice(0, 120);
+    if (observed.payload) return String(observed.payload).slice(0, 120);
+    const alert = observed.alert;
+    if (alert && typeof alert === "object" && alert.signature) return String(alert.signature).slice(0, 120);
+    return "";
+  }
+
+  function renderSessionTimeline(bundle) {
+    const root = $("session-timeline");
+    root.replaceChildren();
+    const events = bundle?.events || [];
+    if (!events.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("empty.noData");
+      root.append(empty);
+      return;
+    }
+    events.forEach((event) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "session-event";
+      const marker = document.createElement("span");
+      marker.className = "timeline-marker " + (event.severity || "info");
+      const body = document.createElement("span");
+      body.className = "session-event-body";
+      const top = document.createElement("span");
+      top.className = "session-event-top";
+      const time = document.createElement("time");
+      time.textContent = formatTime(event.timestamp);
+      const type = document.createElement("strong");
+      type.textContent = event.event_type;
+      top.append(time, type);
+      const artifact = document.createElement("span");
+      artifact.className = "muted";
+      artifact.textContent = eventArtifact(event) || (event.service || "—") + " · " + (event.destination_port || "—");
+      body.append(top, artifact);
+      row.append(marker, body);
+      row.addEventListener("click", () => selectEvent(event, false));
+      root.append(row);
+    });
+  }
+
+  function renderStudySection(root, title, values) {
+    if (!values?.length) return;
+    const section = document.createElement("section");
+    const heading = document.createElement("h3");
+    heading.textContent = title;
+    const list = document.createElement("ul");
+    values.forEach((value) => {
+      const item = document.createElement("li");
+      item.textContent = String(value);
+      list.append(item);
+    });
+    section.append(heading, list);
+    root.append(section);
+  }
+
+  function renderEventStudy(data) {
+    const root = $("event-study");
+    root.replaceChildren();
+    if (!data) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = t("study.selectEvent");
+      root.append(empty);
+      return;
+    }
+    const heading = document.createElement("h3");
+    heading.textContent = data.title || "";
+    const whyTitle = document.createElement("span");
+    whyTitle.className = "provenance study";
+    whyTitle.textContent = t("study.why");
+    const why = document.createElement("p");
+    why.textContent = data.why_interesting || "";
+    root.append(heading, whyTitle, why);
+    renderStudySection(root, t("study.checklist"), data.soc_checklist);
+    renderStudySection(root, t("study.questions"), data.questions);
+    renderStudySection(root, t("study.limitations"), data.limitations);
+  }
+
+  function renderSessionStudy(data) {
+    const root = $("session-study");
+    root.replaceChildren();
+    if (!data) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = t("study.selectEvent");
+      root.append(empty);
+      return;
+    }
+    const heading = document.createElement("h3");
+    heading.textContent = data.title || "";
+    root.append(heading);
+    renderStudySection(root, t("study.facts"), data.facts);
+    renderStudySection(root, t("study.focus"), data.focus);
+    renderStudySection(root, t("study.next"), data.next_steps);
+    renderStudySection(root, t("study.limitations"), data.limitations);
+  }
+
+  function graphPosition(nodes) {
+    const positions = new Map();
+    const session = nodes.find((node) => node.kind === "session");
+    if (session) positions.set(session.id, {x: 500, y: 310});
+    const events = nodes.filter((node) => node.kind === "event");
+    const others = nodes.filter((node) => node.kind !== "event" && node.kind !== "session");
+    events.forEach((node, index) => {
+      const angle = (Math.PI * 2 * index / Math.max(events.length, 1)) - Math.PI / 2;
+      positions.set(node.id, {x: 500 + Math.cos(angle) * 150, y: 310 + Math.sin(angle) * 150});
+    });
+    others.forEach((node, index) => {
+      const angle = (Math.PI * 2 * index / Math.max(others.length, 1)) - Math.PI / 2;
+      positions.set(node.id, {x: 500 + Math.cos(angle) * 270, y: 310 + Math.sin(angle) * 250});
+    });
+    return positions;
+  }
+
+  function graphLegend(nodes) {
+    const root = $("graph-legend");
+    root.replaceChildren();
+    const kinds = [...new Set((nodes || []).map((node) => node.kind))].sort();
+    kinds.forEach((kind) => {
+      const item = document.createElement("span");
+      item.className = "legend-item";
+      const dot = document.createElement("i");
+      dot.className = "legend-dot kind-" + kind;
+      const label = document.createElement("span");
+      label.textContent = kind;
+      item.append(dot, label);
+      root.append(item);
+    });
+  }
+
+  async function relations(sessionId) {
+    const svg = $("relation-graph");
+    svg.replaceChildren();
+    if (!sessionId) {
+      $("relation-count").textContent = "0";
+      graphLegend([]);
+      return;
+    }
+    const graph = await safeGet("/api/v1/relations?session_id=" + encodeURIComponent(sessionId));
+    const nodes = (graph?.nodes || []).slice(0, 80);
+    const allowedIds = new Set(nodes.map((node) => node.id));
+    const edges = (graph?.edges || []).filter((edge) => allowedIds.has(edge.source) && allowedIds.has(edge.target));
+    $("relation-count").textContent = String(nodes.length);
+    graphLegend(nodes);
+    if (!nodes.length) return;
+    const positions = graphPosition(nodes);
+
+    edges.forEach((edge) => {
+      const source = positions.get(edge.source), target = positions.get(edge.target);
+      if (!source || !target) return;
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      [["x1", source.x], ["y1", source.y], ["x2", target.x], ["y2", target.y]].forEach(([key, value]) => line.setAttribute(key, String(value)));
+      line.setAttribute("class", "relation-edge");
+      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = edge.relation;
+      line.append(title);
+      svg.append(line);
+    });
+
+    nodes.forEach((node) => {
+      const position = positions.get(node.id);
+      if (!position) return;
+      const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      group.setAttribute("class", "relation-node kind-" + node.kind);
+      group.setAttribute("tabindex", "0");
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", String(position.x));
+      circle.setAttribute("cy", String(position.y));
+      circle.setAttribute("r", node.kind === "session" ? "16" : node.kind === "event" ? "10" : "12");
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("x", String(position.x + 15));
+      label.setAttribute("y", String(position.y + 4));
+      label.textContent = String(node.label).slice(0, 22);
+      const inspect = () => {
+        $("graph-node-kind").textContent = node.kind;
+        $("graph-node-label").textContent = node.label;
+      };
+      group.addEventListener("click", inspect);
+      group.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") inspect();
+      });
+      group.append(circle, label);
+      svg.append(group);
+    });
+  }
+
+  async function selectEvent(event, switchView) {
+    state.selected = event;
+    if (switchView) showView("investigate");
+    $("event-empty").hidden = true;
+    $("event-details").hidden = false;
+    $("investigation-context").hidden = false;
+    $("detail-title").textContent = event.event_type || "—";
+    $("detail-meta").textContent = formatDate(event.timestamp) + " · " + (event.source_ip || "—") + " · " + (event.service || "—") + " · " + (event.honeypot || "—");
+    $("detail-observed").textContent = pretty(event.observed);
+    $("detail-enrichment").textContent = pretty(event.enrichment);
+    $("detail-derived").textContent = pretty(event.derived);
+    $("detail-hypotheses").textContent = pretty(event.hypotheses);
+    renderFeed("event-feed", state.events);
+    renderFeed("dashboard-feed", state.events, 12);
+
+    const ip = event.source_ip;
+    const sessionId = event.session_id;
+    const [eventStudy, session, profile, ti, sessionStudy] = await Promise.all([
+      safeGet("/api/v1/study/" + encodeURIComponent(event.id) + "?lang=" + encodeURIComponent(state.lang)),
+      sessionId ? safeGet("/api/v1/sessions/" + encodeURIComponent(sessionId)) : Promise.resolve(null),
+      ip ? safeGet("/api/v1/ips/" + encodeURIComponent(ip)) : Promise.resolve(null),
+      ip ? safeGet("/api/v1/ips/" + encodeURIComponent(ip) + "/threat-intelligence") : Promise.resolve(null),
+      sessionId ? safeGet("/api/v1/study/session/" + encodeURIComponent(sessionId) + "?lang=" + encodeURIComponent(state.lang)) : Promise.resolve(null),
+    ]);
+
+    state.eventStudy = eventStudy;
+    state.session = session;
+    state.ipProfile = profile;
+    state.sessionStudy = sessionStudy;
+    renderEventStudy(eventStudy);
+    renderSessionStudy(sessionStudy);
+    renderIp(profile);
+    renderSession(session);
+    renderThreatIntelligence(ti);
+    renderSessionTimeline(session);
+    await relations(sessionId);
+  }
+
+  function downloadBlob(content, filename, type) {
+    const blob = content instanceof Blob ? content : new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function downloadReportJSON() {
+    if (!state.selected?.session_id) return;
+    const report = await safeGet("/api/v1/reports/session/" + encodeURIComponent(state.selected.session_id));
+    if (report) downloadBlob(JSON.stringify(report, null, 2), "aegis-" + state.selected.session_id + ".json", "application/json");
+  }
+
+  function downloadReportCSV() {
+    if (!state.selected?.session_id) return;
+    const anchor = document.createElement("a");
+    anchor.href = "/api/v1/reports/session/" + encodeURIComponent(state.selected.session_id) + ".csv";
+    anchor.download = "aegis-" + state.selected.session_id + ".csv";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  function exportStats() {
+    if (!state.dashboard) return;
+    downloadBlob(JSON.stringify(state.dashboard, null, 2), "aegis-dashboard-stats.json", "application/json");
+  }
+
+  async function refresh() {
+    const dashboardParams = currentParams();
+    const eventsParams = feedParams();
+    try {
+      const [dashboard, events] = await Promise.all([
+        getJSON("/api/v1/dashboard?" + dashboardParams.toString()),
+        getJSON("/api/v1/events?" + eventsParams.toString()),
+      ]);
+      state.dashboard = dashboard;
+      state.events = events.items || [];
+      $("kpi-events").textContent = String(dashboard.totals.events);
+      $("kpi-ips").textContent = String(dashboard.totals.unique_source_ip);
+      $("kpi-sessions").textContent = String(dashboard.totals.sessions);
+      $("kpi-critical").textContent = String(dashboard.totals.critical);
+      timeline(dashboard.timeline);
+      map(dashboard.map_points);
+      heat(dashboard.heatmap);
+      bars("chart-country", dashboard.country, {filterKey: "country"});
+      bars("chart-asn", dashboard.asn, {search: true});
+      bars("chart-port", dashboard.destination_port, {search: true});
+      bars("chart-protocol", dashboard.protocol, {filterKey: "protocol"});
+      bars("chart-honeypot", dashboard.honeypot, {filterKey: "honeypot"});
+      bars("chart-service", dashboard.service, {filterKey: "service"});
+      bars("chart-credentials", dashboard.credentials, {search: true});
+      bars("chart-commands", dashboard.commands, {search: true});
+      bars("chart-ids", dashboard.ids_alerts, {search: true});
+      bars("chart-mitre", dashboard.mitre, {search: true});
+      renderFeed("event-feed", state.events);
+      renderFeed("dashboard-feed", state.events, 12);
+    } catch (error) {
+      console.error("AEGIS refresh failed", error);
+    }
+  }
+
+  document.querySelectorAll("[data-view-target]").forEach((button) => {
+    button.addEventListener("click", () => showView(button.dataset.viewTarget));
+  });
+
+  document.querySelectorAll("[data-filter]").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.filters[select.dataset.filter] = select.value;
+      updateFilterCount();
+      refresh();
+    });
+  });
+
+  $("reset-filters").addEventListener("click", () => {
+    state.filters = {};
+    document.querySelectorAll("[data-filter]").forEach((select) => { select.value = ""; });
+    $("global-search").value = "";
+    updateFilterCount();
+    refresh();
+  });
+
+  $("lang-toggle").addEventListener("click", async () => {
+    state.lang = state.lang === "it" ? "en" : "it";
+    localStorage.setItem("aegis-lang", state.lang);
+    i18n();
+    if (state.selected) await selectEvent(state.selected, false);
+  });
+
+  $("window").addEventListener("change", async () => {
+    await loadFilterOptions();
+    refresh();
+  });
+
+  let searchTimer;
+  $("global-search").addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(refresh, 250);
+  });
+
+  $("open-relations").addEventListener("click", () => {
+    showView("relations");
+    if (state.selected?.session_id) relations(state.selected.session_id);
+  });
+  $("open-study").addEventListener("click", () => showView("study"));
+  $("report-json").addEventListener("click", downloadReportJSON);
+  $("report-csv").addEventListener("click", downloadReportCSV);
+  $("export-stats").addEventListener("click", exportStats);
+  $("map-zoom-in").addEventListener("click", () => zoomMap(.75));
+  $("map-zoom-out").addEventListener("click", () => zoomMap(1.33));
+  $("map-reset").addEventListener("click", () => {
+    state.mapBox = [0, 0, 800, 390];
+    applyMapBox();
+  });
+
+  i18n();
+  applyMapBox();
+  updateFilterCount();
+  loadFilterOptions().then(refresh);
+  window.setInterval(() => {
+    if (!document.hidden) refresh();
+  }, 5000);
+})();

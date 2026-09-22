@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import csv
 import hmac
+import io
 import ipaddress
 import json
 import os
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .model import EventValidationError, normalize_event
 from .store import Store
-from .study import explain
+from .study import explain, explain_session
 from .suricata import SuricataValidationError, normalize_eve_event
+
+
+FILTER_KEYS = ("country", "protocol", "service", "honeypot", "severity", "source_ip", "session_id", "event_type")
 
 
 def _load_sensor_keys(raw: str) -> dict[str, str]:
@@ -30,6 +35,14 @@ def _load_sensor_keys(raw: str) -> dict[str, str]:
     return result
 
 
+def _filters_from_request() -> dict[str, str]:
+    return {
+        key: value[:256]
+        for key in FILTER_KEYS
+        if (value := request.args.get(key, type=str))
+    }
+
+
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.update(
@@ -38,16 +51,23 @@ def create_app(test_config: dict | None = None) -> Flask:
         INGEST_API_KEY=os.getenv("AEGIS_INGEST_API_KEY", ""),
         SENSOR_KEYS=_load_sensor_keys(os.getenv("AEGIS_SENSOR_KEYS", "")),
         RETENTION_DAYS=int(os.getenv("AEGIS_RETENTION_DAYS", "30")),
+        MAX_DB_EVENTS=int(os.getenv("AEGIS_MAX_DB_EVENTS", "500000")),
     )
     if test_config:
         app.config.update(test_config)
-    store = Store(app.config["DATABASE_PATH"])
+    store = Store(
+        app.config["DATABASE_PATH"],
+        retention_days=int(app.config.get("RETENTION_DAYS", 30)),
+        max_events=int(app.config.get("MAX_DB_EVENTS", 500000)),
+    )
     app.extensions["aegis_store"] = store
-    store.prune(int(app.config.get("RETENTION_DAYS", 30)))
 
     @app.after_request
     def security_headers(response):
-        response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+            "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+        )
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
@@ -119,18 +139,28 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.get("/api/v1/events")
     def events():
-        limit = request.args.get("limit", 100, type=int)
-        q = request.args.get("q", type=str)
-        filters = {
-            key: request.args.get(key, type=str)
-            for key in ("country", "protocol", "service", "honeypot", "severity", "source_ip", "session_id", "event_type")
-        }
-        return jsonify({"items": store.list_events(limit=limit, q=q, filters=filters)})
+        return jsonify({
+            "items": store.list_events(
+                limit=request.args.get("limit", 100, type=int),
+                q=request.args.get("q", type=str),
+                filters=_filters_from_request(),
+                hours=request.args.get("hours", type=int),
+            )
+        })
 
     @app.get("/api/v1/events/<event_id>")
     def event_detail(event_id: str):
         item = store.get_event(event_id)
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.get("/api/v1/sessions")
+    def sessions():
+        return jsonify({
+            "items": store.list_sessions(
+                limit=request.args.get("limit", 100, type=int),
+                q=request.args.get("q", type=str),
+            )
+        })
 
     @app.get("/api/v1/sessions/<session_id>")
     def session_detail(session_id: str):
@@ -145,17 +175,84 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "invalid_ip"}), 422
         return jsonify(store.ip_profile(normalized))
 
+    @app.get("/api/v1/ips/<ip>/threat-intelligence")
+    def ip_threat_intelligence(ip: str):
+        try:
+            normalized = str(ipaddress.ip_address(ip))
+        except ValueError:
+            return jsonify({"error": "invalid_ip"}), 422
+        return jsonify(store.threat_intelligence(normalized))
+
+    @app.get("/api/v1/meta/filters")
+    def filter_options():
+        return jsonify(store.filter_options(request.args.get("hours", 720, type=int)))
+
     @app.get("/api/v1/dashboard")
     def dashboard():
         hours = request.args.get("hours", 24, type=int)
         q = request.args.get("q", type=str)
         include_sim = request.args.get("include_simulation", "false").lower() in {"1", "true", "yes"}
-        return jsonify(store.dashboard(hours=hours, include_simulation=include_sim, q=q))
+        return jsonify(
+            store.dashboard(
+                hours=hours,
+                include_simulation=include_sim,
+                q=q,
+                filters=_filters_from_request(),
+            )
+        )
 
     @app.get("/api/v1/reports/session/<session_id>")
     def session_report(session_id: str):
         item = store.report(session_id)
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.get("/api/v1/reports/session/<session_id>.csv")
+    def session_report_csv(session_id: str):
+        item = store.report(session_id)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "timestamp",
+            "event_id",
+            "event_type",
+            "severity",
+            "source_ip",
+            "honeypot",
+            "service",
+            "protocol",
+            "destination_port",
+            "username",
+            "command",
+            "payload",
+            "ids_signature",
+        ])
+        for event in item["events"]:
+            observed = event.get("observed") or {}
+            credential = observed.get("credential") if isinstance(observed.get("credential"), dict) else {}
+            alert = observed.get("alert") if isinstance(observed.get("alert"), dict) else {}
+            writer.writerow([
+                event.get("timestamp"),
+                event.get("id"),
+                event.get("event_type"),
+                event.get("severity"),
+                event.get("source_ip"),
+                event.get("honeypot"),
+                event.get("service"),
+                event.get("protocol"),
+                event.get("destination_port"),
+                credential.get("username"),
+                observed.get("command"),
+                observed.get("payload"),
+                alert.get("signature"),
+            ])
+        filename = f"aegis-{session_id[:64]}.csv"
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @app.get("/api/v1/relations")
     def relations():
@@ -167,6 +264,13 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not item:
             return jsonify({"error": "not_found"}), 404
         return jsonify(explain(item, request.args.get("lang", "it")))
+
+    @app.get("/api/v1/study/session/<session_id>")
+    def study_session(session_id: str):
+        item = store.get_session(session_id)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        return jsonify(explain_session(item, request.args.get("lang", "it")))
 
     return app
 

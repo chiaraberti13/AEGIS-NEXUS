@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import os
-import socketserver
 import time
 
 import paramiko
 
 from .client import SensorClient
+from .server import BoundedThreadingTCPServer
 
 HOST_KEY = paramiko.RSAKey.generate(2048)
 MAX_COMMAND = 512
@@ -125,15 +125,11 @@ class SSHHandler(socketserver.BaseRequestHandler):
             transport.close()
 
 
-class ThreadingSSHServer(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
-    daemon_threads = True
-
-
 def main():
     port = int(os.getenv("AEGIS_SSH_PORT", "2222"))
+    max_connections = int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32"))
     SSHHandler.sensor = SensorClient(os.getenv("AEGIS_HONEYPOT_ID", "ssh-decoy-01"))
-    with ThreadingSSHServer(("0.0.0.0", port), SSHHandler) as server:
+    with BoundedThreadingTCPServer(("0.0.0.0", port), SSHHandler, max_connections=max_connections) as server:
         server.serve_forever()
 
 

@@ -84,3 +84,51 @@ def test_relationship_payload_labels_are_bounded(tmp_path):
     payloads = [node for node in graph["nodes"] if node["kind"] == "payload"]
     assert payloads
     assert len(payloads[0]["label"]) <= 180
+
+
+def test_ip_profile_keeps_external_enrichment_provenance(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.40",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+        "enrichment": {
+            "geo": {
+                "source": "geo-fixture",
+                "observed_at": "2026-09-22T18:00:00Z",
+                "data": {"country": "IT", "latitude": 41.9, "longitude": 12.5},
+            }
+        },
+    })
+    store.ingest(event)
+    profile = store.ip_profile("203.0.113.40")
+    assert profile["countries"] == ["IT"]
+    assert profile["threat_intelligence"][0]["source"] == "geo-fixture"
+    assert profile["threat_intelligence"][0]["provenance"] == "external_enrichment"
+
+
+def test_report_never_exports_cleartext_password(tmp_path, monkeypatch):
+    monkeypatch.setenv("AEGIS_STORE_CREDENTIAL_SECRETS", "true")
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "credential",
+        "observed": {
+            "source_ip": "203.0.113.41",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "credential": {"username": "root", "password": "cleartext-fixture"},
+        },
+    })
+    saved = store.ingest(event)
+    report = store.report(saved["session_id"])
+    credential = report["credentials"][0]
+    assert credential["username"] == "root"
+    assert "password" not in credential
+    assert credential["password_sha256"]
