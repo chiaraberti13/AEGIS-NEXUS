@@ -6,7 +6,7 @@ Key threats and current controls:
 
 - XSS/log injection -> JSON-only ingestion, bounded normalization, text-only rendering and strict CSP.
 - Injection/path abuse -> parameterized SQLite queries, bounded identifiers, no attacker-controlled filesystem paths and no payload execution.
-- Resource exhaustion -> request-size limits, bounded strings/depth/cardinality, rejection of non-finite numeric telemetry, query/result ceilings, bounded-cost API rate limiting, container resource limits and bounded concurrent sensor connections.
+- Resource exhaustion -> request-size limits, bounded strings/depth/cardinality, rejection of non-finite numeric telemetry, analytics/session query ceilings with explicit truncation metadata, bounded-cost API rate limiting, container resource limits and bounded concurrent sensor connections.
 - Credential leakage -> redaction by default, explicit raw-database opt-in only, and mandatory cleartext suppression from decoded operator APIs, UI and investigation exports.
 - Sensor spoofing/replay -> per-sensor/shared secrets, sensor identity binding and optional required HMAC request signatures with bounded timestamp skew.
 - Unauthorized SOC access -> independent operator key, fail-closed API behavior when the key is absent, explicit development-only unauthenticated opt-in, session-only browser storage, API authorization and operator rate limiting.
