@@ -11,7 +11,7 @@ Default controls:
 - investigation JSON/CSV/Markdown reports never export cleartext passwords, even when raw storage was explicitly enabled; sanitization is applied to the complete exported event copy, not only to the credential summary;
 - the collector rejects oversized bodies and bounds nested structures and strings;
 - hostile values are rendered as text, never as attacker-controlled HTML;
-- `AEGIS_RETENTION_DAYS` applies time-based retention continuously while the collector is running;
+- `AEGIS_RETENTION_DAYS` applies time-based retention continuously using collector-side `received_at`, so a sensor clock cannot silently extend or shorten raw telemetry retention;
 - `AEGIS_MAX_DB_EVENTS` adds a capacity ceiling so event volume cannot grow the SQLite dataset without bound;
 - SQLite secure deletion is enabled and maintenance truncates the WAL after retention/capacity cleanup; backups and storage snapshots still require their own retention policy;
 - SOC cases store references to source event/session IDs rather than copies of payloads or credentials, so creating a case does not silently extend telemetry retention;
@@ -37,7 +37,7 @@ Controlli predefiniti:
 - i report investigativi JSON/CSV/Markdown non esportano mai password in chiaro, anche se la memorizzazione raw è stata abilitata esplicitamente; la sanitizzazione viene applicata alla copia completa dell'evento esportato e non soltanto al riepilogo credential;
 - il collector rifiuta body eccessivi e limita profondità, cardinalità e lunghezza delle stringhe;
 - i valori ostili vengono renderizzati come testo e mai come HTML controllato dall'attaccante;
-- `AEGIS_RETENTION_DAYS` applica la retention temporale in modo continuo mentre il collector è in esecuzione;
+- `AEGIS_RETENTION_DAYS` applica la retention temporale in modo continuo usando `received_at` generato dal collector, evitando che l'orologio del sensore possa estendere o accorciare implicitamente la conservazione della telemetria raw;
 - `AEGIS_MAX_DB_EVENTS` impone anche un limite di capacità, evitando che il volume degli eventi faccia crescere indefinitamente il dataset SQLite;
 - SQLite utilizza la cancellazione sicura e la manutenzione tronca il WAL dopo i cleanup di retention/capacità; backup e snapshot richiedono comunque una propria policy di conservazione;
 - i casi SOC conservano riferimenti agli ID di eventi/sessioni invece di copie di payload o credenziali, quindi creare un caso non estende implicitamente la retention della telemetria;
