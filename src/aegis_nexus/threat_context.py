@@ -10,9 +10,10 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 SUPPORTED_TYPES = {"ip", "domain", "url", "md5", "sha1", "sha256"}
-DOMAIN_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$")
+DOMAIN_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$")
 HASH_LENGTHS = {"md5": 32, "sha1": 40, "sha256": 64}
 HEX_RE = re.compile(r"^[A-Fa-f0-9]+$")
+CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 class ThreatContextError(ValueError):
@@ -26,7 +27,7 @@ def _now() -> str:
 def _clean_text(value: Any, limit: int) -> str | None:
     if value in (None, ""):
         return None
-    return str(value).strip()[:limit]
+    return CONTROL_RE.sub("", str(value)).strip()[:limit]
 
 
 def _normalize_domain(value: Any) -> str | None:
@@ -149,10 +150,11 @@ class LocalThreatContextEnricher:
 
     def _load(self) -> None:
         try:
-            stat = self.path.stat()
-            if stat.st_size > self.max_bytes:
+            with self.path.open("rb") as handle:
+                raw_bytes = handle.read(self.max_bytes + 1)
+            if len(raw_bytes) > self.max_bytes:
                 raise ThreatContextError("feed_too_large")
-            raw = self.path.read_text(encoding="utf-8")
+            raw = raw_bytes.decode("utf-8")
             payload = json.loads(raw)
             if not isinstance(payload, dict):
                 raise ThreatContextError("feed_root_must_be_object")
@@ -182,7 +184,7 @@ class LocalThreatContextEnricher:
         except Exception as exc:
             self._index = {}
             self.loaded_at = None
-            self.error = str(exc)[:160]
+            self.error = str(exc)[:160] if isinstance(exc, ThreatContextError) else type(exc).__name__
 
     def status(self) -> dict[str, Any]:
         return {
