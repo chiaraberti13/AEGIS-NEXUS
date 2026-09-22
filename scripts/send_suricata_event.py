@@ -38,9 +38,15 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=float(os.getenv("AEGIS_SENSOR_TIMEOUT", "2.0")))
     args = parser.parse_args()
 
-    secret = os.getenv("AEGIS_SENSOR_API_KEY") or os.getenv("AEGIS_INGEST_API_KEY", "")
+    secret = (
+        os.getenv("AEGIS_SURICATA_SENSOR_API_KEY")
+        or os.getenv("AEGIS_SENSOR_API_KEY")
+        or os.getenv("AEGIS_INGEST_API_KEY", "")
+    )
     if not secret:
-        raise SystemExit("AEGIS_SENSOR_API_KEY or AEGIS_INGEST_API_KEY must be set")
+        raise SystemExit(
+            "AEGIS_SURICATA_SENSOR_API_KEY, AEGIS_SENSOR_API_KEY or AEGIS_INGEST_API_KEY must be set"
+        )
 
     stream = open(args.file, "r", encoding="utf-8") if args.file else sys.stdin
     sent = failed = 0

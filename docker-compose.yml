@@ -16,7 +16,6 @@ x-sensor-hardening: &sensor-hardening
 
 x-sensor-env: &sensor-env
   AEGIS_COLLECTOR_URL: http://collector:8600/api/v1/events
-  AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:?set AEGIS_INGEST_API_KEY in .env}
   AEGIS_SENSOR_TIMEOUT: ${AEGIS_SENSOR_TIMEOUT:-2.0}
   AEGIS_SIGN_SENSOR_REQUESTS: ${AEGIS_SIGN_SENSOR_REQUESTS:-true}
   AEGIS_SENSOR_MAX_CONNECTIONS: ${AEGIS_SENSOR_MAX_CONNECTIONS:-32}
@@ -26,7 +25,9 @@ services:
     build: .
     environment:
       AEGIS_DATABASE_PATH: /data/aegis.db
-      AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:?set AEGIS_INGEST_API_KEY in .env}
+      AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:-}
+      AEGIS_SENSOR_KEYS: >-
+        {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}
       AEGIS_OPERATOR_API_KEY: ${AEGIS_OPERATOR_API_KEY:?set AEGIS_OPERATOR_API_KEY in .env}
       AEGIS_REQUIRE_SENSOR_SIGNATURE: ${AEGIS_REQUIRE_SENSOR_SIGNATURE:-true}
       AEGIS_SENSOR_SIGNATURE_MAX_SKEW: ${AEGIS_SENSOR_SIGNATURE_MAX_SKEW:-300}
@@ -66,6 +67,7 @@ services:
     command: ["python", "-m", "aegis_nexus.sensors.ssh_decoy"]
     environment:
       <<: *sensor-env
+      AEGIS_SENSOR_API_KEY: ${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: ssh-decoy-01
       AEGIS_SSH_PORT: "2222"
     ports:
@@ -104,6 +106,7 @@ services:
       - aegis_nexus.sensors.web_decoy:app
     environment:
       <<: *sensor-env
+      AEGIS_SENSOR_API_KEY: ${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: web-decoy-01
       AEGIS_WEB_PORT: "8080"
     ports:
@@ -120,6 +123,7 @@ services:
     command: ["python", "-m", "aegis_nexus.sensors.legacy"]
     environment:
       <<: *sensor-env
+      AEGIS_SENSOR_API_KEY: ${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: legacy-decoy-01
       AEGIS_FTP_PORT: "2121"
       AEGIS_TELNET_PORT: "2323"

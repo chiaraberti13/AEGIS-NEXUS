@@ -232,3 +232,62 @@ def test_csv_exports_neutralize_formula_injection(tmp_path):
     body = csv_report.get_data(as_text=True)
     assert "'=HYPERLINK" in body
     assert ",=HYPERLINK" not in body
+
+
+def test_per_sensor_allowlist_rejects_cross_sensor_spoofing(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "legacy-shared-key",
+        "SENSOR_KEYS": {
+            "ssh-decoy-01": "ssh-secret",
+            "web-decoy-01": "web-secret",
+        },
+    })
+    client = app.test_client()
+    payload = {
+        "honeypot": "ssh-decoy-01",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.120",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+        },
+    }
+
+    accepted = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "ssh-secret", "X-Aegis-Sensor": "ssh-decoy-01"},
+        json=payload,
+    )
+    assert accepted.status_code == 201
+
+    cross_sensor = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "web-secret", "X-Aegis-Sensor": "ssh-decoy-01"},
+        json={**payload, "id": "43ba4933-413f-4e2f-8c72-2292a80b63ed"},
+    )
+    assert cross_sensor.status_code == 401
+
+    shared_fallback = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "legacy-shared-key", "X-Aegis-Sensor": "ssh-decoy-01"},
+        json={**payload, "id": "c973fb3e-ddf6-4cf2-b9da-f5b4642c40c5"},
+    )
+    assert shared_fallback.status_code == 401
+
+    unknown_sensor = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "ssh-secret", "X-Aegis-Sensor": "unknown-decoy"},
+        json={
+            **payload,
+            "id": "1fa10cdc-898d-419c-9803-75e9bda41c73",
+            "honeypot": "unknown-decoy",
+        },
+    )
+    assert unknown_sensor.status_code == 401
+
+    status = client.get("/api/v1/operator/status").get_json()
+    assert status["sensor_auth_mode"] == "per_sensor_allowlist"
+    assert status["sensor_allowlist_count"] == 2
