@@ -289,3 +289,5 @@ pre{
 @media(max-width:800px){.sidebar-substatus{display:none}}
 
 .danger-action:not(:disabled){border-color:#5f3239;color:#e9a3ac;background:#1b1115}.danger-action:not(:disabled):hover{border-color:#8c4853;background:#27161b}.danger-action:disabled{opacity:.38;cursor:not-allowed}
+
+.feed-pagination{display:flex;justify-content:center;padding-top:10px}.feed-pagination .compact{min-width:180px}
