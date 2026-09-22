@@ -145,7 +145,8 @@ def test_operational_status_reports_receipt_freshness_without_online_claim(tmp_p
     telemetry = payload["telemetry"]
     assert telemetry["configured_sensors"] == 2
     assert telemetry["configured_with_recent_telemetry"] == 1
-    assert "online" not in telemetry["interpretation"].lower()
+    assert "not proof" in telemetry["interpretation"].lower()
+    assert "online or offline" in telemetry["interpretation"].lower()
 
     items = {item["sensor_id"]: item for item in telemetry["items"]}
     assert items["ssh-decoy-01"]["recent_events"] == 1
