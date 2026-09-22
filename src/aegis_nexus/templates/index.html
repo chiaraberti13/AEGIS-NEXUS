@@ -27,6 +27,7 @@
     <nav>
       <button class="nav-item active" data-view-target="dashboard" data-i18n="nav.dashboard"></button>
       <button class="nav-item" data-view-target="investigate" data-i18n="nav.investigate"></button>
+      <button class="nav-item" data-view-target="cases" data-i18n="nav.cases"></button>
       <button class="nav-item" data-view-target="relations" data-i18n="nav.relations"></button>
       <button class="nav-item" data-view-target="study" data-i18n="nav.study"></button>
     </nav>
@@ -161,6 +162,7 @@
                 <p id="detail-meta" class="muted"></p>
               </div>
               <div class="detail-actions">
+                <button id="case-from-event" class="compact" type="button" data-i18n="cases.fromEvent"></button>
                 <button id="open-relations" class="compact" type="button" data-i18n="details.relations"></button>
                 <button id="open-study" class="compact" type="button" data-i18n="details.study"></button>
                 <button id="report-json" class="compact" type="button" data-i18n="report.json"></button>
@@ -199,6 +201,83 @@
         <article class="panel timeline-panel">
           <div class="panel-head"><div><span class="eyebrow" data-i18n="session.timelineEyebrow"></span><h2 data-i18n="session.timeline"></h2></div></div>
           <div id="session-timeline" class="session-timeline"></div>
+        </article>
+      </section>
+    </section>
+
+    <section class="workspace" data-view="cases">
+      <section class="grid case-grid">
+        <article class="panel case-browser">
+          <div class="panel-head">
+            <div><span class="eyebrow" data-i18n="cases.eyebrow"></span><h2 data-i18n="cases.title"></h2></div>
+            <button id="case-new" class="compact" type="button" data-i18n="cases.new"></button>
+          </div>
+          <div class="case-filters">
+            <input id="case-search" type="search" data-i18n-placeholder="cases.search" autocomplete="off">
+            <select id="case-status-filter">
+              <option value="" data-i18n="cases.allStatus"></option>
+              <option value="open" data-i18n="cases.status.open"></option>
+              <option value="investigating" data-i18n="cases.status.investigating"></option>
+              <option value="monitoring" data-i18n="cases.status.monitoring"></option>
+              <option value="closed" data-i18n="cases.status.closed"></option>
+            </select>
+          </div>
+          <div id="case-list" class="case-list"></div>
+        </article>
+
+        <article class="panel case-editor">
+          <div class="panel-head">
+            <div><span class="eyebrow" data-i18n="cases.classification"></span><h2 id="case-editor-title" data-i18n="cases.newTitle"></h2></div>
+            <span class="provenance hypotheses" data-i18n="cases.analyst"></span>
+          </div>
+          <form id="case-form" class="case-form">
+            <label><span data-i18n="cases.field.title"></span><input id="case-title" maxlength="160" required></label>
+            <div class="case-form-row">
+              <label><span data-i18n="cases.field.status"></span>
+                <select id="case-status">
+                  <option value="open" data-i18n="cases.status.open"></option>
+                  <option value="investigating" data-i18n="cases.status.investigating"></option>
+                  <option value="monitoring" data-i18n="cases.status.monitoring"></option>
+                  <option value="closed" data-i18n="cases.status.closed"></option>
+                </select>
+              </label>
+              <label><span data-i18n="cases.field.severity"></span>
+                <select id="case-severity">
+                  <option value="info">INFO</option><option value="low">LOW</option><option value="medium">MEDIUM</option>
+                  <option value="high">HIGH</option><option value="critical">CRITICAL</option>
+                </select>
+              </label>
+            </div>
+            <label><span data-i18n="cases.field.summary"></span><textarea id="case-summary" maxlength="4000" rows="4"></textarea></label>
+            <label><span data-i18n="cases.field.tags"></span><input id="case-tags" maxlength="600" data-i18n-placeholder="cases.tagsPlaceholder"></label>
+            <div class="case-actions">
+              <button class="compact" type="submit" data-i18n="cases.save"></button>
+              <button id="case-add-event" class="compact" type="button" data-i18n="cases.addEvent"></button>
+              <button id="case-add-session" class="compact" type="button" data-i18n="cases.addSession"></button>
+              <button id="case-report-json" class="compact" type="button" data-i18n="report.json"></button>
+              <button id="case-report-csv" class="compact" type="button" data-i18n="report.csv"></button>
+            </div>
+          </form>
+          <p class="panel-note" data-i18n="cases.provenanceLimit"></p>
+
+          <section class="case-section">
+            <div class="panel-head"><h3 data-i18n="cases.evidence"></h3><span id="case-evidence-count" class="badge">0</span></div>
+            <div id="case-evidence" class="case-evidence"></div>
+          </section>
+
+          <section class="case-section">
+            <div class="panel-head"><h3 data-i18n="cases.notes"></h3></div>
+            <form id="case-note-form" class="case-note-form">
+              <textarea id="case-note" maxlength="4000" rows="3" data-i18n-placeholder="cases.notePlaceholder"></textarea>
+              <button class="compact" type="submit" data-i18n="cases.addNote"></button>
+            </form>
+            <div id="case-notes" class="case-notes"></div>
+          </section>
+
+          <section class="case-section">
+            <div class="panel-head"><h3 data-i18n="cases.history"></h3></div>
+            <div id="case-history" class="case-history"></div>
+          </section>
         </article>
       </section>
     </section>

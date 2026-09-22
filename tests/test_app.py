@@ -133,3 +133,66 @@ def test_frontend_shell_exposes_soc_workspace(tmp_path):
         'id="session-study"',
     ):
         assert marker in html
+
+
+def test_case_api_is_operator_protected_and_exports_reference_only(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "sensor-secret",
+        "OPERATOR_API_KEY": "operator-secret",
+    })
+    client = app.test_client()
+    created_event = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "sensor-secret"},
+        json={
+            "honeypot": "ssh-decoy-01",
+            "event_type": "credential",
+            "observed": {
+                "source_ip": "203.0.113.92",
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+                "credential": {"username": "root", "password": "do-not-export"},
+            },
+        },
+    )
+    assert created_event.status_code == 201
+    event_id = created_event.get_json()["id"]
+
+    assert client.get("/api/v1/cases").status_code == 401
+    operator = {"X-Aegis-Operator-Key": "operator-secret"}
+
+    case_response = client.post(
+        "/api/v1/cases",
+        headers=operator,
+        json={"title": "Credential investigation", "severity": "medium", "tags": ["ssh", "credential"]},
+    )
+    assert case_response.status_code == 201
+    case_id = case_response.get_json()["id"]
+
+    evidence = client.post(
+        f"/api/v1/cases/{case_id}/evidence",
+        headers=operator,
+        json={"type": "event", "id": event_id},
+    )
+    assert evidence.status_code == 200
+
+    note = client.post(
+        f"/api/v1/cases/{case_id}/notes",
+        headers=operator,
+        json={"body": "Analyst note: compare reuse across sessions."},
+    )
+    assert note.status_code == 201
+
+    report = client.get(f"/api/v1/reports/case/{case_id}", headers=operator)
+    assert report.status_code == 200
+    report_text = report.get_data(as_text=True)
+    assert "do-not-export" not in report_text
+    assert '"classification_provenance":"analyst"' in report_text
+
+    csv_report = client.get(f"/api/v1/reports/case/{case_id}.csv", headers=operator)
+    assert csv_report.status_code == 200
+    assert event_id in csv_report.get_data(as_text=True)
+    assert "do-not-export" not in csv_report.get_data(as_text=True)

@@ -132,3 +132,76 @@ def test_report_never_exports_cleartext_password(tmp_path, monkeypatch):
     assert credential["username"] == "root"
     assert "password" not in credential
     assert credential["password_sha256"]
+
+
+def test_case_references_survive_source_retention_without_copying_payload(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "web.payload",
+        "observed": {
+            "source_ip": "203.0.113.90",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+            "payload": "sensitive-fixture-payload",
+        },
+    })
+    saved = store.ingest(event)
+    case = store.create_case({
+        "title": "Web investigation",
+        "summary": "Analyst working notes",
+        "status": "open",
+        "severity": "medium",
+        "tags": ["web", "triage"],
+    })
+    case = store.add_case_evidence(case["id"], "event", saved["id"])
+    assert case["evidence"][0]["available"] is True
+    assert "sensitive-fixture-payload" not in str(case["evidence"][0]["summary"])
+
+    with store.connect() as conn:
+        conn.execute("DELETE FROM events WHERE id=?", (saved["id"],))
+        conn.execute("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM events)")
+
+    retained_case = store.get_case(case["id"])
+    assert retained_case["evidence"][0]["available"] is False
+    assert retained_case["evidence"][0]["evidence_id"] == saved["id"]
+
+
+def test_case_audit_notes_and_analyst_classification(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.91",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+        },
+    })
+    saved = store.ingest(event)
+    case = store.create_case({
+        "title": "SSH review",
+        "summary": "",
+        "status": "open",
+        "severity": "low",
+        "tags": ["ssh"],
+    })
+    store.add_case_evidence(case["id"], "session", saved["session_id"])
+    store.add_case_note(case["id"], "Review adjacent activity before escalation.")
+    updated = store.update_case(case["id"], {"status": "investigating", "severity": "high", "tags": ["ssh", "priority"]})
+    report = store.case_report(case["id"])
+
+    assert updated["classification_provenance"] == "analyst"
+    assert updated["status"] == "investigating"
+    assert report["case"]["classification_provenance"] == "analyst"
+    assert report["notes"][0]["provenance"] == "analyst_note"
+    actions = [item["action"] for item in report["history"]]
+    assert actions == ["created", "evidence_added", "note_added", "updated"]
+
+    # Re-linking the same source evidence is idempotent and must not forge audit activity.
+    store.add_case_evidence(case["id"], "session", saved["session_id"])
+    after_duplicate = store.case_report(case["id"])
+    duplicate_actions = [item["action"] for item in after_duplicate["history"]]
+    assert duplicate_actions == actions

@@ -11,6 +11,7 @@ import sqlite3
 from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
+from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
 from .model import EventValidationError, normalize_event
 from .security import SlidingWindowLimiter, verify_signed_payload
 from .store import Store
@@ -278,6 +279,118 @@ def create_app(test_config: dict | None = None) -> Flask:
                 q=q,
                 filters=_filters_from_request(),
             )
+        )
+
+    @app.get("/api/v1/cases")
+    def cases():
+        return jsonify({
+            "items": store.list_cases(
+                limit=request.args.get("limit", 100, type=int),
+                q=request.args.get("q", type=str),
+                status=request.args.get("status", type=str),
+            )
+        })
+
+    @app.post("/api/v1/cases")
+    def create_case():
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        try:
+            item = store.create_case(normalize_case_create(request.get_json()))
+        except CaseValidationError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        return jsonify(item), 201
+
+    @app.get("/api/v1/cases/<case_id>")
+    def case_detail(case_id: str):
+        item = store.get_case(case_id[:128])
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.patch("/api/v1/cases/<case_id>")
+    def update_case(case_id: str):
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        try:
+            item = store.update_case(case_id[:128], normalize_case_update(request.get_json()))
+        except CaseValidationError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.post("/api/v1/cases/<case_id>/evidence")
+    def add_case_evidence(case_id: str):
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        try:
+            evidence = normalize_evidence(request.get_json())
+            item = store.add_case_evidence(case_id[:128], evidence["type"], evidence["id"])
+        except CaseValidationError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        except ValueError as exc:
+            if str(exc) == "evidence_not_found":
+                return jsonify({"error": "evidence_not_found"}), 404
+            raise
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.delete("/api/v1/cases/<case_id>/evidence/<int:evidence_row_id>")
+    def remove_case_evidence(case_id: str, evidence_row_id: int):
+        try:
+            item = store.remove_case_evidence(case_id[:128], evidence_row_id)
+        except ValueError as exc:
+            if str(exc) == "evidence_not_found":
+                return jsonify({"error": "evidence_not_found"}), 404
+            raise
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.post("/api/v1/cases/<case_id>/notes")
+    def add_case_note(case_id: str):
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        try:
+            item = store.add_case_note(case_id[:128], normalize_note(request.get_json()))
+        except CaseValidationError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        return (jsonify(item), 201) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.get("/api/v1/reports/case/<case_id>")
+    def case_report(case_id: str):
+        item = store.case_report(case_id[:128])
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.get("/api/v1/reports/case/<case_id>.csv")
+    def case_report_csv(case_id: str):
+        item = store.case_report(case_id[:128])
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "case_id",
+            "case_title",
+            "case_status",
+            "case_severity",
+            "classification_provenance",
+            "evidence_type",
+            "evidence_id",
+            "evidence_available",
+            "evidence_added_at",
+        ])
+        for evidence in item["evidence"]:
+            writer.writerow([
+                item["case"]["id"],
+                item["case"]["title"],
+                item["case"]["status"],
+                item["case"]["severity"],
+                "analyst",
+                evidence["evidence_type"],
+                evidence["evidence_id"],
+                evidence["available"],
+                evidence["added_at"],
+            ])
+        filename = f"aegis-{case_id[:64]}.csv"
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
     @app.get("/api/v1/reports/session/<session_id>")
