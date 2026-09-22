@@ -109,8 +109,46 @@ def test_ip_profile_keeps_external_enrichment_provenance(tmp_path):
     store.ingest(event)
     profile = store.ip_profile("203.0.113.40")
     assert profile["countries"] == ["IT"]
-    assert profile["threat_intelligence"][0]["source"] == "geo-fixture"
-    assert profile["threat_intelligence"][0]["provenance"] == "external_enrichment"
+    assert profile["external_enrichment"][0]["source"] == "geo-fixture"
+    assert profile["external_enrichment"][0]["provenance"] == "external_enrichment"
+    assert profile["external_enrichment"][0]["classification"] == "context_enrichment"
+    assert profile["threat_intelligence"] == []
+
+
+def test_relations_expose_provenance_and_safe_credential_fingerprint(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "credential",
+        "observed": {
+            "source_ip": "203.0.113.42",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "credential": {"username": "admin", "password": "reuse-me"},
+        },
+        "enrichment": {
+            "threat_context": {
+                "source": "fixture-feed",
+                "observed_at": "2026-09-22T18:00:00Z",
+                "data": {
+                    "match_policy": "exact",
+                    "matches": [{"type": "ip", "value": "203.0.113.42", "confidence": 70, "evidence": ["observed.source_ip"]}],
+                },
+            }
+        },
+    })
+    saved = store.ingest(event)
+    graph = store.relations(saved["session_id"])
+    nodes = graph["nodes"]
+    secret = next(node for node in nodes if node["kind"] == "credential_secret_fingerprint")
+    assert secret["provenance"] == "derived"
+    assert "reuse-me" not in str(graph)
+    threat = next(node for node in nodes if node["kind"] == "threat_intel")
+    assert threat["provenance"] == "enrichment"
+    assert threat["metadata"]["source"] == "fixture-feed"
+    ip = next(node for node in nodes if node["kind"] == "ip")
+    assert ip["provenance"] == "observed"
 
 
 def test_report_never_exports_cleartext_password(tmp_path, monkeypatch):
