@@ -725,6 +725,18 @@
     renderStudySection(root, t("study.limitations"), data.limitations);
   }
 
+  function graphKindLabel(kind) {
+    const key = "relations.kind." + String(kind || "unknown");
+    const label = t(key);
+    return label === key ? String(kind || t("common.unknown")) : label;
+  }
+
+  function graphRelationLabel(relation) {
+    const key = "relations.edge." + String(relation || "unknown");
+    const label = t(key);
+    return label === key ? String(relation || t("common.unknown")) : label;
+  }
+
   function graphPosition(nodes) {
     const positions = new Map();
     const session = nodes.find((node) => node.kind === "session");
@@ -752,7 +764,7 @@
       const dot = document.createElement("i");
       dot.className = "legend-dot kind-" + kind;
       const label = document.createElement("span");
-      label.textContent = kind;
+      label.textContent = graphKindLabel(kind);
       item.append(dot, label);
       root.append(item);
     });
@@ -782,7 +794,7 @@
       [["x1", source.x], ["y1", source.y], ["x2", target.x], ["y2", target.y]].forEach(([key, value]) => line.setAttribute(key, String(value)));
       line.setAttribute("class", "relation-edge");
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = edge.relation;
+      title.textContent = graphRelationLabel(edge.relation);
       line.append(title);
       svg.append(line);
     });
@@ -802,7 +814,7 @@
       label.setAttribute("y", String(position.y + 4));
       label.textContent = String(node.label).slice(0, 22);
       const inspect = () => {
-        $("graph-node-kind").textContent = node.kind;
+        $("graph-node-kind").textContent = graphKindLabel(node.kind);
         $("graph-node-label").textContent = node.label;
         const provenance = node.provenance || "observed";
         const provenanceNode = $("graph-node-provenance");
