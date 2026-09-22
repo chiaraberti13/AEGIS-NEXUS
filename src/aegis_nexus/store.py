@@ -849,7 +849,7 @@ class Store:
 
         timeline: dict[str, int] = defaultdict(int)
         heatmap = [[0 for _ in range(24)] for _ in range(7)]
-        credentials, commands, mitre, ids = Counter(), Counter(), Counter(), Counter()
+        credentials, commands, mitre, ids, iocs = Counter(), Counter(), Counter(), Counter(), Counter()
         for event in events:
             ts = datetime.fromisoformat(event["timestamp"])
             timeline[ts.strftime("%Y-%m-%dT%H:00Z")] += 1
@@ -862,6 +862,10 @@ class Store:
             for item in event["derived"].get("mitre", []) or []:
                 if isinstance(item, dict) and item.get("technique_id"):
                     mitre[str(item["technique_id"])] += 1
+            for item in event["derived"].get("ioc", []) or []:
+                if isinstance(item, dict) and item.get("type") and item.get("value") not in (None, ""):
+                    label = f"{item['type']}: {str(item['value'])[:140]}"
+                    iocs[label] += 1
             if event["event_type"] == "ids.alert":
                 alert = event["observed"].get("alert") if isinstance(event["observed"].get("alert"), dict) else {}
                 signature = event["observed"].get("signature") or alert.get("signature")
@@ -894,6 +898,7 @@ class Store:
             "credentials": [{"label": key, "value": value} for key, value in credentials.most_common(10)],
             "commands": [{"label": key, "value": value} for key, value in commands.most_common(10)],
             "ids_alerts": [{"label": key, "value": value} for key, value in ids.most_common(10)],
+            "iocs": [{"label": key, "value": value} for key, value in iocs.most_common(10)],
             "mitre": [{"label": key, "value": value} for key, value in mitre.most_common(10)],
             "map_points": [
                 {

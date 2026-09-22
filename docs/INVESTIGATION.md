@@ -31,6 +31,10 @@ Session correlation is based on source IP, honeypot, service, protocol, destinat
 
 AEGIS does not invent reputation, malware family, actor or campaign information. The Threat Intelligence panel displays only enrichment present in the dataset and always keeps provider and timestamp visible. Empty enrichment produces an empty panel rather than an inferred classification.
 
+### Observed artifact extraction
+
+Commands and payloads are scanned statically for exact URLs, domains, IP literals and MD5/SHA-1/SHA-256-shaped values. Extracted items are deterministic derived data with an evidence path. They are useful for cross-session correlation and search, but their presence alone is not a maliciousness or compromise verdict.
+
 ### Relationship graph
 
 The graph can contain event, session, IP, ASN, country, service, protocol, port, honeypot, credential, command, payload, IDS, IOC, MITRE and CVE nodes. Nodes exist only when the underlying data exists. MITRE and CVE nodes therefore appear only when the stored record contains rationale and evidence.
@@ -79,6 +83,10 @@ La correlazione usa IP sorgente, honeypot, servizio, protocollo, porta destinazi
 ### Threat Intelligence
 
 AEGIS non inventa reputazione, malware family, actor o campagne. Il pannello Threat Intelligence visualizza soltanto enrichment presenti nel dataset e mantiene sempre visibili provider e timestamp. In assenza di enrichment il pannello resta vuoto invece di produrre classificazioni inferite.
+
+### Estrazione artefatti osservati
+
+Comandi e payload vengono analizzati staticamente per URL, domini, IP letterali e valori con forma MD5/SHA-1/SHA-256. Gli elementi estratti sono dati derivati deterministici con percorso di evidenza. Sono utili per correlazione tra sessioni e ricerca, ma la loro presenza non costituisce da sola un verdetto di malevolenza o compromissione.
 
 ### Grafo delle relazioni
 

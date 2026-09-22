@@ -27,6 +27,7 @@ L'implementazione attuale fornisce sia la base sicura per telemetria e investiga
 - Provenienza obbligatoria per enrichment esterni (`source` e `observed_at`).
 - Enrichment locale offline GeoIP/ASN da file MMDB MaxMind forniti dall'operatore; gli IP sorgente pubblici vengono arricchiti nel collector senza inviare gli IP raccolti ad API di terze parti.
 - Mapping MITRE ATT&CK e CVE accettati solo con `rationale` ed `evidence`.
+- Estrazione statica deterministica da comandi/payload osservati di URL, domini, IP letterali e formati hash comuni; i valori restano artefatti derivati supportati da evidenza e non diventano automaticamente indicatori malevoli.
 - Password redatte per default, con fingerprint SHA-256 e lunghezza; memorizzazione raw solo tramite opt-in esplicito.
 - Correlazione persistente delle sessioni su SQLite per IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività, con migrazione compatibile dello schema.
 - API e viste SOC dedicate per eventi, profili IP, sessioni, timeline, relazioni, contesto Threat Intelligence e Study Mode.
@@ -110,6 +111,7 @@ src/aegis_nexus/
 ├── model.py        normalizzazione hostile-input e validazione provenienza
 ├── correlation.py regole di correlazione sessioni
 ├── enrichment.py  enrichment locale offline GeoIP/ASN
+├── derivation.py  estrazione statica bounded degli artefatti osservati
 ├── casework.py     validazione bounded dei casi analista
 ├── backup.py       logica riusabile di backup SQLite
 ├── store.py        persistenza, analytics, casi, relazioni e report

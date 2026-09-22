@@ -13,6 +13,7 @@ from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
+from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .model import EventValidationError, normalize_event
 from .security import SlidingWindowLimiter, verify_signed_payload
@@ -204,6 +205,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             ):
                 return jsonify({"error": "rate_limited"}), 429
             event = normalize_event(payload)
+            event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
             stored = store.ingest(event)
         except sqlite3.IntegrityError:
@@ -231,6 +233,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             ):
                 return jsonify({"error": "rate_limited"}), 429
             event = normalize_event(normalize_eve_event(request.get_json(), sensor_id))
+            event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
             stored = store.ingest(event)
         except sqlite3.IntegrityError:

@@ -100,6 +100,12 @@ def explain(event: dict[str, Any], lang: str = "it") -> dict[str, Any]:
             if it else
             "Verify that every CVE is tied to concrete technical evidence, not merely to a port or service name."
         )
+    if derived.get("ioc"):
+        checklist.append(
+            "Controlla contesto ed evidenza di ogni IOC/artefatto estratto: la presenza nel payload o comando non implica automaticamente malevolenza."
+            if it else
+            "Review the context and evidence for each extracted IOC/artifact: presence in a payload or command does not automatically imply maliciousness."
+        )
     if not checklist:
         checklist.append(
             "Esamina gli eventi vicini nella stessa sessione prima di formulare ipotesi."
@@ -203,6 +209,12 @@ def explain_session(bundle: dict[str, Any], lang: str = "it") -> dict[str, Any]:
             "Sono presenti correlazioni CVE evidence-backed: verifica che l'evidenza sia specifica della vulnerabilità."
             if it else
             "Evidence-backed CVE correlations are present: verify that the evidence is specific to the vulnerability."
+        )
+    if summary.get("iocs"):
+        focus.append(
+            f"Sono presenti {summary['iocs']} IOC/artefatti derivati: correlali tra sessioni senza considerarli automaticamente indicatori malevoli."
+            if it else
+            f"{summary['iocs']} derived IOCs/artifacts are present: correlate them across sessions without automatically treating them as malicious indicators."
         )
     if not focus:
         focus.append(

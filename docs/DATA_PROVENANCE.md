@@ -9,6 +9,12 @@ AEGIS-NEXUS keeps four classes separate in every event:
 
 The UI and API must never collapse these classes into a single “truth” field. IP geolocation, ASN ownership and threat-intelligence reputation are contextual data, not attacker identity.
 
+### Deterministic observed-artifact extraction
+
+AEGIS may derive exact URLs, domain names, IP literals and common cryptographic hash strings from `observed.command` and `observed.payload`. These records live under `derived.ioc`, carry `classification: observed_artifact`, and retain an explicit evidence path such as `observed.command`.
+
+The term IOC in the schema is a correlation container, not a verdict. Automatic extraction means only that the exact value was present in hostile telemetry. It does **not** assert malicious reputation, compromise, ownership, intent or attribution.
+
 ---
 
 AEGIS-NEXUS mantiene separate quattro classi in ogni evento:
@@ -19,3 +25,9 @@ AEGIS-NEXUS mantiene separate quattro classi in ogni evento:
 - `hypotheses`: possibilità analitiche esplicitamente non fattuali.
 
 UI e API non devono mai fondere queste classi in un unico campo di “verità”. Geolocalizzazione IP, proprietà ASN e reputazione Threat Intelligence sono contesto, non identità dell'attaccante.
+
+### Estrazione deterministica degli artefatti osservati
+
+AEGIS può derivare URL, domini, IP letterali e stringhe hash crittografiche comuni presenti esattamente in `observed.command` e `observed.payload`. Questi record vengono conservati in `derived.ioc`, con `classification: observed_artifact` e percorso di evidenza esplicito, ad esempio `observed.command`.
+
+Il termine IOC nello schema è un contenitore utile alla correlazione, non un verdetto. L'estrazione automatica indica soltanto che il valore era presente nella telemetria ostile. Non implica reputazione malevola, compromissione, proprietà, intenzione o attribuzione.
