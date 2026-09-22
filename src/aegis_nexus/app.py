@@ -18,6 +18,7 @@ from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .model import EventValidationError, normalize_event
 from .pagination import CursorError
+from .reporting import case_markdown, session_markdown
 from .security import SlidingWindowLimiter, verify_signed_payload
 from .store import Store
 from .study import explain, explain_session
@@ -455,6 +456,19 @@ def create_app(test_config: dict | None = None) -> Flask:
         item = store.case_report(case_id[:128])
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
+    @app.get("/api/v1/reports/case/<case_id>.md")
+    def case_report_markdown(case_id: str):
+        item = store.case_report(case_id[:128])
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        body = case_markdown(item, request.args.get("lang", "it")[:8])
+        filename = f"aegis-{case_id[:64]}.md"
+        return Response(
+            body,
+            content_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     @app.get("/api/v1/reports/case/<case_id>.csv")
     def case_report_csv(case_id: str):
         item = store.case_report(case_id[:128])
@@ -496,6 +510,19 @@ def create_app(test_config: dict | None = None) -> Flask:
     def session_report(session_id: str):
         item = store.report(session_id)
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.get("/api/v1/reports/session/<session_id>.md")
+    def session_report_markdown(session_id: str):
+        item = store.report(session_id)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        body = session_markdown(item, request.args.get("lang", "it")[:8])
+        filename = f"aegis-{session_id[:64]}.md"
+        return Response(
+            body,
+            content_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @app.get("/api/v1/reports/session/<session_id>.csv")
     def session_report_csv(session_id: str):
