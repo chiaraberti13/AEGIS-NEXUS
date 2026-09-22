@@ -53,6 +53,8 @@ def test_suricata_alert_ingestion_preserves_evidence_without_inventing_mappings(
             "dest_port":22,
             "proto":"TCP",
             "app_proto":"ssh",
+            "flow_id": 987654,
+            "flow": {"start": "2026-09-22T17:59:58Z"},
             "alert":{"signature":"Example IDS signature","signature_id":1001,"severity":1,"category":"Attempted Admin"},
         },
     )
@@ -61,6 +63,8 @@ def test_suricata_alert_ingestion_preserves_evidence_without_inventing_mappings(
     event = client.get(f"/api/v1/events/{event_id}").get_json()
     assert event["event_type"] == "ids.alert"
     assert event["observed"]["alert"]["signature"] == "Example IDS signature"
+    assert event["observed"]["flow_id"] == 987654
+    assert event["observed"]["flow_start"] == "2026-09-22T17:59:58Z"
     assert event["derived"] == {}
 
 
