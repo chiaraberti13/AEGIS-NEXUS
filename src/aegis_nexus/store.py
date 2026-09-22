@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import sqlite3
 import uuid
 from collections import Counter, defaultdict
@@ -70,7 +71,7 @@ class Store:
                     event_count INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS events (
-                    id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, honeypot TEXT NOT NULL,
+                    id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, received_at TEXT NOT NULL, honeypot TEXT NOT NULL,
                     event_type TEXT NOT NULL, severity TEXT NOT NULL, source_ip TEXT,
                     session_id TEXT NOT NULL, protocol TEXT, service TEXT, destination_port INTEGER,
                     country TEXT, asn TEXT, latitude REAL, longitude REAL,
@@ -127,6 +128,19 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_case_evidence_case ON case_evidence(case_id, added_at);
                 CREATE INDEX IF NOT EXISTS idx_case_history_case ON case_history(case_id, timestamp);
             """)
+            event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(events)")}
+            if "received_at" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN received_at TEXT")
+                conn.execute("UPDATE events SET received_at=timestamp WHERE received_at IS NULL OR received_at=''")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_received "
+                "ON events(received_at DESC, id DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_sensor_received "
+                "ON events(honeypot, received_at DESC)"
+            )
+
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(sessions)")}
             if "protocol" not in columns:
                 conn.execute("ALTER TABLE sessions ADD COLUMN protocol TEXT NOT NULL DEFAULT 'unknown'")
@@ -215,15 +229,16 @@ class Store:
     def ingest(self, event: dict[str, Any]) -> dict[str, Any]:
         observed = event["observed"]
         country, asn, latitude, longitude = self._geo(event["enrichment"])
+        received_at = datetime.now(timezone.utc).isoformat()
         with self.connect() as conn:
             session_id = self._select_or_create_session(conn, event)
             conn.execute("""
                 INSERT INTO events(
-                    id,timestamp,honeypot,event_type,severity,source_ip,session_id,protocol,service,
+                    id,timestamp,received_at,honeypot,event_type,severity,source_ip,session_id,protocol,service,
                     destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
-                event["id"], event["timestamp"], event["honeypot"], event["event_type"], event["severity"],
+                event["id"], event["timestamp"], received_at, event["honeypot"], event["event_type"], event["severity"],
                 observed.get("source_ip"), session_id, observed.get("protocol"), observed.get("service"),
                 observed.get("destination_port"), country, asn, latitude, longitude,
                 json.dumps(event["observed"], ensure_ascii=False),
@@ -233,7 +248,7 @@ class Store:
             ))
         self._ingest_since_maintenance += 1
         self.maintain()
-        return {**event, "session_id": session_id}
+        return {**event, "session_id": session_id, "received_at": received_at}
 
     def maintain(self, force: bool = False) -> dict[str, int]:
         if not force and self._ingest_since_maintenance < 100:
@@ -247,7 +262,7 @@ class Store:
             overflow = max(0, int(count) - self.max_events)
             if overflow:
                 cur = conn.execute(
-                    "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY timestamp ASC LIMIT ?)",
+                    "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY received_at ASC, id ASC LIMIT ?)",
                     (overflow,),
                 )
                 capacity_deleted = cur.rowcount
@@ -272,7 +287,7 @@ class Store:
             return 0
         cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
         with self.connect() as conn:
-            cur = conn.execute("DELETE FROM events WHERE timestamp < ?", (cutoff,))
+            cur = conn.execute("DELETE FROM events WHERE received_at < ?", (cutoff,))
             deleted = cur.rowcount
             conn.execute("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM events)")
         return deleted
@@ -913,6 +928,98 @@ class Store:
                 "VPNs, proxies, NAT, hosting providers and compromised systems can obscure origin.",
                 "No threat actor or campaign attribution is inferred by AEGIS-NEXUS.",
             ],
+        }
+
+    def operational_health(self, min_free_bytes: int = 67_108_864) -> dict[str, Any]:
+        threshold = max(0, int(min_free_bytes))
+        database_ready = False
+        try:
+            with self.connect() as conn:
+                conn.execute("SELECT 1").fetchone()
+            database_ready = True
+        except sqlite3.Error:
+            database_ready = False
+
+        storage_free_bytes: int | None = None
+        try:
+            storage_free_bytes = int(shutil.disk_usage(Path(self.path).parent).free)
+        except OSError:
+            storage_free_bytes = None
+        storage_ready = storage_free_bytes is not None and storage_free_bytes >= threshold
+
+        return {
+            "ready": database_ready and storage_ready,
+            "database_ready": database_ready,
+            "storage_ready": storage_ready,
+            "storage_free_bytes": storage_free_bytes,
+            "min_free_bytes": threshold,
+        }
+
+    def sensor_telemetry_observation(
+        self,
+        configured_sensor_ids: list[str] | tuple[str, ...] | set[str] | None = None,
+        recent_hours: int = 24,
+    ) -> dict[str, Any]:
+        bounded_hours = max(1, min(int(recent_hours), 720))
+        since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    honeypot,
+                    MAX(received_at) AS last_received_at,
+                    MAX(timestamp) AS latest_event_timestamp,
+                    COUNT(*) AS total_events,
+                    SUM(CASE WHEN received_at >= ? THEN 1 ELSE 0 END) AS recent_events
+                FROM events
+                GROUP BY honeypot
+                ORDER BY honeypot COLLATE NOCASE
+                """,
+                (since,),
+            ).fetchall()
+
+        observed = {
+            str(row["honeypot"]): {
+                "sensor_id": str(row["honeypot"]),
+                "configured": False,
+                "last_received_at": row["last_received_at"],
+                "latest_event_timestamp": row["latest_event_timestamp"],
+                "total_events": int(row["total_events"] or 0),
+                "recent_events": int(row["recent_events"] or 0),
+            }
+            for row in rows
+        }
+        configured = {
+            str(sensor_id)[:96]
+            for sensor_id in (configured_sensor_ids or [])
+            if str(sensor_id)
+        }
+        for sensor_id in configured:
+            item = observed.setdefault(
+                sensor_id,
+                {
+                    "sensor_id": sensor_id,
+                    "configured": True,
+                    "last_received_at": None,
+                    "latest_event_timestamp": None,
+                    "total_events": 0,
+                    "recent_events": 0,
+                },
+            )
+            item["configured"] = True
+
+        items = [observed[key] for key in sorted(observed, key=str.casefold)]
+        return {
+            "recent_hours": bounded_hours,
+            "configured_sensors": len(configured),
+            "configured_with_recent_telemetry": sum(
+                1 for item in items if item["configured"] and item["recent_events"] > 0
+            ),
+            "observed_sensor_ids": len(items),
+            "items": items,
+            "interpretation": (
+                "Telemetry timestamps indicate collector receipt, not proof that a sensor is online or offline."
+            ),
         }
 
     def filter_options(self, hours: int = 720) -> dict[str, list[str]]:
