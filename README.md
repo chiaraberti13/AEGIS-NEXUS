@@ -22,7 +22,7 @@ The current implementation provides both the secure telemetry/investigation foun
 
 ## Implemented now
 
-- Isolated SSH, web, FTP and Telnet decoys plus a Flask collector with bounded JSON ingestion, fail-closed authentication and sensor identity headers; optional per-sensor keys are supported.
+- Isolated SSH, web, FTP and Telnet decoys plus a Flask collector with bounded JSON ingestion and fail-closed authentication; the standard Compose deployment uses distinct allowlisted keys per built-in sensor.
 - Normalized event schema with separate `observed`, `enrichment`, `derived` and `hypotheses` classes.
 - External enrichment requires provenance through `source` and `observed_at`.
 - Offline local GeoIP/ASN enrichment from operator-supplied MaxMind MMDB files; public source IPs are enriched at the collector without sending captured IPs to a third-party API.
@@ -90,7 +90,8 @@ Requires Python 3.12+ or Docker Compose.
 
 ```bash
 cp .env.example .env
-# Replace AEGIS_INGEST_API_KEY with a long random value.
+# Replace the SSH, web, legacy and operator placeholder secrets with independent random values.
+# Set AEGIS_SURICATA_SENSOR_API_KEY only when Suricata ingestion is used.
 docker compose up -d --build
 # Dashboard: http://127.0.0.1:8600
 ```
