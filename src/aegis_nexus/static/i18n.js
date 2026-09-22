@@ -2,7 +2,7 @@
 window.AEGIS_I18N={
 it:{
 "brand.subtitle":"Honeypot · SOC · Threat Research","nav.dashboard":"Dashboard","nav.investigate":"Investigazione","nav.relations":"Relazioni","nav.study":"Study Mode","status.live":"Collector online","header.eyebrow":"AEGIS SOC CONSOLE","header.title":"Threat Observation & Investigation","search.placeholder":"Cerca IP, evento, payload, username, IOC…",
-"filters.reset":"Azzera filtri","filters.all.country":"Tutti i paesi","filters.all.protocol":"Tutti i protocolli","filters.all.service":"Tutti i servizi","filters.all.honeypot":"Tutti gli honeypot","filters.all.severity":"Tutte le severità","filters.all.event_type":"Tutti gli eventi",
+"filters.reset":"Azzera filtri","filters.global":"Filtri globali","time.window":"Finestra temporale","filters.all.country":"Tutti i paesi","filters.all.protocol":"Tutti i protocolli","filters.all.service":"Tutti i servizi","filters.all.honeypot":"Tutti gli honeypot","filters.all.severity":"Tutte le severità","filters.all.event_type":"Tutti gli eventi",
 "kpi.events":"Eventi osservati","kpi.ips":"IP sorgente unici","kpi.sessions":"Sessioni correlate","kpi.critical":"Eventi critici",
 "panel.timeline.eyebrow":"VOLUME","panel.timeline.title":"Attacks over time","panel.map.eyebrow":"GEO ENRICHMENT","panel.map.title":"Attack Map",
 "chart.country":"Attacchi per paese","chart.asn":"ASN","chart.port":"Porte destinazione","chart.protocol":"Protocolli","chart.honeypot":"Honeypot","chart.service":"Servizi","chart.credentials":"Username osservati","chart.commands":"Comandi osservati","chart.ids":"Alert IDS / Suricata","chart.mitre":"MITRE ATT&CK con evidenza","chart.heatmap":"Heatmap temporale",
@@ -21,7 +21,7 @@ it:{
 },
 en:{
 "brand.subtitle":"Honeypot · SOC · Threat Research","nav.dashboard":"Dashboard","nav.investigate":"Investigation","nav.relations":"Relations","nav.study":"Study Mode","status.live":"Collector online","header.eyebrow":"AEGIS SOC CONSOLE","header.title":"Threat Observation & Investigation","search.placeholder":"Search IP, event, payload, username, IOC…",
-"filters.reset":"Reset filters","filters.all.country":"All countries","filters.all.protocol":"All protocols","filters.all.service":"All services","filters.all.honeypot":"All honeypots","filters.all.severity":"All severities","filters.all.event_type":"All events",
+"filters.reset":"Reset filters","filters.global":"Global filters","time.window":"Time window","filters.all.country":"All countries","filters.all.protocol":"All protocols","filters.all.service":"All services","filters.all.honeypot":"All honeypots","filters.all.severity":"All severities","filters.all.event_type":"All events",
 "kpi.events":"Observed events","kpi.ips":"Unique source IPs","kpi.sessions":"Correlated sessions","kpi.critical":"Critical events",
 "panel.timeline.eyebrow":"VOLUME","panel.timeline.title":"Attacks over time","panel.map.eyebrow":"GEO ENRICHMENT","panel.map.title":"Attack Map",
 "chart.country":"Attacks by country","chart.asn":"ASN","chart.port":"Destination ports","chart.protocol":"Protocols","chart.honeypot":"Honeypot","chart.service":"Services","chart.credentials":"Observed usernames","chart.commands":"Observed commands","chart.ids":"IDS / Suricata alerts","chart.mitre":"Evidence-backed MITRE ATT&CK","chart.heatmap":"Temporal heatmap",
