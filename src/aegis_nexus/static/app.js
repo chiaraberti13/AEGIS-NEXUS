@@ -804,6 +804,7 @@
     $("case-add-session").disabled = !hasCase || !state.selected?.session_id;
     $("case-report-json").disabled = !hasCase;
     $("case-report-csv").disabled = !hasCase;
+    $("case-report-markdown").disabled = !hasCase;
     $("case-delete").disabled = !hasCase || state.selectedCase?.status !== "closed";
     $("case-note").disabled = !hasCase;
     $("case-note-form").querySelector("button").disabled = !hasCase;
@@ -1049,10 +1050,33 @@
     loadCases();
   }
 
+  async function downloadMarkdownReport(url, filename) {
+    const separator = url.includes("?") ? "&" : "?";
+    const response = await fetch(
+      url + separator + "lang=" + encodeURIComponent(state.lang),
+      {headers: apiHeaders()}
+    );
+    if (response.status === 401) {
+      showOperatorGate(true);
+      return;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    downloadBlob(await response.blob(), filename, "text/markdown");
+  }
+
   async function downloadCaseReportJSON() {
     if (!state.selectedCase?.id) return;
     const report = await safeGet("/api/v1/reports/case/" + encodeURIComponent(state.selectedCase.id));
     if (report) downloadBlob(JSON.stringify(report, null, 2), "aegis-" + state.selectedCase.id + ".json", "application/json");
+  }
+
+  async function downloadCaseReportMarkdown() {
+    if (!state.selectedCase?.id) return;
+    const id = state.selectedCase.id;
+    await downloadMarkdownReport(
+      "/api/v1/reports/case/" + encodeURIComponent(id) + ".md",
+      "aegis-" + id + ".md"
+    );
   }
 
   async function downloadCaseReportCSV() {
@@ -1098,6 +1122,15 @@
     if (!state.selected?.session_id) return;
     const report = await safeGet("/api/v1/reports/session/" + encodeURIComponent(state.selected.session_id));
     if (report) downloadBlob(JSON.stringify(report, null, 2), "aegis-" + state.selected.session_id + ".json", "application/json");
+  }
+
+  async function downloadReportMarkdown() {
+    if (!state.selected?.session_id) return;
+    const id = state.selected.session_id;
+    await downloadMarkdownReport(
+      "/api/v1/reports/session/" + encodeURIComponent(id) + ".md",
+      "aegis-" + id + ".md"
+    );
   }
 
   async function downloadReportCSV() {
@@ -1242,6 +1275,7 @@
   $("case-note-form").addEventListener("submit", addCaseNote);
   $("case-report-json").addEventListener("click", downloadCaseReportJSON);
   $("case-report-csv").addEventListener("click", downloadCaseReportCSV);
+  $("case-report-markdown").addEventListener("click", downloadCaseReportMarkdown);
   $("case-delete").addEventListener("click", deleteSelectedCase);
   $("case-status-filter").addEventListener("change", loadCases);
   let caseSearchTimer;
@@ -1257,6 +1291,7 @@
   $("open-study").addEventListener("click", () => showView("study"));
   $("report-json").addEventListener("click", downloadReportJSON);
   $("report-csv").addEventListener("click", downloadReportCSV);
+  $("report-markdown").addEventListener("click", downloadReportMarkdown);
   $("export-stats").addEventListener("click", exportStats);
   $("map-zoom-in").addEventListener("click", () => zoomMap(.75));
   $("map-zoom-out").addEventListener("click", () => zoomMap(1.33));
