@@ -561,20 +561,21 @@ class Store:
             if not available:
                 raise ValueError("evidence_not_found")
             now = self._case_now()
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT OR IGNORE INTO case_evidence(case_id,evidence_type,evidence_id,added_at)
                 VALUES(?,?,?,?)
                 """,
                 (case_id, evidence_type, evidence_id, now),
             )
-            conn.execute("UPDATE cases SET updated_at=? WHERE id=?", (now, case_id))
-            self._case_log(
-                conn,
-                case_id,
-                "evidence_added",
-                {"type": evidence_type, "id": evidence_id, "provenance": "telemetry_reference"},
-            )
+            if cur.rowcount:
+                conn.execute("UPDATE cases SET updated_at=? WHERE id=?", (now, case_id))
+                self._case_log(
+                    conn,
+                    case_id,
+                    "evidence_added",
+                    {"type": evidence_type, "id": evidence_id, "provenance": "telemetry_reference"},
+                )
         return self.get_case(case_id)
 
     def remove_case_evidence(self, case_id: str, evidence_row_id: int) -> dict[str, Any] | None:
