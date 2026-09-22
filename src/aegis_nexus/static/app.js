@@ -585,6 +585,13 @@
     fact(root, t("session.ids"), summary.ids_alerts || 0);
     fact(root, t("session.mitre"), summary.mitre || []);
     fact(root, t("session.ioc"), summary.iocs || 0);
+    if (summary.truncated) {
+      fact(
+        root,
+        t("session.analysisScope"),
+        t("session.latestEventsOnly").replace("{limit}", String(bundle.analysis?.event_limit || summary.events_returned || "—")),
+      );
+    }
   }
 
   function renderThreatIntelligence(data) {
