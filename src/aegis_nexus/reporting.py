@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 MAX_MARKDOWN_EVENTS = 200
-_MARKDOWN_META = re.compile(r"([\\`*_{}\[\]()#+\-.!|])")
+_MARKDOWN_META = re.compile(r"([\\`*_{}\[\]#+!|])")
 
 
 def _it(lang: str) -> bool:
