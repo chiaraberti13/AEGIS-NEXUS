@@ -1521,8 +1521,7 @@ class Store:
                     continue
                 ioc_type = ioc.get("type")
                 ioc_value = ioc.get("value")
-                label = f"{ioc_type}: {ioc_value}" if ioc_type and ioc_value not in (None, "") else ioc_value
-                ioc_node = add("ioc", label, "derived", {
+                ioc_node = add("ioc", ioc_value, "derived", {
                     "type": ioc_type,
                     "evidence": ioc.get("evidence"),
                     "classification": ioc.get("classification"),
