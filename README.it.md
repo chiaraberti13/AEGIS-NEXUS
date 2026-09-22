@@ -18,11 +18,11 @@
 
 AEGIS-NEXUS nasce come **Honeypot + SOC Analysis + Threat Research + Cybersecurity Learning Lab**. Il principio centrale è separare sempre osservazione grezza, enrichment esterni, dati derivati e ipotesi analitiche.
 
-L'implementazione attuale fornisce la base reale e sicura per telemetria e investigazione. I servizi di deception SSH/web/legacy verranno aggiunti sopra questo contratto senza dichiararli completi prima che il relativo codice esista.
+L'implementazione attuale fornisce sia la base sicura per telemetria e investigazione sia decoy SSH, web, FTP e Telnet a bassa/intermedia interazione. Comandi e payload catturati vengono solo emulati o registrati e non vengono mai eseguiti.
 
 ## Implementato ora
 
-- Collector Flask con ingestione JSON limitata e API key sensore opzionale.
+- Decoy isolati SSH, web, FTP e Telnet più collector Flask con ingestione JSON limitata e API key sensore.
 - Schema eventi normalizzato con `observed`, `enrichment`, `derived`, `hypotheses` separati.
 - Provenienza obbligatoria per enrichment esterni (`source` e `observed_at`).
 - Mapping MITRE ATT&CK e CVE accettati solo con `rationale` ed `evidence`.
@@ -33,6 +33,7 @@ L'implementazione attuale fornisce la base reale e sicura per telemetria e inves
 - Interfaccia IT/EN tramite dizionario i18n centrale; la telemetria viene sempre resa come testo e mai come HTML controllato dall'attaccante.
 - Retention configurabile con `AEGIS_RETENTION_DAYS`.
 - Runtime Docker hardenizzato: utente non-root, capability rimosse, root filesystem read-only, `no-new-privileges`, rete management privata e porta operatore esposta solo su localhost.
+- Container sensore con filesystem read-only, capability rimosse, limiti di risorse e percorso DMZ/telemetria separato.
 - CI per test Python e build Docker.
 
 ## Contratto dati
@@ -103,6 +104,7 @@ src/aegis_nexus/
 ├── correlation.py regole di correlazione sessioni
 ├── store.py        persistenza, analytics, relazioni e report
 ├── study.py        Study Mode deterministico IT/EN
+├── sensors/        decoy SSH, web, FTP/Telnet e client telemetria
 ├── templates/      console SOC
 └── static/         i18n, grafici, mappa, live feed e investigazione
 docs/
@@ -116,11 +118,11 @@ tests/
 
 La telemetria honeypot può contenere IP, credenziali e payload. Definisci finalità e periodo di conservazione, limita l'accesso degli operatori e non pubblicare dati sensibili raw. Geolocalizzazione IP, ASN e reputazione Threat Intelligence possono riferirsi a VPN, proxy, hosting, NAT o sistemi compromessi e non dimostrano l'identità della persona che ha originato l'attività.
 
-Consulta [Privacy e retention](docs/PRIVACY.md) e [Threat model](docs/THREAT_MODEL.md).
+Consulta [Privacy e retention](docs/PRIVACY.md), [Threat model](docs/THREAT_MODEL.md) e [Isolamento sensori](docs/SENSOR_ISOLATION.md).
 
 ## Roadmap
 
-I prossimi cicli implementativi sono dedicati a servizi honeypot isolati, identità firmata dei sensori, adapter di enrichment controllati, ingestione Suricata, case management, formati di export e ulteriori workflow SOC/Study. Le funzionalità vengono documentate quando sono realmente presenti nel codice.
+I prossimi cicli implementativi sono dedicati a identità più forte per ogni sensore, adapter di enrichment controllati, ingestione nativa Suricata, case management, formati di export e ulteriori workflow SOC/Study. Le funzionalità vengono documentate quando sono realmente presenti nel codice.
 
 ## Licenza e uso responsabile
 
