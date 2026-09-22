@@ -22,18 +22,19 @@ The current implementation provides both the secure telemetry/investigation foun
 
 ## Implemented now
 
-- Isolated SSH, web, FTP and Telnet decoys plus a Flask collector with bounded JSON ingestion and a sensor API key.
+- Isolated SSH, web, FTP and Telnet decoys plus a Flask collector with bounded JSON ingestion, fail-closed authentication and sensor identity headers; optional per-sensor keys are supported.
 - Normalized event schema with separate `observed`, `enrichment`, `derived` and `hypotheses` classes.
 - External enrichment requires provenance through `source` and `observed_at`.
 - MITRE ATT&CK and CVE derived mappings are accepted only when they include both `rationale` and `evidence`.
 - Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw storage is explicit opt-in only.
-- Persistent SQLite session correlation by source IP, honeypot, service and inactivity window.
+- Persistent SQLite session correlation by source IP, honeypot, service, protocol, destination port and inactivity window, with compatible schema migration.
 - Investigation APIs for events, IP profiles, sessions, relationship graphs, Study Mode and evidence-preserving JSON reports.
 - SOC dashboard with attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, IDS alerts, MITRE mappings, temporal heatmap, Attack Map and Live Feed.
 - IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
 - Configurable retention with `AEGIS_RETENTION_DAYS`.
 - Hardened Docker runtime: non-root user, dropped capabilities, read-only root filesystem, `no-new-privileges`, private management network and localhost-only operator port.
 - Sensor containers with read-only filesystems, dropped capabilities, resource limits and a separate DMZ/telemetry network path.
+- Native evidence-first Suricata EVE JSON ingestion for IDS telemetry; alert signatures are preserved as observed IDS output without inventing MITRE or CVE mappings.
 - CI for Python tests and Docker image build.
 
 ## Data contract
@@ -69,6 +70,10 @@ Every event preserves the four provenance classes as distinct sections. No CVE, 
   "hypotheses": []
 }
 ```
+
+## Suricata ingestion
+
+Send one Suricata EVE JSON event to `POST /api/v1/integrations/suricata/eve` using `X-Aegis-Key` and `X-Aegis-Sensor`. Alert events become `ids.alert`; AEGIS preserves the Suricata signature and network facts as observed data and leaves `derived` empty unless evidence-backed analysis is added separately.
 
 ## Investigation flow
 
