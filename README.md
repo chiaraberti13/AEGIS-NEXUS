@@ -25,6 +25,7 @@ The current implementation provides both the secure telemetry/investigation foun
 - Isolated SSH, web, FTP and Telnet decoys plus a Flask collector with bounded JSON ingestion, fail-closed authentication and sensor identity headers; optional per-sensor keys are supported.
 - Normalized event schema with separate `observed`, `enrichment`, `derived` and `hypotheses` classes.
 - External enrichment requires provenance through `source` and `observed_at`.
+- Offline local GeoIP/ASN enrichment from operator-supplied MaxMind MMDB files; public source IPs are enriched at the collector without sending captured IPs to a third-party API.
 - MITRE ATT&CK and CVE derived mappings are accepted only when they include both `rationale` and `evidence`.
 - Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw storage is explicit opt-in only.
 - Persistent SQLite session correlation by source IP, honeypot, service, protocol, destination port and inactivity window, with compatible schema migration.
@@ -108,6 +109,7 @@ src/aegis_nexus/
 ├── app.py          Flask API, security headers and routes
 ├── model.py        hostile-input normalization and provenance validation
 ├── correlation.py session correlation rules
+├── enrichment.py  offline local GeoIP/ASN enrichment
 ├── casework.py     bounded analyst-case validation
 ├── backup.py       reusable SQLite backup logic
 ├── store.py        persistence, analytics, cases, relations and reports
@@ -118,6 +120,7 @@ src/aegis_nexus/
 docs/
 ├── CASE_MANAGEMENT.md
 ├── DATA_PROVENANCE.md
+├── ENRICHMENT.md
 ├── INVESTIGATION.md
 ├── PRIVACY.md
 ├── SENSOR_ISOLATION.md
@@ -129,11 +132,11 @@ tests/
 
 Honeypot telemetry may contain IP addresses, credentials and payloads. Define a lawful purpose and retention period, restrict operator access and avoid publishing raw sensitive telemetry. IP geolocation, ASN ownership and Threat Intelligence reputation may point to VPNs, proxies, hosting infrastructure, NAT gateways or compromised systems and do not establish the identity of the human behind the activity.
 
-See [Privacy & retention](docs/PRIVACY.md), the [Threat model](docs/THREAT_MODEL.md) and [Sensor isolation](docs/SENSOR_ISOLATION.md).
+See [Privacy & retention](docs/PRIVACY.md), [Local enrichment](docs/ENRICHMENT.md), the [Threat model](docs/THREAT_MODEL.md) and [Sensor isolation](docs/SENSOR_ISOLATION.md).
 
 ## Roadmap
 
-Next implementation cycles focus on controlled enrichment adapters, richer investigation exports and additional sensor/IDS integrations. Capabilities are documented when they are implemented, not ahead of the code.
+Next implementation cycles focus on additional controlled threat-context adapters, richer investigation exports and additional sensor/IDS integrations. Capabilities are documented when they are implemented, not ahead of the code.
 
 ## Licence & responsible use
 
