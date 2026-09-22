@@ -12,6 +12,8 @@ from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
+from . import enrichment as enrichment_module
+from .enrichment import EnrichmentProviderError, EnrichmentValidationError, normalize_manual_enrichment
 from .model import EventValidationError, normalize_event
 from .security import SlidingWindowLimiter, verify_signed_payload
 from .store import Store
@@ -61,6 +63,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
         INGEST_RATE_LIMIT=int(os.getenv("AEGIS_INGEST_RATE_LIMIT_PER_MINUTE", "600")),
         OPERATOR_RATE_LIMIT=int(os.getenv("AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE", "1200")),
+        ABUSEIPDB_API_KEY=os.getenv("AEGIS_ABUSEIPDB_API_KEY", ""),
+        ABUSEIPDB_MAX_AGE_DAYS=int(os.getenv("AEGIS_ABUSEIPDB_MAX_AGE_DAYS", "90")),
+        ENRICHMENT_TIMEOUT=float(os.getenv("AEGIS_ENRICHMENT_TIMEOUT", "5.0")),
+        ENRICHMENT_CACHE_HOURS=int(os.getenv("AEGIS_ENRICHMENT_CACHE_HOURS", "6")),
     )
     if test_config:
         app.config.update(test_config)
@@ -262,6 +268,68 @@ def create_app(test_config: dict | None = None) -> Flask:
         except ValueError:
             return jsonify({"error": "invalid_ip"}), 422
         return jsonify(store.threat_intelligence(normalized))
+
+    @app.get("/api/v1/enrichment/providers")
+    def enrichment_providers():
+        return jsonify({
+            "abuseipdb": {
+                "configured": bool(app.config.get("ABUSEIPDB_API_KEY")),
+                "automatic": False,
+                "max_age_days": max(1, min(int(app.config.get("ABUSEIPDB_MAX_AGE_DAYS", 90)), 365)),
+                "cache_hours": max(0, min(int(app.config.get("ENRICHMENT_CACHE_HOURS", 6)), 168)),
+            }
+        })
+
+    @app.post("/api/v1/enrichment/ip/<ip>")
+    def add_manual_ip_enrichment(ip: str):
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        try:
+            normalized_ip = enrichment_module.normalize_ip(ip)
+            enrichment = normalize_manual_enrichment(request.get_json())
+            item = store.add_ip_enrichment(normalized_ip, enrichment)
+        except EnrichmentValidationError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        return jsonify({"item": item, "cached": False}), 201
+
+    @app.post("/api/v1/enrichment/ip/<ip>/abuseipdb")
+    def enrich_ip_abuseipdb(ip: str):
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        try:
+            normalized_ip = enrichment_module.require_global_ip(ip)
+            body = request.get_json() or {}
+            if not isinstance(body, dict):
+                raise EnrichmentValidationError("request must be an object")
+            force = body.get("force", False)
+            if not isinstance(force, bool):
+                raise EnrichmentValidationError("force must be a boolean")
+            api_key = str(app.config.get("ABUSEIPDB_API_KEY", ""))
+            if not api_key:
+                return jsonify({"error": "provider_not_configured"}), 503
+            cache_hours = max(0, min(int(app.config.get("ENRICHMENT_CACHE_HOURS", 6)), 168))
+            if not force and cache_hours:
+                cached = store.recent_ip_enrichment(
+                    normalized_ip,
+                    "AbuseIPDB API v2",
+                    "reputation",
+                    cache_hours,
+                )
+                if cached:
+                    return jsonify({"item": cached, "cached": True}), 200
+            enrichment = enrichment_module.fetch_abuseipdb(
+                normalized_ip,
+                api_key,
+                max_age_days=int(app.config.get("ABUSEIPDB_MAX_AGE_DAYS", 90)),
+                timeout=float(app.config.get("ENRICHMENT_TIMEOUT", 5.0)),
+            )
+            item = store.add_ip_enrichment(normalized_ip, enrichment)
+        except EnrichmentValidationError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        except EnrichmentProviderError as exc:
+            app.logger.warning("external enrichment provider failed: %s", exc)
+            return jsonify({"error": "provider_failed", "detail": str(exc)}), 502
+        return jsonify({"item": item, "cached": False}), 201
 
     @app.get("/api/v1/meta/filters")
     def filter_options():
