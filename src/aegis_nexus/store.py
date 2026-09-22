@@ -5,6 +5,7 @@ import json
 import sqlite3
 import uuid
 from collections import Counter, defaultdict
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -956,11 +957,22 @@ class Store:
             ][-400:],
         }
 
+    @staticmethod
+    def _export_safe_event(event: dict[str, Any]) -> dict[str, Any]:
+        safe = deepcopy(event)
+        observed = safe.get("observed")
+        if isinstance(observed, dict):
+            credential = observed.get("credential")
+            if isinstance(credential, dict):
+                credential.pop("password", None)
+        return safe
+
     def report(self, session_id: str) -> dict[str, Any] | None:
         bundle = self.get_session(session_id)
         if not bundle:
             return None
-        events = bundle["events"]
+        source_events = bundle["events"]
+        events = [self._export_safe_event(event) for event in source_events]
         credentials, commands, payloads, iocs, mappings, enrichments = [], [], [], [], [], []
         for event in events:
             credential = event["observed"].get("credential")
