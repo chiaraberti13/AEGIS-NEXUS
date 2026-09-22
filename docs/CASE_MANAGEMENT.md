@@ -1,41 +1,43 @@
-# Case management / Gestione dei casi
+# Case management / Gestione casi
 
 ## English
 
-AEGIS-NEXUS cases are analyst workspaces for grouping telemetry references, notes and investigation state without changing the provenance of the underlying evidence.
+AEGIS-NEXUS cases organize an investigation without changing the provenance of the underlying telemetry.
 
-A case stores:
+A case stores analyst-owned metadata: title, status, severity, summary, tags and notes. These fields are marked as analyst classifications or annotations. They are never promoted to observed facts.
 
-- analyst classification: title, status, severity, summary and tags;
-- analyst notes with immutable timestamps;
-- references to event and session identifiers;
-- an audit trail for creation, updates, evidence links/removals and notes.
+Evidence is linked by reference to an existing event or correlated session. The case store does not copy commands, payloads, credentials or enrichment into a second long-lived evidence store. This avoids silently extending telemetry retention. When the source event/session is removed by the configured retention policy, the case keeps the identifier and marks the evidence reference as unavailable.
 
-Case severity and status are **analyst assessments**, not observed facts. The API and UI expose this explicitly through `classification_provenance: analyst`.
+The case audit trail records creation, analyst updates, notes, evidence links and evidence removal. Notes are append-only through the current UI/API. Case reports include provenance labels and evidence availability.
 
-Evidence links do not copy attacker payloads, credentials or complete telemetry into the case tables. They reference the original event/session. If retention removes the source telemetry, the case keeps the identifier and marks the evidence as unavailable. This avoids silently extending telemetry retention through case creation.
+Resource controls:
+- maximum 1,000 evidence references per case;
+- maximum 500 analyst notes per case;
+- bounded title, summary, note and tag sizes;
+- operator authentication and API rate limiting apply to all case endpoints.
 
-Case JSON/CSV reports contain reference metadata and analyst annotations. They do not export cleartext credential secrets.
+CSV exports neutralize cells beginning with spreadsheet formula prefixes so attacker-controlled telemetry cannot become a formula when opened in spreadsheet software.
 
-Operators should define a retention policy for analyst notes and case metadata separately from raw honeypot telemetry. Do not paste secrets or unnecessary personal data into analyst notes.
+A case severity is an analyst assessment. It does not overwrite the severity stored on source telemetry. Closing a case also does not delete or modify source evidence.
 
 ---
 
 ## Italiano
 
-I casi di AEGIS-NEXUS sono workspace dell’analista per raggruppare riferimenti alla telemetria, note e stato dell’investigazione senza modificare la provenienza delle evidenze originali.
+I casi di AEGIS-NEXUS organizzano un'investigazione senza modificare la provenienza della telemetria sottostante.
 
-Un caso conserva:
+Un caso conserva metadati dell'analista: titolo, stato, severità, sintesi, tag e note. Questi campi sono marcati come classificazioni o annotazioni dell'analista e non vengono mai trasformati in fatti osservati.
 
-- classificazione dell’analista: titolo, stato, severità, sintesi e tag;
-- note dell’analista con timestamp immutabile;
-- riferimenti agli identificativi di eventi e sessioni;
-- audit trail di creazione, modifiche, collegamento/rimozione evidenze e note.
+Le evidenze vengono collegate tramite riferimento a un evento esistente o a una sessione correlata. Il case store non copia comandi, payload, credenziali o enrichment in un secondo archivio persistente. In questo modo il caso non prolunga implicitamente la retention della telemetria. Quando evento/sessione sorgente vengono eliminati dalla policy di retention, il caso conserva l'identificativo e marca il riferimento come non più disponibile.
 
-Severità e stato del caso sono **valutazioni dell’analista**, non fatti osservati. API e interfaccia lo rendono esplicito tramite `classification_provenance: analyst`.
+L'audit trail registra creazione, modifiche analista, note, collegamenti e rimozioni di evidenza. Le note sono append-only nell'interfaccia/API attuale. I report del caso includono provenienza e disponibilità dei riferimenti.
 
-I collegamenti alle evidenze non copiano payload, credenziali o telemetria completa nelle tabelle dei casi. Mantengono un riferimento all’evento/sessione originale. Se la retention elimina la telemetria sorgente, il caso conserva l’identificativo e marca l’evidenza come non più disponibile. In questo modo la creazione di un caso non estende implicitamente la retention della telemetria.
+Controlli sulle risorse:
+- massimo 1.000 riferimenti di evidenza per caso;
+- massimo 500 note analista per caso;
+- limiti su titolo, sintesi, note e tag;
+- autenticazione operatore e rate limiting anche sugli endpoint dei casi.
 
-I report JSON/CSV dei casi contengono metadata dei riferimenti e annotazioni dell’analista. Non esportano credenziali in chiaro.
+Gli export CSV neutralizzano le celle che iniziano con prefissi interpretabili come formule, evitando che telemetria controllata dall'attaccante venga eseguita come formula quando il file viene aperto in un foglio di calcolo.
 
-È necessario definire una retention separata per note e metadata dei casi rispetto alla telemetria honeypot. Non inserire nelle note segreti o dati personali non necessari.
+La severità del caso è una valutazione dell'analista e non sovrascrive la severità della telemetria sorgente. La chiusura di un caso non elimina né modifica le evidenze originali.
