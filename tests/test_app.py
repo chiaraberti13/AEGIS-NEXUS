@@ -301,3 +301,39 @@ def test_per_sensor_allowlist_rejects_cross_sensor_spoofing(tmp_path):
     assert status["authenticated"] is True
     assert status["sensor_auth_mode"] == "per_sensor_allowlist"
     assert status["sensor_allowlist_count"] == 2
+
+
+def test_json_report_never_exports_opted_in_raw_password(tmp_path, monkeypatch):
+    monkeypatch.setenv("AEGIS_STORE_CREDENTIAL_SECRETS", "true")
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "secret",
+    })
+    client = app.test_client()
+    created = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "secret"},
+        json={
+            "honeypot": "ssh-1",
+            "event_type": "credential",
+            "observed": {
+                "source_ip": "203.0.113.130",
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+                "credential": {"username": "admin", "password": "raw-opt-in-secret"},
+            },
+        },
+    )
+    assert created.status_code == 201
+    session_id = created.get_json()["session_id"]
+
+    detail = client.get(f"/api/v1/sessions/{session_id}").get_data(as_text=True)
+    assert "raw-opt-in-secret" in detail
+
+    report = client.get(f"/api/v1/reports/session/{session_id}")
+    assert report.status_code == 200
+    report_text = report.get_data(as_text=True)
+    assert "raw-opt-in-secret" not in report_text
+    assert "password_sha256" in report_text

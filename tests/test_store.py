@@ -132,6 +132,10 @@ def test_report_never_exports_cleartext_password(tmp_path, monkeypatch):
     assert credential["username"] == "root"
     assert "password" not in credential
     assert credential["password_sha256"]
+    assert "cleartext-fixture" not in str(report)
+    exported_credential = report["events"][0]["observed"]["credential"]
+    assert "password" not in exported_credential
+    assert exported_credential["password_sha256"]
 
 
 def test_case_references_survive_source_retention_without_copying_payload(tmp_path):
