@@ -76,6 +76,7 @@ class Store:
                     country TEXT, asn TEXT, latitude REAL, longitude REAL,
                     observed TEXT NOT NULL, enrichment TEXT NOT NULL, derived TEXT NOT NULL,
                     hypotheses TEXT NOT NULL, schema_version TEXT NOT NULL,
+                    collector_received_at TEXT NOT NULL,
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp DESC);
@@ -127,6 +128,15 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_case_evidence_case ON case_evidence(case_id, added_at);
                 CREATE INDEX IF NOT EXISTS idx_case_history_case ON case_history(case_id, timestamp);
             """)
+            event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(events)")}
+            if "collector_received_at" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN collector_received_at TEXT")
+                conn.execute("UPDATE events SET collector_received_at=timestamp WHERE collector_received_at IS NULL")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_received "
+                "ON events(collector_received_at ASC, id ASC)"
+            )
+
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(sessions)")}
             if "protocol" not in columns:
                 conn.execute("ALTER TABLE sessions ADD COLUMN protocol TEXT NOT NULL DEFAULT 'unknown'")
@@ -212,16 +222,18 @@ class Store:
         asn_data = asn.get("data") if isinstance(asn.get("data"), dict) else {}
         return data.get("country"), asn_data.get("asn"), data.get("latitude"), data.get("longitude")
 
-    def ingest(self, event: dict[str, Any]) -> dict[str, Any]:
+    def ingest(self, event: dict[str, Any], collector_received_at: str | None = None) -> dict[str, Any]:
         observed = event["observed"]
+        received_at = collector_received_at or datetime.now(timezone.utc).isoformat()
         country, asn, latitude, longitude = self._geo(event["enrichment"])
         with self.connect() as conn:
             session_id = self._select_or_create_session(conn, event)
             conn.execute("""
                 INSERT INTO events(
                     id,timestamp,honeypot,event_type,severity,source_ip,session_id,protocol,service,
-                    destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version,
+                    collector_received_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 event["id"], event["timestamp"], event["honeypot"], event["event_type"], event["severity"],
                 observed.get("source_ip"), session_id, observed.get("protocol"), observed.get("service"),
@@ -229,11 +241,11 @@ class Store:
                 json.dumps(event["observed"], ensure_ascii=False),
                 json.dumps(event["enrichment"], ensure_ascii=False),
                 json.dumps(event["derived"], ensure_ascii=False),
-                json.dumps(event["hypotheses"], ensure_ascii=False), event["schema_version"],
+                json.dumps(event["hypotheses"], ensure_ascii=False), event["schema_version"], received_at,
             ))
         self._ingest_since_maintenance += 1
         self.maintain()
-        return {**event, "session_id": session_id}
+        return {**event, "session_id": session_id, "collector_received_at": received_at}
 
     def maintain(self, force: bool = False) -> dict[str, int]:
         if not force and self._ingest_since_maintenance < 100:
@@ -247,7 +259,7 @@ class Store:
             overflow = max(0, int(count) - self.max_events)
             if overflow:
                 cur = conn.execute(
-                    "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY timestamp ASC LIMIT ?)",
+                    "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY collector_received_at ASC, id ASC LIMIT ?)",
                     (overflow,),
                 )
                 capacity_deleted = cur.rowcount
@@ -272,7 +284,7 @@ class Store:
             return 0
         cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
         with self.connect() as conn:
-            cur = conn.execute("DELETE FROM events WHERE timestamp < ?", (cutoff,))
+            cur = conn.execute("DELETE FROM events WHERE collector_received_at < ?", (cutoff,))
             deleted = cur.rowcount
             conn.execute("DELETE FROM sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM events)")
         return deleted
