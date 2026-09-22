@@ -11,6 +11,9 @@
     dashboard: null,
     enrichmentStatus: null,
     events: [],
+    eventsCursor: null,
+    eventsHasMore: false,
+    eventsLoadingOlder: false,
     cases: [],
     selectedCase: null,
     caseSeed: [],
@@ -96,6 +99,7 @@
       $("analytics-warning").textContent = t("analytics.truncated").replace("{limit}", String(state.dashboard.analysis.event_limit));
     }
     renderEnrichmentStatus();
+    renderEventPagination();
   }
 
   function renderEnrichmentStatus() {
@@ -364,6 +368,43 @@
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleString();
+  }
+
+  function renderEventPagination() {
+    const button = $("event-load-older");
+    if (!button) return;
+    button.hidden = !state.eventsHasMore && !state.eventsLoadingOlder;
+    button.disabled = state.eventsLoadingOlder;
+    button.textContent = t(state.eventsLoadingOlder ? "feed.loadingOlder" : "feed.loadOlder");
+  }
+
+  async function loadOlderEvents() {
+    if (state.eventsLoadingOlder || !state.eventsHasMore || !state.eventsCursor) return;
+    const requestCursor = state.eventsCursor;
+    state.eventsLoadingOlder = true;
+    renderEventPagination();
+    const params = feedParams();
+    params.set("cursor", requestCursor);
+    try {
+      const page = await getJSON("/api/v1/events?" + params.toString());
+      if (state.eventsCursor !== requestCursor) return;
+      const known = new Set(state.events.map((item) => item.id));
+      (page.items || []).forEach((item) => {
+        if (!known.has(item.id)) {
+          known.add(item.id);
+          state.events.push(item);
+        }
+      });
+      state.eventsCursor = page.next_cursor || null;
+      state.eventsHasMore = page.has_more === true;
+      renderFeed("event-feed", state.events, state.events.length || 120);
+    } catch (error) {
+      console.error("AEGIS historical feed pagination failed", error);
+      await refresh();
+    } finally {
+      state.eventsLoadingOlder = false;
+      renderEventPagination();
+    }
   }
 
   function renderFeed(rootId, events, limit = 120) {
@@ -1088,6 +1129,10 @@
       ]);
       state.dashboard = dashboard;
       state.events = events.items || [];
+      state.eventsCursor = events.next_cursor || null;
+      state.eventsHasMore = events.has_more === true;
+      state.eventsLoadingOlder = false;
+      renderEventPagination();
       $("kpi-events").textContent = String(dashboard.totals.events);
       $("kpi-ips").textContent = String(dashboard.totals.unique_source_ip);
       $("kpi-sessions").textContent = String(dashboard.totals.sessions);
@@ -1188,6 +1233,7 @@
     searchTimer = setTimeout(refresh, 250);
   });
 
+  $("event-load-older").addEventListener("click", loadOlderEvents);
   $("case-from-event").addEventListener("click", seedCaseFromSelected);
   $("case-new").addEventListener("click", () => resetCaseEditor([]));
   $("case-form").addEventListener("submit", saveCase);
