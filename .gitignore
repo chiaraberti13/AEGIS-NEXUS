@@ -15,3 +15,6 @@ build/
 # Operator-supplied GeoIP databases
 /geoip/
 *.mmdb
+
+# Operator-supplied threat context feeds
+/threat-context/
