@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .correlation import explicit_session_token, session_id_for, session_id_for_explicit, session_identity, should_join
+from .pagination import CursorError, decode_cursor, encode_cursor
 
 
 _EVENT_FILTERS = (
@@ -74,6 +75,7 @@ class Store:
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp DESC);
+                CREATE INDEX IF NOT EXISTS idx_events_page ON events(timestamp DESC, id DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_source ON events(source_ip, timestamp DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, timestamp ASC);
 
@@ -129,6 +131,10 @@ class Store:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_sessions_lookup_v2 "
                 "ON sessions(source_ip, honeypot, service, protocol, destination_port, last_seen)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_page "
+                "ON sessions(last_seen DESC, id DESC)"
             )
 
     def _select_or_create_session(self, conn: sqlite3.Connection, event: dict[str, Any]) -> str:
@@ -277,17 +283,26 @@ class Store:
                 params.append(value[:256])
         return clauses, params
 
-    def list_events(
+    def page_events(
         self,
         limit: int = 100,
         q: str | None = None,
         filters: dict[str, str] | None = None,
         hours: int | None = None,
-    ) -> list[dict[str, Any]]:
+        cursor: str | None = None,
+        scope: str = "",
+    ) -> dict[str, Any]:
+        bounded_limit = max(1, min(limit, 500))
         clauses, params = self._sql_filters(filters)
-        if hours is not None:
+        since: str | None = None
+        cursor_data: dict[str, Any] | None = None
+        if cursor:
+            cursor_data = decode_cursor(cursor, kind="events", scope=scope)
+            since = cursor_data.get("since")
+        elif hours is not None:
             bounded_hours = max(1, min(hours, 720))
             since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+        if since:
             clauses.append("timestamp >= ?")
             params.append(since)
         if q:
@@ -297,28 +312,84 @@ class Store:
             )
             needle = f"%{q[:128]}%"
             params.extend([needle] * 10)
+        if cursor_data:
+            clauses.append("(timestamp < ? OR (timestamp = ? AND id < ?))")
+            params.extend([cursor_data["position"], cursor_data["position"], cursor_data["id"]])
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
-        params.append(max(1, min(limit, 500)))
-        with self.connect() as conn:
-            rows = conn.execute(f"SELECT * FROM events{where} ORDER BY timestamp DESC LIMIT ?", params).fetchall()
-        return [self._decode(row) for row in rows]
-
-    def list_sessions(self, limit: int = 100, q: str | None = None) -> list[dict[str, Any]]:
-        params: list[Any] = []
-        where = ""
-        if q:
-            needle = f"%{q[:128]}%"
-            where = (
-                " WHERE source_ip LIKE ? OR honeypot LIKE ? OR service LIKE ? OR protocol LIKE ? OR id LIKE ?"
-            )
-            params.extend([needle] * 5)
-        params.append(max(1, min(limit, 300)))
+        params.append(bounded_limit + 1)
         with self.connect() as conn:
             rows = conn.execute(
-                f"SELECT * FROM sessions{where} ORDER BY last_seen DESC LIMIT ?",
+                f"SELECT * FROM events{where} ORDER BY timestamp DESC, id DESC LIMIT ?",
                 params,
             ).fetchall()
-        return [dict(row) for row in rows]
+        has_more = len(rows) > bounded_limit
+        rows = rows[:bounded_limit]
+        items = [self._decode(row) for row in rows]
+        next_cursor = None
+        if has_more and rows:
+            last = rows[-1]
+            next_cursor = encode_cursor(
+                "events",
+                position=str(last["timestamp"]),
+                row_id=str(last["id"]),
+                scope=scope,
+                since=since,
+            )
+        return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
+
+    def list_events(
+        self,
+        limit: int = 100,
+        q: str | None = None,
+        filters: dict[str, str] | None = None,
+        hours: int | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.page_events(limit=limit, q=q, filters=filters, hours=hours)["items"]
+
+    def page_sessions(
+        self,
+        limit: int = 100,
+        q: str | None = None,
+        cursor: str | None = None,
+        scope: str = "",
+    ) -> dict[str, Any]:
+        bounded_limit = max(1, min(limit, 300))
+        clauses: list[str] = []
+        params: list[Any] = []
+        cursor_data: dict[str, Any] | None = None
+        if q:
+            needle = f"%{q[:128]}%"
+            clauses.append(
+                "(source_ip LIKE ? OR honeypot LIKE ? OR service LIKE ? OR protocol LIKE ? OR id LIKE ?)"
+            )
+            params.extend([needle] * 5)
+        if cursor:
+            cursor_data = decode_cursor(cursor, kind="sessions", scope=scope)
+            clauses.append("(last_seen < ? OR (last_seen = ? AND id < ?))")
+            params.extend([cursor_data["position"], cursor_data["position"], cursor_data["id"]])
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        params.append(bounded_limit + 1)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM sessions{where} ORDER BY last_seen DESC, id DESC LIMIT ?",
+                params,
+            ).fetchall()
+        has_more = len(rows) > bounded_limit
+        rows = rows[:bounded_limit]
+        items = [dict(row) for row in rows]
+        next_cursor = None
+        if has_more and rows:
+            last = rows[-1]
+            next_cursor = encode_cursor(
+                "sessions",
+                position=str(last["last_seen"]),
+                row_id=str(last["id"]),
+                scope=scope,
+            )
+        return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
+
+    def list_sessions(self, limit: int = 100, q: str | None = None) -> list[dict[str, Any]]:
+        return self.page_sessions(limit=limit, q=q)["items"]
 
     @staticmethod
     def _session_summary(events: list[dict[str, Any]]) -> dict[str, Any]:
