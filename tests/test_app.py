@@ -331,7 +331,7 @@ def test_json_report_never_exports_opted_in_raw_password(tmp_path, monkeypatch):
     assert created.status_code == 201
     created_text = created.get_data(as_text=True)
     assert "raw-opt-in-secret" not in created_text
-    assert "password_sha256" in created_text
+    assert created.get_json().keys() == {"id", "session_id"}
     session_id = created.get_json()["session_id"]
 
     detail = client.get(f"/api/v1/sessions/{session_id}").get_data(as_text=True)
