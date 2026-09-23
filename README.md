@@ -38,6 +38,7 @@ The central design rule is provenance: **observed data, external enrichment, der
 - Native Suricata EVE JSON ingestion.
 - Bilingual IT/EN interface through central i18n dictionaries.
 - Hardened containers: non-root runtime, read-only filesystems, dropped capabilities, `no-new-privileges`, resource limits and separate management networks.
+- Per-sensor management CIDR binding: built-in decoy identities are accepted only from their expected internal subnet, while sensor trust zones cannot reach operator/UI APIs.
 - Linux host-side `DOCKER-USER` egress guard that blocks new decoy-initiated connections while preserving reply traffic for published honeypot ports.
 - Evidence Integrity with separate collector metadata, truncation/redaction indicators and credential fingerprints computed from the original value before storage bounds.
 - Time/capacity retention, online SQLite backups, readiness checks and bounded historical pagination.
