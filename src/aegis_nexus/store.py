@@ -492,14 +492,48 @@ class Store:
                     cves.add(str(item["cve_id"]))
             iocs += len(derived.get("ioc", []) or [])
         correlation_method = "temporal_fallback"
+        correlation_strength = "heuristic"
+        correlation_basis = [
+            "observed.source_ip",
+            "honeypot",
+            "observed.service",
+            "observed.protocol",
+            "observed.destination_port",
+            "event.timestamp",
+            "session_gap",
+        ]
         if any(event["observed"].get("sensor_session_id") for event in events):
             correlation_method = "sensor_connection_id"
+            correlation_strength = "explicit"
+            correlation_basis = [
+                "observed.source_ip",
+                "honeypot",
+                "observed.service",
+                "observed.protocol",
+                "observed.destination_port",
+                "observed.sensor_session_id",
+            ]
         elif any(event["observed"].get("flow_id") for event in events):
             correlation_method = "suricata_flow_id"
+            correlation_strength = "explicit"
+            correlation_basis = [
+                "observed.source_ip",
+                "honeypot",
+                "observed.service",
+                "observed.protocol",
+                "observed.destination_port",
+                "observed.flow_id",
+                "observed.flow_start",
+            ]
 
         return {
             "event_count": len(events),
             "correlation_method": correlation_method,
+            "correlation": {
+                "method": correlation_method,
+                "strength": correlation_strength,
+                "basis": correlation_basis,
+            },
             "severity": dict(severity),
             "event_types": [{"label": key, "value": value} for key, value in event_types.most_common()],
             "credentials": credentials,
@@ -1527,8 +1561,13 @@ class Store:
 
         for event in bundle["events"]:
             event_node = add("event", event["id"], "observed")
+            summary = bundle.get("summary", {})
             session_node = add("session", event["session_id"], "derived", {
-                "correlation": bundle.get("summary", {}).get("correlation_method", "temporal_fallback")
+                "correlation": deepcopy(summary.get("correlation") or {
+                    "method": summary.get("correlation_method", "temporal_fallback"),
+                    "strength": "heuristic",
+                    "basis": [],
+                })
             })
             ip_node = add("ip", event.get("source_ip"), "observed")
             asn_node = add("asn", event.get("asn"), "enrichment")
