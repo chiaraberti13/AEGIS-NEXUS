@@ -129,6 +129,11 @@ def test_frontend_shell_exposes_soc_workspace(tmp_path):
     html = client.get("/").get_data(as_text=True)
     for marker in (
         'data-view="dashboard"',
+        'data-view="alerts"',
+        'id="alert-list"',
+        'id="alert-detail-content"',
+        'id="case-from-alert"',
+        'id="alert-iocs"',
         'data-view="investigate"',
         'data-view="relations"',
         'data-view="study"',
