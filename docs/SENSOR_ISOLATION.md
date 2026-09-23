@@ -33,7 +33,9 @@ Do not assume that changing a published sensor's exposure network to Compose `in
 
 The standard Compose deployment assigns distinct ingest secrets to SSH, web and legacy decoys. The collector receives these through `AEGIS_SENSOR_KEYS`, which acts as an allowlist: when the map is configured, the shared `AEGIS_INGEST_API_KEY` is not accepted as a fallback and unknown sensor IDs are rejected. Signed requests therefore authenticate both payload integrity and the expected sensor identity.
 
-Suricata uses the optional `AEGIS_SURICATA_SENSOR_API_KEY`. Custom sensors must be added explicitly to the collector allowlist. Rotate one sensor key independently after suspected compromise instead of rotating every decoy at once.
+The built-in Compose sensors are additionally source-bound through `AEGIS_SENSOR_SOURCE_CIDRS` to explicit `ssh_mgmt`, `web_mgmt` and `legacy_mgmt` CIDRs. A valid sensor key presented from the wrong management subnet is rejected. Requests that originate from any configured sensor-management CIDR are also denied access to the dashboard, static UI, operator status and other operator APIs; only the two ingestion endpoints are reachable from those trust zones. This is a defense-in-depth control for a compromised decoy and does not replace key rotation or network isolation.
+
+Suricata uses the optional `AEGIS_SURICATA_SENSOR_API_KEY` and is intentionally not source-bound by the default Compose mapping because the included forwarder runs on the host. Custom sensors must be added explicitly to the collector allowlist and, when appropriate, to `AEGIS_SENSOR_SOURCE_CIDRS`. Rotate one sensor key independently after suspected compromise instead of rotating every decoy at once.
 
 ### Runtime containment
 
@@ -87,7 +89,9 @@ Non considerare la semplice modifica della rete di esposizione a Compose `intern
 
 Il deployment Compose standard assegna segreti di ingestione distinti ai decoy SSH, web e legacy. Il collector li riceve tramite `AEGIS_SENSOR_KEYS`, che funziona come allowlist: quando la mappa è configurata, `AEGIS_INGEST_API_KEY` condivisa non viene accettata come fallback e gli ID sensore sconosciuti vengono rifiutati. Le richieste firmate autenticano quindi sia l'integrità del payload sia l'identità attesa del sensore.
 
-Suricata utilizza la chiave opzionale `AEGIS_SURICATA_SENSOR_API_KEY`. I sensori personalizzati devono essere aggiunti esplicitamente all'allowlist del collector. Dopo una compromissione sospetta è possibile ruotare la singola chiave senza dover cambiare quelle di tutti i decoy.
+I sensori built-in del Compose sono inoltre vincolati alla sorgente tramite `AEGIS_SENSOR_SOURCE_CIDRS`, associata alle CIDR esplicite di `ssh_mgmt`, `web_mgmt` e `legacy_mgmt`. Una chiave sensore valida presentata dalla subnet management sbagliata viene rifiutata. Le richieste provenienti da una CIDR management sensore configurata non possono inoltre accedere a dashboard, UI statica, stato operatore o altre API operatore: da quelle trust zone restano raggiungibili soltanto i due endpoint di ingestione. È un controllo defense-in-depth per un decoy compromesso e non sostituisce rotazione delle chiavi o isolamento di rete.
+
+Suricata utilizza la chiave opzionale `AEGIS_SURICATA_SENSOR_API_KEY` e non viene vincolato a una sorgente dalla mappatura Compose predefinita perché il forwarder incluso viene eseguito sull'host. I sensori personalizzati devono essere aggiunti esplicitamente all'allowlist del collector e, quando opportuno, a `AEGIS_SENSOR_SOURCE_CIDRS`. Dopo una compromissione sospetta è possibile ruotare la singola chiave senza dover cambiare quelle di tutti i decoy.
 
 ### Contenimento runtime
 
