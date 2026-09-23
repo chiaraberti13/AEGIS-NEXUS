@@ -8,151 +8,372 @@
   <img src="https://img.shields.io/badge/licence-MIT-2EA043?style=flat-square" alt="MIT">
 </p>
 
-> Honeypot telemetry, SOC investigation, threat research and cybersecurity study in one evidence-first platform.
+# 🛡️ AEGIS-NEXUS
 
-<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="docs/INVESTIGATION.md">Investigation workflow</a> · <a href="LICENSE">MIT Licence</a></p>
+> Honeypot telemetry, SOC investigation, threat research and cybersecurity learning in one evidence-first platform.
+
+<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="docs/INVESTIGATION.md">Investigation workflow</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">MIT Licence</a></p>
 
 ---
 
-## What AEGIS-NEXUS is
+## 📖 What AEGIS-NEXUS is
 
-AEGIS-NEXUS is being built as a **Honeypot + SOC Analysis + Threat Research + Cybersecurity Learning Lab**. Its core rule is to keep raw observations, external enrichment, derived analysis and hypotheses separate.
+AEGIS-NEXUS is a **Honeypot + SOC Analysis + Threat Research + Cybersecurity Learning Lab**. It exposes deliberately limited SSH, web, FTP and Telnet decoys, collects hostile telemetry through authenticated sensor channels and turns it into an investigation workflow without executing attacker-supplied commands or payloads.
 
-The current implementation provides both the secure telemetry/investigation foundation and isolated low/intermediate-interaction SSH, web, FTP and Telnet decoys. Captured commands and payloads are emulated or recorded only; they are never executed.
+The central design rule is provenance: **observed data, external enrichment, derived analysis and hypotheses remain separate**. GeoIP, ASN, local threat-context matches, IOC extraction, MITRE ATT&CK mappings and CVE references are never presented as facts unless the stored evidence supports them.
 
-## Implemented now
+## ✨ Key capabilities
 
-- Isolated SSH, web, FTP and Telnet decoys plus a Flask collector with bounded JSON ingestion and fail-closed authentication; the standard Compose deployment uses distinct allowlisted keys per built-in sensor.
-- Normalized event schema with separate `observed`, `enrichment`, `derived` and `hypotheses` classes.
-- External enrichment requires provenance through `source` and `observed_at`.
-- Offline local GeoIP/ASN enrichment from operator-supplied MaxMind MMDB files; public source IPs are enriched at the collector without sending captured IPs to a third-party API.
-- Offline exact-match threat context from an operator-supplied JSON feed for observed IPs and derived URL/domain/hash artifacts; matches remain external context and never become automatic attribution, CVE or MITRE claims.
-- MITRE ATT&CK and CVE derived mappings are accepted only when they include both `rationale` and `evidence`.
-- Deterministic static artifact extraction from observed commands/payloads for URLs, domains, IP literals and common hash formats; extracted values remain evidence-backed derived artifacts, not automatic maliciousness claims.
-- Passwords are redacted by default while retaining a SHA-256 fingerprint and length; raw database storage is explicit opt-in only, and operator APIs/UI/reports never return the cleartext secret.
-- Persistent SQLite session correlation that prefers explicit decoy connection IDs or Suricata flow identity and falls back to source IP, honeypot, service, protocol, destination port and inactivity window when needed.
-- Investigation APIs and dedicated SOC views for events, IP profiles, sessions, timelines, relationship graphs, Threat Intelligence context and Study Mode.
-- Stable cursor pagination for historical event/session navigation; the live dashboard stays on current data while Investigation can append older matching telemetry.
-- Large single-session investigations are bounded by `AEGIS_SESSION_MAX_EVENTS`; when the retained session exceeds the limit, UI, graph, reports and Study Mode explicitly disclose that they are operating on the latest subset.
-- Evidence-preserving SOC case management with analyst classification, notes, tags, event/session references, audit trail, bounded lifecycle/closed-case retention and JSON/CSV/Markdown case reports.
-- SOC dashboard with global search/filters, attacks over time, unique-source-IP timeline, top source IPs, event types, severities, countries, ASN, ports, protocols, services, honeypots, usernames, password fingerprints, commands, payloads, IDS alerts, IOC, evidence-backed MITRE/CVE, temporal heatmap, aggregated interactive Attack Map and Live Feed.
-- IT/EN interface through a central i18n dictionary; telemetry is rendered as text rather than attacker-controlled HTML.
-- Collector-side receipt provenance separates sensor event time from collector acceptance time: `collector_received_at` is canonical for retention/operational freshness and `received_at` is a synchronized compatibility alias; investigation timelines keep the original event `timestamp`.
-- Continuous time-based retention with `AEGIS_RETENTION_DAYS` plus the storage ceiling `AEGIS_MAX_DB_EVENTS`; JSON/CSV/Markdown investigation exports never include cleartext passwords.
-- Readiness checks validate SQLite access and a configurable free-space floor; authenticated operations status reports telemetry receipt without claiming sensor online/offline state.
-- Hardened Docker runtime: non-root user, dropped capabilities, read-only root filesystem, `no-new-privileges`, bounded concurrent TCP connections, per-sensor management networks and localhost-only operator port.
-- Sensor containers with CPU/memory/PID/file-descriptor limits and separate exposure/management networks so SSH, web and legacy sensors do not share a lateral management segment.
-- Native evidence-first Suricata EVE JSON ingestion for IDS telemetry; alert signatures are preserved as observed IDS output without inventing MITRE or CVE mappings.
-- CI for Python tests and Docker image build.
+- Isolated SSH, web, FTP and Telnet decoys with per-sensor secrets and signed telemetry.
+- Flask/Gunicorn collector with bounded JSON ingestion, rate limits, hostile-input validation and SQLite persistence.
+- Session correlation using explicit decoy connection IDs or Suricata flow identity when available, with temporal fallback.
+- SOC dashboard with global search and filters, Live Feed, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, payloads, IDS alerts, IOC, MITRE/CVE and temporal heatmaps.
+- Interactive Attack Map based only on stored geolocation enrichment.
+- Event → IP → session → timeline → evidence → enrichment → relations → case → report → Study Mode investigation flow.
+- Evidence-preserving SOC case management with analyst notes, tags, audit trail and JSON/CSV/Markdown reports.
+- Offline GeoIP/ASN enrichment from operator-supplied MaxMind MMDB files.
+- Offline exact-match threat context from an operator-supplied JSON feed; captured indicators are never sent to third-party services.
+- Deterministic IOC/artifact extraction from observed commands and payloads without automatically labelling values as malicious.
+- Native Suricata EVE JSON ingestion.
+- Bilingual IT/EN interface through central i18n dictionaries.
+- Hardened containers: non-root runtime, read-only filesystems, dropped capabilities, `no-new-privileges`, resource limits and separate management networks.
+- Time/capacity retention, online SQLite backups, readiness checks and bounded historical pagination.
 
-## Data contract
+## 🗺️ Architecture Diagram
 
-Every event preserves the four provenance classes as distinct sections. No CVE, threat actor, malware family or MITRE technique is invented automatically: insufficient evidence means an empty field.
+```mermaid
+flowchart LR
+    traffic["🌐 Internet / authorized test traffic"]
+    operator["🧑‍💻 SOC Operator"]
+    suricata["🛡️ Suricata EVE JSON<br/>optional sensor"]
 
-```json
-{
-  "honeypot": "ssh-01",
-  "event_type": "command",
-  "severity": "medium",
-  "observed": {
-    "source_ip": "203.0.113.10",
-    "service": "ssh",
-    "protocol": "tcp",
-    "destination_port": 22,
-    "command": "uname -a"
-  },
-  "enrichment": {
-    "geo": {
-      "source": "provider-name",
-      "observed_at": "2026-09-22T18:00:00Z",
-      "data": {"country": "IT", "latitude": 41.9, "longitude": 12.5}
-    }
-  },
-  "derived": {
-    "mitre": [{
-      "technique_id": "T1059",
-      "rationale": "Command interpreter activity was directly observed",
-      "evidence": ["observed.command"]
-    }]
-  },
-  "hypotheses": []
-}
+    subgraph traps["Published decoys"]
+        ssh["🔐 SSH Decoy<br/>:2222<br/>emulated shell"]
+        web["🌐 Web Decoy<br/>:8080<br/>login / payload traps"]
+        legacy["📟 Legacy Decoy<br/>FTP :2121 · Telnet :2323"]
+    end
+
+    collector["📥 Collector + SOC Console<br/>Flask / Gunicorn · :8600<br/>auth · signatures · normalization · rate limits"]
+    sqlite[("🗄️ SQLite / aegis-data<br/>events · sessions · cases")]
+    geo["🗺️ GeoIP / ASN MMDB<br/>optional · read-only"]
+    threat["🔎 Local Threat Context JSON<br/>optional · exact match · read-only"]
+    backup["💾 Backup job<br/>ops profile"]
+
+    subgraph soc["SOC / Investigation layer"]
+        dashboard["Dashboard + Live Feed + Attack Map"]
+        investigation["Event · IP · Session · Timeline"]
+        analysis["IOC · TI · MITRE/CVE · Relations"]
+        cases["Cases · Reports · Study Mode"]
+    end
+
+    traffic --> ssh
+    traffic --> web
+    traffic --> legacy
+
+    ssh -->|"signed JSON · ssh_mgmt (internal)"| collector
+    web -->|"signed JSON · web_mgmt (internal)"| collector
+    legacy -->|"signed JSON · legacy_mgmt (internal)"| collector
+    suricata -->|"signed EVE JSON"| collector
+
+    geo -. "local enrichment" .-> collector
+    threat -. "local exact-match context" .-> collector
+    collector --> sqlite
+    collector --> dashboard
+    dashboard --> investigation --> analysis --> cases
+    operator -->|"127.0.0.1:8600 + operator key"| collector
+    backup -->|"SQLite online backup"| sqlite
+
+    classDef trap fill:#302527,stroke:#b98282,color:#f4f7f8;
+    classDef core fill:#23313a,stroke:#7193a7,color:#f4f7f8;
+    classDef data fill:#2b3035,stroke:#8b959e,color:#f4f7f8;
+    class ssh,web,legacy trap;
+    class collector,dashboard,investigation,analysis,cases core;
+    class sqlite,geo,threat,backup data;
 ```
 
-## Suricata ingestion
+The three decoys do **not** share a lateral management network. Each sensor has its own exposure network and its own `internal: true` management network connected to the collector. The SOC console is published only on `127.0.0.1:8600` by default.
 
-Send one Suricata EVE JSON event to `POST /api/v1/integrations/suricata/eve` using `X-Aegis-Key` and `X-Aegis-Sensor`. Alert events become `ids.alert`; AEGIS preserves the Suricata signature and network facts as observed data and leaves `derived` empty unless evidence-backed analysis is added separately.
+**Data flow:** `attacker/test traffic → decoy → signed normalized event → collector → validation/correlation/enrichment → SQLite → dashboard/investigation/cases/reports`.
 
-## Investigation flow
+## 🧭 Investigation model
+
+AEGIS keeps four provenance classes distinct:
+
+1. **Observed** — facts captured directly by a decoy or IDS.
+2. **Enrichment** — external/local context with source and timestamp provenance.
+3. **Derived** — evidence-backed artifacts, IOC, MITRE or CVE analysis.
+4. **Hypotheses** — analyst interpretation that must remain visibly separate from facts.
+
+The normal analyst flow is:
 
 `Dashboard → event → IP → session → timeline → credentials/commands/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relations → case → report → Study Mode`
 
-The relationship graph is generated only from data actually present in the selected session and marks nodes by provenance. External context is split explicitly between contextual enrichment (for example GeoIP/ASN) and true `threat_context` matches; source/timestamp provenance remains visible. Study Mode covers both the selected event and the complete correlated session while keeping analytical limitations visible. See [Investigation workflow](docs/INVESTIGATION.md).
+See [Investigation workflow](docs/INVESTIGATION.md) for the complete evidence model.
 
-## Quick start
+## 🚀 Installation Guide
 
-Requires Python 3.12+ or Docker Compose.
+### 1. Prerequisites
+
+Recommended deployment:
+
+- Git
+- Docker Engine / Docker Desktop
+- Docker Compose v2 (`docker compose version` must work)
+- free host ports `2222`, `8080`, `2121`, `2323` and local port `8600`
+
+Python 3.12+ is required only for direct local development.
+
+### 2. Clone the repository
+
+```bash
+git clone https://github.com/chiaraberti13/AEGIS-NEXUS.git
+cd AEGIS-NEXUS
+```
+
+### 3. Create the environment file
 
 ```bash
 cp .env.example .env
-# Replace the SSH, web, legacy and operator placeholder secrets with independent random values.
-# Set AEGIS_SURICATA_SENSOR_API_KEY only when Suricata ingestion is used.
-docker compose up -d --build
-# Dashboard: http://127.0.0.1:8600
 ```
 
-Development:
+Generate a different high-entropy value for **each** sensor and for the operator account:
 
 ```bash
-python -m pip install -e '.[dev]'
-pytest -q
-AEGIS_DATABASE_PATH=./data/aegis.db AEGIS_OPERATOR_API_KEY='replace-with-a-long-random-secret' flask --app aegis_nexus.app run --host 127.0.0.1 --port 8600
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-## Repository structure
+Run the command four times and place different values in `.env`:
 
 ```text
-src/aegis_nexus/
-├── app.py          Flask API, security headers and routes
-├── model.py        hostile-input normalization and provenance validation
-├── correlation.py session correlation rules
-├── enrichment.py  offline local GeoIP/ASN enrichment
-├── derivation.py  bounded static observed-artifact extraction
-├── threat_context.py offline exact-match external context
-├── casework.py     bounded analyst-case validation
-├── backup.py       reusable SQLite backup logic
-├── store.py        persistence, analytics, cases, relations and reports
-├── reporting.py    safe IT/EN Markdown investigation rendering
-├── study.py        deterministic IT/EN Study Mode
-├── sensors/        SSH, web, FTP/Telnet decoys and telemetry client
-├── templates/      SOC console
-└── static/         i18n, charts, map, live feed and investigation
-docs/
-├── CASE_MANAGEMENT.md
-├── DATA_PROVENANCE.md
-├── ENRICHMENT.md
-├── INVESTIGATION.md
-├── PRIVACY.md
-├── REPORTING.md
-├── SENSOR_ISOLATION.md
-├── THREAT_CONTEXT.md
-└── THREAT_MODEL.md
-tests/
+AEGIS_SSH_SENSOR_API_KEY=<random-secret-1>
+AEGIS_WEB_SENSOR_API_KEY=<random-secret-2>
+AEGIS_LEGACY_SENSOR_API_KEY=<random-secret-3>
+AEGIS_OPERATOR_API_KEY=<random-secret-4>
 ```
 
-## Privacy and attribution limits
+Keep `AEGIS_INGEST_API_KEY` empty when using the default per-sensor allowlist. Set `AEGIS_SURICATA_SENSOR_API_KEY` only if you ingest Suricata telemetry. Do not commit `.env`.
 
-Honeypot telemetry may contain IP addresses, credentials and payloads. Define a lawful purpose and retention period, restrict operator access and avoid publishing raw sensitive telemetry. IP geolocation, ASN ownership and Threat Intelligence reputation may point to VPNs, proxies, hosting infrastructure, NAT gateways or compromised systems and do not establish the identity of the human behind the activity.
+### 4. Build and start AEGIS-NEXUS
 
-See [Privacy & retention](docs/PRIVACY.md), [Local enrichment](docs/ENRICHMENT.md), the [Threat model](docs/THREAT_MODEL.md) and [Sensor isolation](docs/SENSOR_ISOLATION.md).
+```bash
+docker compose up -d --build
+```
 
-## Roadmap
+Check container state:
 
-Next implementation cycles focus on additional controlled threat-context adapters, export interoperability and additional sensor/IDS integrations. Capabilities are documented when they are implemented, not ahead of the code.
+```bash
+docker compose ps
+```
 
-## Licence & responsible use
+Check collector readiness:
 
-Released under the [MIT License](LICENSE). Use only on infrastructure you own or are explicitly authorized to monitor. Do not use AEGIS-NEXUS to counter-attack, access third-party systems or publish captured credentials/personal data.
+```bash
+curl -fsS http://127.0.0.1:8600/health
+```
+
+A healthy collector returns:
+
+```json
+{"status":"ok"}
+```
+
+### 5. Open the SOC console
+
+Open:
+
+**http://127.0.0.1:8600**
+
+When prompted, enter the value of `AEGIS_OPERATOR_API_KEY` from your `.env`. The browser stores it only in `sessionStorage`; closing the session or using the lock button removes it.
+
+## 🔌 Default ports
+
+| Component | Host endpoint | Purpose |
+|---|---:|---|
+| SSH decoy | `host:2222` | Emulated SSH interaction and command telemetry |
+| Web decoy | `http://host:8080` | Login, request and payload telemetry |
+| FTP decoy | `host:2121` | Legacy credential telemetry |
+| Telnet decoy | `host:2323` | Legacy credential/command telemetry |
+| SOC console | `http://127.0.0.1:8600` | Operator-only dashboard and API |
+
+The sensor ports can be changed with `AEGIS_PUBLIC_*_PORT` variables. Keep the operator console private; for remote access use TLS and perimeter controls such as the example in `deploy/nginx.conf.example`.
+
+## 🎮 Usage Instructions
+
+### Generate safe local telemetry
+
+Use only test credentials and test data. Never type real passwords into a honeypot.
+
+SSH:
+
+```bash
+ssh -p 2222 demo@127.0.0.1
+# inside the emulated shell try: pwd, ls, uname -a
+```
+
+Web:
+
+```bash
+curl http://127.0.0.1:8080/
+curl -X POST http://127.0.0.1:8080/login -d "username=demo&password=demo"
+curl "http://127.0.0.1:8080/internal-db?q=status"
+```
+
+FTP/Telnet with `nc`:
+
+```bash
+printf "USER demo\r\nPASS demo\r\nQUIT\r\n" | nc 127.0.0.1 2121
+printf "demo\r\ndemo\r\nhelp\r\n" | nc 127.0.0.1 2323
+```
+
+The resulting events appear in the Live Feed and become available to search, session correlation, the relationship graph, cases, reports and Study Mode.
+
+### Investigate an event
+
+1. Open **Dashboard** and use the time window, search bar or analytical charts to narrow the dataset.
+2. Select an item in **Live Feed** or on the **Attack Map**.
+3. Inspect the four provenance blocks: Observed, Enrichment, Derived and Hypotheses.
+4. Open the source **IP profile** and correlated **session**.
+5. Review timeline, credentials, commands, payloads, IDS alerts, IOC, Threat Intelligence context and evidence-backed MITRE/CVE mappings.
+6. Open **Relations** to inspect connections among events, sessions, IPs, ports, ASN, credentials, payloads, IOC and mappings.
+7. Create or update a **Case**, attach event/session evidence and add analyst notes.
+8. Export JSON/CSV/Markdown reports or open **Study Mode** for an evidence-based learning walkthrough.
+
+### Historical investigation
+
+The Live Feed shows recent telemetry. In the Investigation view use **Load older events** to append previous matching events without losing the current search/filter scope. Pagination uses stable opaque cursors rather than offsets.
+
+## 🌍 Optional local GeoIP / ASN enrichment
+
+AEGIS can use operator-supplied MaxMind GeoIP2/GeoLite2 MMDB files without sending captured IPs to an external API.
+
+```bash
+mkdir -p geoip
+# place GeoLite2-City.mmdb and GeoLite2-ASN.mmdb in ./geoip
+docker compose -f docker-compose.yml -f docker-compose.geoip.yml up -d --build
+```
+
+See [Local enrichment](docs/ENRICHMENT.md).
+
+## 🔎 Optional local Threat Context
+
+AEGIS can exact-match observed IPs and derived URL/domain/hash artifacts against a local JSON feed. Matches remain external context and do not automatically change severity, create CVEs/MITRE mappings or attribute an actor.
+
+```bash
+mkdir -p threat-context
+# place feed.json in ./threat-context
+docker compose -f docker-compose.yml -f docker-compose.threat-context.yml up -d --build
+```
+
+See [Local threat context](docs/THREAT_CONTEXT.md) for the feed schema.
+
+Both optional overlays can be enabled together:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.geoip.yml \
+  -f docker-compose.threat-context.yml \
+  up -d --build
+```
+
+## 🛡️ Suricata ingestion
+
+Set an independent `AEGIS_SURICATA_SENSOR_API_KEY` in `.env`, then forward EVE JSON records with the included helper:
+
+```bash
+export AEGIS_SENSOR_API_KEY="<same-suricata-secret>"
+python scripts/send_suricata_event.py --file /var/log/suricata/eve.json --sensor suricata-01
+```
+
+Suricata alerts are stored as observed IDS telemetry. AEGIS does not invent MITRE or CVE mappings from a signature alone.
+
+## ⚙️ Operations
+
+View collector logs:
+
+```bash
+docker compose logs -f collector
+```
+
+Restart the collector:
+
+```bash
+docker compose restart collector
+```
+
+Create an online SQLite backup:
+
+```bash
+docker compose --profile ops run --rm backup
+```
+
+Stop the stack without deleting the database volume:
+
+```bash
+docker compose down
+```
+
+Delete containers **and all persistent AEGIS data**:
+
+```bash
+docker compose down -v
+```
+
+> ⚠️ `docker compose down -v` permanently removes the `aegis-data` volume. Export or back up anything you need first.
+
+For operational details, readiness, retention, keys and TLS guidance see [Operations](docs/OPERATIONS.md).
+
+## 🧪 Local development
+
+```bash
+python -m pip install -e ".[dev]"
+pytest -q
+AEGIS_DATABASE_PATH=./data/aegis.db \
+AEGIS_OPERATOR_API_KEY="replace-with-a-long-random-secret" \
+flask --app aegis_nexus.app run --host 127.0.0.1 --port 8600
+```
+
+The complete Docker deployment is recommended when testing the decoys because it applies the network separation and container hardening defined by the project.
+
+## 📦 Repository structure
+
+```text
+AEGIS-NEXUS/
+├── docker-compose.yml                  default hardened stack
+├── docker-compose.geoip.yml            optional local GeoIP/ASN mount
+├── docker-compose.threat-context.yml   optional local threat-feed mount
+├── deploy/                             reverse-proxy example
+├── docs/                               security, privacy, operations and investigation docs
+├── scripts/                            backup, Suricata forwarding and utilities
+├── src/aegis_nexus/
+│   ├── app.py                          collector API and SOC console
+│   ├── store.py                        SQLite persistence, analytics and cases
+│   ├── model.py                        hostile-input normalization
+│   ├── correlation.py                  session correlation
+│   ├── derivation.py                   deterministic artifact extraction
+│   ├── enrichment.py                   local GeoIP/ASN
+│   ├── threat_context.py               local exact-match threat context
+│   ├── reporting.py                    safe investigation reports
+│   ├── study.py                        IT/EN Study Mode
+│   ├── sensors/                        SSH, web, FTP/Telnet decoys
+│   ├── static/                         dashboard JS, i18n and CSS
+│   └── templates/                      SOC console template
+└── tests/                              regression and security tests
+```
+
+## 🔒 Security, privacy and attribution
+
+Honeypot telemetry can contain IP addresses, credentials and attacker-controlled payloads. Define a lawful purpose and retention period, protect operator access and do not publish captured personal or secret data.
+
+GeoIP, ASN and threat-context matches describe infrastructure or external context. VPNs, proxies, NAT gateways, hosting providers and compromised systems can obscure the real origin. AEGIS-NEXUS does not automatically identify a person, threat actor, malware family or campaign.
+
+Internet-facing deployments should use a dedicated VM/VLAN, deny routes to production networks, restrict sensor egress at the host/network firewall and use TLS for remote operator access.
+
+Read [Security](SECURITY.md), [Threat model](docs/THREAT_MODEL.md), [Privacy & retention](docs/PRIVACY.md) and [Sensor isolation](docs/SENSOR_ISOLATION.md) before exposing decoys to the Internet.
+
+## 📄 Licence & responsible use
+
+Released under the [MIT License](LICENSE). Use AEGIS-NEXUS only on infrastructure you own or are explicitly authorized to monitor. Do not use it to counter-attack, access third-party systems or publish captured credentials/personal data.
 
 ---
 
