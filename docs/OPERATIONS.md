@@ -12,7 +12,7 @@ Generate independent high-entropy values for every sensor and for operator acces
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-The default Compose stack uses separate `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_SENSOR_API_KEY` and `AEGIS_LEGACY_SENSOR_API_KEY` values and builds the collector-side sensor allowlist from them. Configure `AEGIS_SURICATA_SENSOR_API_KEY` when Suricata ingestion is enabled. `AEGIS_INGEST_API_KEY` is a legacy/shared fallback for direct deployments and should remain empty when the allowlist is in use. Keep `AEGIS_OPERATOR_API_KEY` independent from all sensor secrets and never commit the resulting `.env`.
+The default Compose stack uses separate `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_SENSOR_API_KEY` and `AEGIS_LEGACY_SENSOR_API_KEY` values and builds the collector-side sensor allowlist from them. It also assigns explicit `AEGIS_*_MGMT_SUBNET` CIDRs and binds each built-in sensor identity to its expected source network; those networks are denied access to the operator/UI surface. Configure `AEGIS_SURICATA_SENSOR_API_KEY` when Suricata ingestion is enabled. `AEGIS_INGEST_API_KEY` is a legacy/shared fallback for direct deployments and should remain empty when the allowlist is in use. Keep `AEGIS_OPERATOR_API_KEY` independent from all sensor secrets and never commit the resulting `.env`.
 
 ### Signed telemetry
 
@@ -76,7 +76,7 @@ Genera valori indipendenti e ad alta entropia per ogni sensore e per l'accesso o
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Lo stack Compose predefinito usa valori distinti `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_SENSOR_API_KEY` e `AEGIS_LEGACY_SENSOR_API_KEY` e costruisce da questi l'allowlist del collector. Configura `AEGIS_SURICATA_SENSOR_API_KEY` quando abiliti l'ingestione Suricata. `AEGIS_INGEST_API_KEY` è un fallback legacy/condiviso per deployment diretti e dovrebbe restare vuoto quando è attiva l'allowlist. Mantieni `AEGIS_OPERATOR_API_KEY` distinta da tutte le chiavi sensore e non committare mai il file `.env` risultante.
+Lo stack Compose predefinito usa valori distinti `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_SENSOR_API_KEY` e `AEGIS_LEGACY_SENSOR_API_KEY` e costruisce da questi l'allowlist del collector. Assegna inoltre CIDR esplicite `AEGIS_*_MGMT_SUBNET` e vincola ogni identità sensore built-in alla rete sorgente attesa; tali reti non possono accedere alla superficie operatore/UI. Configura `AEGIS_SURICATA_SENSOR_API_KEY` quando abiliti l'ingestione Suricata. `AEGIS_INGEST_API_KEY` è un fallback legacy/condiviso per deployment diretti e dovrebbe restare vuoto quando è attiva l'allowlist. Mantieni `AEGIS_OPERATOR_API_KEY` distinta da tutte le chiavi sensore e non committare mai il file `.env` risultante.
 
 ### Telemetria firmata
 
@@ -85,7 +85,7 @@ Compose abilita per default la firma delle richieste sensore. Il sensore invia I
 Per file Suricata EVE JSON Lines:
 
 ```bash
-export AEGIS_SENSOR_API_KEY='...'
+export AEGIS_SURICATA_SENSOR_API_KEY='...'
 python scripts/send_suricata_event.py --file /var/log/suricata/eve.json --sensor suricata-01
 ```
 
