@@ -37,6 +37,7 @@ class Store:
         max_events: int = 500_000,
         analytics_max_events: int = 20_000,
         session_max_events: int = 5_000,
+        relation_max_nodes: int = 160,
         max_cases: int = 10_000,
         case_retention_days: int = 0,
     ):
@@ -45,6 +46,7 @@ class Store:
         self.max_events = max(1_000, max_events)
         self.analytics_max_events = max(100, min(analytics_max_events, self.max_events))
         self.session_max_events = max(100, min(int(session_max_events), self.max_events))
+        self.relation_max_nodes = max(32, min(int(relation_max_nodes), 1_000))
         self.max_cases = max(1, min(int(max_cases), 1_000_000))
         self.case_retention_days = max(0, min(int(case_retention_days), 3650))
         self._ingest_since_maintenance = 0
@@ -1541,13 +1543,18 @@ class Store:
 
         nodes: dict[str, dict[str, Any]] = {}
         edges: set[tuple[str, str, str]] = set()
+        graph_truncated = False
 
         def add(kind: str, value: Any, provenance: str, metadata: dict[str, Any] | None = None) -> str | None:
+            nonlocal graph_truncated
             if value in (None, ""):
                 return None
             label = str(value)
             digest = hashlib.sha256(f"{kind}\0{label}".encode("utf-8", "replace")).hexdigest()[:20]
             node_id = f"{kind}:{digest}"
+            if node_id not in nodes and len(nodes) >= self.relation_max_nodes:
+                graph_truncated = True
+                return None
             node = {
                 "id": node_id,
                 "kind": kind,
@@ -1561,6 +1568,8 @@ class Store:
 
         for event in bundle["events"]:
             event_node = add("event", event["id"], "observed")
+            if event_node is None and graph_truncated:
+                break
             summary = bundle.get("summary", {})
             session_node = add("session", event["session_id"], "derived", {
                 "correlation": deepcopy(summary.get("correlation") or {
@@ -1669,8 +1678,15 @@ class Store:
                     if event_node and ti_node:
                         edges.add((event_node, ti_node, "external_threat_context"))
 
+        graph_analysis = dict(bundle.get("analysis", {}))
+        graph_analysis.update({
+            "graph_truncated": graph_truncated,
+            "graph_node_limit": self.relation_max_nodes,
+            "graph_nodes_returned": len(nodes),
+            "graph_edges_returned": len(edges),
+        })
         return {
-            "analysis": bundle.get("analysis", {}),
+            "analysis": graph_analysis,
             "nodes": list(nodes.values()),
             "edges": [
                 {"source": source, "target": target, "relation": relation}
