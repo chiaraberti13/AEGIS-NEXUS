@@ -24,7 +24,7 @@ services:
   collector:
     build: .
     environment:
-      AEGIS_DATABASE_PATH: /data/aegis.db
+      AEGIS_DATABASE_PATH: ${AEGIS_DATABASE_PATH:-/data/aegis.db}
       AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:-}
       AEGIS_SENSOR_KEYS: >-
         {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}
@@ -150,7 +150,7 @@ services:
     command: ["python", "scripts/backup.py"]
     environment:
       AEGIS_DATABASE_PATH: /data/aegis.db
-      AEGIS_BACKUP_DIR: /data/backups
+      AEGIS_BACKUP_DIR: ${AEGIS_BACKUP_DIR:-/data/backups}
       AEGIS_BACKUP_KEEP: ${AEGIS_BACKUP_KEEP:-14}
     volumes:
       - aegis-data:/data
