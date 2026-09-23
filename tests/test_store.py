@@ -637,3 +637,71 @@ def test_existing_database_backfills_collector_receive_time_from_sensor_timestam
     store = Store(str(path), retention_days=0)
     migrated = store.get_event("53000000-0000-4000-8000-000000000001")
     assert migrated["collector_received_at"] == timestamp
+
+
+def test_store_preserves_normalization_provenance_in_dashboard_and_report(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "web.payload",
+        "observed": {
+            "source_ip": "203.0.113.123",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+            "payload": "X" * 5000,
+        },
+    })
+    saved = store.ingest(event)
+
+    restored = store.get_event(saved["id"])
+    normalization = restored["collector"]["normalization"]
+    assert normalization["truncated"] is True
+    assert normalization["lossy"] is True
+
+    dashboard = store.dashboard(hours=24, include_simulation=True)
+    assert dashboard["data_quality"]["events_with_truncation"] == 1
+    assert dashboard["data_quality"]["events_with_lossy_normalization"] == 1
+    assert dashboard["data_quality"]["truncated_strings"] == 1
+    assert "collector" in dashboard["analysis"]["provenance"]
+
+    report = store.report(saved["session_id"])
+    assert report["facts"]["events_with_field_truncation"] == 1
+    assert report["facts"]["events_with_lossy_normalization"] == 1
+    assert any("collector.normalization" in item for item in report["limitations"])
+
+
+def test_session_summary_discloses_correlation_strength(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    fallback = store.ingest(normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.124",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+        },
+    }))
+    fallback_bundle = store.get_session(fallback["session_id"])
+    assert fallback_bundle["summary"]["correlation"]["method"] == "temporal_fallback"
+    assert fallback_bundle["summary"]["correlation"]["strength"] == "heuristic"
+    assert "event.timestamp" in fallback_bundle["summary"]["correlation"]["basis"]
+
+    explicit = store.ingest(normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "203.0.113.125",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "sensor_session_id": "connection-125",
+        },
+    }))
+    explicit_bundle = store.get_session(explicit["session_id"])
+    assert explicit_bundle["summary"]["correlation"]["method"] == "sensor_connection_id"
+    assert explicit_bundle["summary"]["correlation"]["strength"] == "explicit"
+    graph = store.relations(explicit["session_id"])
+    session_node = next(node for node in graph["nodes"] if node["kind"] == "session")
+    assert session_node["metadata"]["correlation"]["strength"] == "explicit"
