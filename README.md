@@ -98,10 +98,10 @@ flowchart LR
 
     classDef trap fill:#302527,stroke:#b98282,color:#f4f7f8;
     classDef core fill:#23313a,stroke:#7193a7,color:#f4f7f8;
-    classDef data fill:#2b3035,stroke:#8b959e,color:#f4f7f8;
+    classDef storage fill:#2b3035,stroke:#8b959e,color:#f4f7f8;
     class ssh,web,legacy trap;
     class collector,dashboard,investigation,analysis,cases core;
-    class data,geo,threat,backup data;
+    class data,geo,threat,backup storage;
 ```
 
 The diagram reflects the default Compose topology. The three decoys do **not** share a lateral management network: each sensor has its own exposure network and its own `internal: true` management network connected to the collector. The exposure networks are ordinary Docker bridge networks, so they are **not an egress-control boundary**; Internet-facing deployments must restrict outbound traffic with the host/VLAN firewall.
@@ -137,8 +137,9 @@ Recommended deployment:
 - Docker Engine / Docker Desktop
 - Docker Compose v2 (`docker compose version` must work)
 - free host ports `2222`, `8080`, `2121`, `2323` and local port `8600`
+- for the CLI examples: `curl`, an OpenSSH client and `nc`/netcat
 
-Python 3.12+ is required only for direct local development.
+Python 3.12+ is required for direct local development and when running the included host-side Python utilities, such as the Suricata forwarder.
 
 ### 2. Clone the repository
 
@@ -239,7 +240,7 @@ FTP/Telnet with `nc`:
 
 ```bash
 printf "USER demo\r\nPASS demo\r\nQUIT\r\n" | nc 127.0.0.1 2121
-printf "demo\r\ndemo\r\nhelp\r\n" | nc 127.0.0.1 2323
+printf "demo\r\ndemo\r\n" | nc 127.0.0.1 2323
 ```
 
 The resulting events appear in the Live Feed and become available to search, session correlation, the relationship graph, cases, reports and Study Mode.
@@ -295,7 +296,7 @@ docker compose \
 
 ## 🛡️ Suricata ingestion
 
-Set an independent `AEGIS_SURICATA_SENSOR_API_KEY` in `.env`, then forward EVE JSON records with the included helper:
+Set an independent `AEGIS_SURICATA_SENSOR_API_KEY` in `.env`. The included helper is a host-side Python utility: install the package first (`python -m pip install -e .`), then forward EVE JSON records:
 
 ```bash
 export AEGIS_SURICATA_SENSOR_API_KEY="<suricata-secret-configured-in-.env>"
