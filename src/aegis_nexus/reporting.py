@@ -78,7 +78,7 @@ def session_markdown(report: dict[str, Any], lang: str = "it") -> str:
                 _bullet("Event ID", item.get("event_id")),
                 _bullet("Username", item.get("username")),
                 _bullet("Lunghezza ricevuta dal collector" if it else "Collector-received length", item.get("password_length")),
-                _bullet("SHA-256 ricevuto dal collector" if it else "Collector-received SHA-256", item.get("password_sha256")),
+                _bullet("SHA-256 password (ricevuto dal collector)" if it else "Password SHA-256 (collector-received)", item.get("password_sha256")),
                 _bullet("Cattura completa" if it else "Complete capture", item.get("password_complete")),
                 *([
                     _bullet("Lunghezza originale dichiarata dal sensore" if it else "Sensor-reported original length", item.get("sensor_reported_password_length")),
