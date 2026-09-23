@@ -85,6 +85,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         MAX_DB_EVENTS=int(os.getenv("AEGIS_MAX_DB_EVENTS", "500000")),
         ANALYTICS_MAX_EVENTS=int(os.getenv("AEGIS_ANALYTICS_MAX_EVENTS", "20000")),
         SESSION_MAX_EVENTS=int(os.getenv("AEGIS_SESSION_MAX_EVENTS", "5000")),
+        RELATION_MAX_NODES=int(os.getenv("AEGIS_RELATION_MAX_NODES", "160")),
         MAX_CASES=int(os.getenv("AEGIS_MAX_CASES", "10000")),
         CASE_RETENTION_DAYS=int(os.getenv("AEGIS_CASE_RETENTION_DAYS", "0")),
         MIN_FREE_BYTES=int(os.getenv("AEGIS_MIN_FREE_BYTES", "67108864")),
@@ -111,6 +112,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         max_events=int(app.config.get("MAX_DB_EVENTS", 500000)),
         analytics_max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)),
         session_max_events=int(app.config.get("SESSION_MAX_EVENTS", 5000)),
+        relation_max_nodes=int(app.config.get("RELATION_MAX_NODES", 160)),
         max_cases=int(app.config.get("MAX_CASES", 10000)),
         case_retention_days=int(app.config.get("CASE_RETENTION_DAYS", 0)),
     )
