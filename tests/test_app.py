@@ -137,6 +137,9 @@ def test_frontend_shell_exposes_soc_workspace(tmp_path):
         'id="ti-list"',
         'id="relation-graph"',
         'id="session-study"',
+        'id="detail-collector"',
+        'id="quality-lossy"',
+        'id="quality-truncated"',
     ):
         assert marker in html
 
