@@ -1168,6 +1168,30 @@
     });
   }
 
+  function renderAlertIocs(items) {
+    const root = $("alert-iocs");
+    if (!root) return;
+    root.replaceChildren();
+    if (!items?.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("alerts.noIocs");
+      root.append(empty);
+      return;
+    }
+    items.forEach((item) => {
+      const card = document.createElement("div");
+      card.className = "alert-evidence-item";
+      const label = document.createElement("strong");
+      label.textContent = String(item.type || "ioc") + " · " + String(item.value || "—");
+      const meta = document.createElement("span");
+      meta.className = "alert-list-meta";
+      meta.textContent = t("alerts.iocEvidence") + ": " + String(item.evidence_event_id || "—");
+      card.append(label, meta);
+      root.append(card);
+    });
+  }
+
   function renderAlertNotes(items) {
     const root = $("alert-notes");
     root.replaceChildren();
@@ -1206,6 +1230,7 @@
     $("alert-status").value = item.status || "new";
     $("alert-tags").value = (item.tags || []).join(", ");
     renderAlertEvidence(item.evidence || []);
+    renderAlertIocs(item.related_iocs || []);
     renderAlertNotes(item.notes || []);
     renderAlertList();
   }
@@ -1262,6 +1287,32 @@
     } catch (error) {
       console.error("AEGIS alert note failed", error);
     }
+  }
+
+  function seedCaseFromAlert() {
+    if (!state.selectedAlert) return;
+    const seen = new Set();
+    const seed = [];
+    const add = (type, id) => {
+      if (!id) return;
+      const key = type + ":" + id;
+      if (seen.has(key)) return;
+      seen.add(key);
+      seed.push({type, id});
+    };
+    add("alert", state.selectedAlert.id);
+    (state.selectedAlert.evidence || []).forEach((item) => {
+      if (item.type === "event") add("event", item.id);
+    });
+    (state.selectedAlert.related_session_ids || []).forEach((id) => add("session", id));
+    showView("cases");
+    resetCaseEditor(seed);
+    $("case-title").value = t("alerts.caseTitle")
+      .replace("{rule}", state.selectedAlert.rule_id || t("common.unknown"))
+      .replace("{ip}", state.selectedAlert.source_ip || t("common.unknown"));
+    $("case-severity").value = state.selectedAlert.severity || "medium";
+    $("case-tags").value = "alert, " + String(state.selectedAlert.rule_id || "detection");
+    loadCases();
   }
 
   async function loadCases() {
@@ -1590,6 +1641,7 @@
   $("alert-status-filter").addEventListener("change", loadAlerts);
   $("alert-severity-filter").addEventListener("change", loadAlerts);
   $("alert-save").addEventListener("click", saveAlert);
+  $("case-from-alert").addEventListener("click", seedCaseFromAlert);
   $("alert-note-form").addEventListener("submit", addAlertNote);
   $("case-from-event").addEventListener("click", seedCaseFromSelected);
   $("case-new").addEventListener("click", () => resetCaseEditor([]));
