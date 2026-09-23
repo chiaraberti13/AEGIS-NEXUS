@@ -131,3 +131,35 @@ def test_malformed_top_level_event_structures_are_rejected(field, value):
             "event_type": "connection",
             field: value,
         })
+
+
+def test_sensor_truncated_password_keeps_distinct_fingerprint_provenance(monkeypatch):
+    monkeypatch.delenv("AEGIS_STORE_CREDENTIAL_SECRETS", raising=False)
+    original = "z" * 5000
+    captured = original[:4096]
+    original_sha256 = hashlib.sha256(original.encode()).hexdigest()
+
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "credential",
+        "observed": {
+            "source_ip": "203.0.113.170",
+            "credential": {"username": "root", "password": captured},
+            "sensor_capture": {
+                "truncated": True,
+                "truncated_fields": [{
+                    "path": "observed.credential.password",
+                    "original_length": len(original),
+                    "captured_length": len(captured),
+                    "original_sha256": original_sha256,
+                }],
+            },
+        },
+    })
+
+    credential = event["observed"]["credential"]
+    assert credential["password_complete"] is False
+    assert credential["password_length"] == 4096
+    assert credential["password_sha256"] == hashlib.sha256(captured.encode()).hexdigest()
+    assert credential["sensor_reported_password_length"] == 5000
+    assert credential["sensor_reported_password_sha256"] == original_sha256
