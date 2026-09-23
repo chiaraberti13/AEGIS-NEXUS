@@ -35,14 +35,20 @@ def _load_sensor_keys(raw: str) -> dict[str, str]:
         return {}
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
+    except json.JSONDecodeError as exc:
+        raise ValueError("AEGIS_SENSOR_KEYS must be valid JSON") from exc
     if not isinstance(parsed, dict):
-        return {}
+        raise ValueError("AEGIS_SENSOR_KEYS must be a JSON object")
+
     result: dict[str, str] = {}
     for sensor, key in list(parsed.items())[:128]:
-        if isinstance(sensor, str) and isinstance(key, str) and sensor and key:
-            result[sensor[:96]] = key[:512]
+        if not isinstance(sensor, str) or not sensor or len(sensor) > 96:
+            raise ValueError("invalid sensor id in AEGIS_SENSOR_KEYS")
+        if key in (None, ""):
+            continue
+        if not isinstance(key, str):
+            raise ValueError(f"invalid secret for sensor {sensor}")
+        result[sensor] = key[:512]
     return result
 
 
