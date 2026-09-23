@@ -113,3 +113,21 @@ def test_opted_in_raw_credential_truncation_keeps_original_fingerprint(monkeypat
     normalization = event["collector"]["normalization"]
     assert normalization["truncated"] is True
     assert "observed.credential.password" in normalization["paths"]["truncated_strings"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("observed", []),
+        ("enrichment", []),
+        ("derived", []),
+        ("hypotheses", {}),
+    ],
+)
+def test_malformed_top_level_event_structures_are_rejected(field, value):
+    with pytest.raises(EventValidationError):
+        normalize_event({
+            "honeypot": "web-1",
+            "event_type": "connection",
+            field: value,
+        })
