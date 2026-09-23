@@ -21,15 +21,21 @@ The Compose topology is:
 
 `legacy_exposure → legacy-decoy → legacy_mgmt → collector`
 
-The telemetry path is narrow but it is not a hardware data diode. The three exposure networks are ordinary bridge networks and may provide outbound connectivity. If an Internet-facing sensor were compromised through a software defect, the Docker host firewall remains responsible for preventing access to production networks and for restricting outbound Internet access.
+The telemetry path is narrow but it is not a hardware data diode. The three exposure networks are ordinary bridge networks because published honeypot ports must remain reachable. Their CIDRs are explicitly configured through `AEGIS_SSH_EXPOSURE_SUBNET`, `AEGIS_WEB_EXPOSURE_SUBNET` and `AEGIS_LEGACY_EXPOSURE_SUBNET`.
 
-Do not assume that changing a published sensor's exposure network to Compose `internal: true` is a drop-in egress-control solution. Docker documents internal networks as externally isolated, and published-port behavior can differ with an internal-only attachment. AEGIS therefore keeps management networks internal and requires host/VLAN firewall policy for Internet-facing sensor egress. Test both inbound decoy reachability and outbound denial in the deployment environment.
+For a Linux Docker host, AEGIS includes an idempotent host-side egress guard. Run `sudo make egress-guard` after Docker is running and before Internet exposure. It installs a dedicated `AEGIS_NEXUS_EGRESS` chain reached from Docker's `DOCKER-USER` chain. For each sensor exposure CIDR it permits `ESTABLISHED,RELATED` reply traffic and drops new traffic initiated from the decoy exposure interface. Check the active rules with `sudo make egress-status`; remove only during maintenance with `sudo make egress-remove`.
+
+The guard intentionally does not modify container capabilities or execute inside a decoy. It preserves the published inbound ports and the original remote source address while reducing pivot risk. The configured CIDRs must not overlap host, LAN, VPN or production networks. Treat an absent guard as a degraded isolation state for Internet-facing deployment, and verify both inbound honeypot reachability and denied new outbound connections after every Docker/firewall upgrade.
+
+Do not assume that changing a published sensor's exposure network to Compose `internal: true` is a drop-in replacement. Internal-only bridge networking can affect port publishing on recent Docker releases. AEGIS therefore keeps management networks internal and enforces sensor egress at the host forwarding boundary.
 
 ### Sensor identity isolation
 
 The standard Compose deployment assigns distinct ingest secrets to SSH, web and legacy decoys. The collector receives these through `AEGIS_SENSOR_KEYS`, which acts as an allowlist: when the map is configured, the shared `AEGIS_INGEST_API_KEY` is not accepted as a fallback and unknown sensor IDs are rejected. Signed requests therefore authenticate both payload integrity and the expected sensor identity.
 
-Suricata uses the optional `AEGIS_SURICATA_SENSOR_API_KEY`. Custom sensors must be added explicitly to the collector allowlist. Rotate one sensor key independently after suspected compromise instead of rotating every decoy at once.
+The built-in Compose sensors are additionally source-bound through `AEGIS_SENSOR_SOURCE_CIDRS` to explicit `ssh_mgmt`, `web_mgmt` and `legacy_mgmt` CIDRs. A valid sensor key presented from the wrong management subnet is rejected. Requests that originate from any configured sensor-management CIDR are also denied access to the dashboard, static UI, operator status and other operator APIs; only the two ingestion endpoints are reachable from those trust zones. This is a defense-in-depth control for a compromised decoy and does not replace key rotation or network isolation.
+
+Suricata uses the optional `AEGIS_SURICATA_SENSOR_API_KEY` and is intentionally not source-bound by the default Compose mapping because the included forwarder runs on the host. Custom sensors must be added explicitly to the collector allowlist and, when appropriate, to `AEGIS_SENSOR_SOURCE_CIDRS`. Rotate one sensor key independently after suspected compromise instead of rotating every decoy at once.
 
 ### Runtime containment
 
@@ -71,15 +77,21 @@ La topologia Compose è:
 
 `legacy_exposure → legacy-decoy → legacy_mgmt → collector`
 
-Il percorso di telemetria è ristretto ma non equivale a un data diode hardware. Le tre reti di esposizione sono normali bridge Docker e possono consentire connettività in uscita. Se un sensore esposto a Internet venisse compromesso tramite un difetto software, il firewall dell'host deve comunque impedire l'accesso alle reti di produzione e limitare l'uscita verso Internet.
+Il percorso di telemetria è ristretto ma non equivale a un data diode hardware. Le tre reti di esposizione restano normali bridge Docker perché le porte pubblicate degli honeypot devono rimanere raggiungibili. Le relative CIDR sono configurate esplicitamente tramite `AEGIS_SSH_EXPOSURE_SUBNET`, `AEGIS_WEB_EXPOSURE_SUBNET` e `AEGIS_LEGACY_EXPOSURE_SUBNET`.
 
-Non considerare la semplice modifica della rete di esposizione di un sensore pubblicato a Compose `internal: true` come soluzione egress drop-in. Docker definisce le reti interne come isolate dall'esterno e il comportamento delle porte pubblicate può cambiare con un attachment esclusivamente interno. AEGIS mantiene quindi interne le reti management e richiede policy firewall host/VLAN per l'egress dei sensori esposti a Internet. Nel deployment reale verifica sia la raggiungibilità inbound del decoy sia il blocco outbound.
+Su un host Docker Linux AEGIS include ora un egress guard host-side idempotente. Esegui `sudo make egress-guard` dopo l'avvio di Docker e prima dell'esposizione a Internet. Lo script installa una chain dedicata `AEGIS_NEXUS_EGRESS` richiamata da `DOCKER-USER`: per ogni CIDR di esposizione consente il traffico di risposta `ESTABLISHED,RELATED` e blocca le nuove connessioni originate dall'interfaccia di esposizione del decoy. Verifica le regole con `sudo make egress-status`; rimuovile soltanto durante manutenzione con `sudo make egress-remove`.
+
+Il guard non aggiunge capability ai container e non viene eseguito dentro i decoy. Mantiene le porte inbound pubblicate e l'indirizzo sorgente remoto originale, riducendo il rischio di pivot. Le CIDR configurate non devono sovrapporsi a reti host, LAN, VPN o produzione. Per un deployment Internet-facing considera l'assenza del guard come isolamento degradato e verifica, dopo ogni aggiornamento Docker/firewall, sia la raggiungibilità inbound sia il blocco delle nuove connessioni outbound.
+
+Non considerare la semplice modifica della rete di esposizione a Compose `internal: true` come sostituto drop-in: sulle versioni recenti di Docker un attachment esclusivamente interno può influire sul port publishing. AEGIS mantiene quindi interne le reti management e applica il controllo egress al confine di forwarding dell'host.
 
 ### Isolamento dell'identità sensore
 
 Il deployment Compose standard assegna segreti di ingestione distinti ai decoy SSH, web e legacy. Il collector li riceve tramite `AEGIS_SENSOR_KEYS`, che funziona come allowlist: quando la mappa è configurata, `AEGIS_INGEST_API_KEY` condivisa non viene accettata come fallback e gli ID sensore sconosciuti vengono rifiutati. Le richieste firmate autenticano quindi sia l'integrità del payload sia l'identità attesa del sensore.
 
-Suricata utilizza la chiave opzionale `AEGIS_SURICATA_SENSOR_API_KEY`. I sensori personalizzati devono essere aggiunti esplicitamente all'allowlist del collector. Dopo una compromissione sospetta è possibile ruotare la singola chiave senza dover cambiare quelle di tutti i decoy.
+I sensori built-in del Compose sono inoltre vincolati alla sorgente tramite `AEGIS_SENSOR_SOURCE_CIDRS`, associata alle CIDR esplicite di `ssh_mgmt`, `web_mgmt` e `legacy_mgmt`. Una chiave sensore valida presentata dalla subnet management sbagliata viene rifiutata. Le richieste provenienti da una CIDR management sensore configurata non possono inoltre accedere a dashboard, UI statica, stato operatore o altre API operatore: da quelle trust zone restano raggiungibili soltanto i due endpoint di ingestione. È un controllo defense-in-depth per un decoy compromesso e non sostituisce rotazione delle chiavi o isolamento di rete.
+
+Suricata utilizza la chiave opzionale `AEGIS_SURICATA_SENSOR_API_KEY` e non viene vincolato a una sorgente dalla mappatura Compose predefinita perché il forwarder incluso viene eseguito sull'host. I sensori personalizzati devono essere aggiunti esplicitamente all'allowlist del collector e, quando opportuno, a `AEGIS_SENSOR_SOURCE_CIDRS`. Dopo una compromissione sospetta è possibile ruotare la singola chiave senza dover cambiare quelle di tutti i decoy.
 
 ### Contenimento runtime
 

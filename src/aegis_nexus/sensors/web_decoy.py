@@ -5,6 +5,7 @@ import re
 
 from flask import Flask, jsonify, request
 
+from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
 
 app = Flask(__name__)
@@ -20,15 +21,20 @@ def _remote_ip() -> str:
     return request.remote_addr or "0.0.0.0"
 
 
-def _base_observed() -> dict:
+def _base_observed(audit: dict | None = None) -> dict:
     return {
         "source_ip": _remote_ip(),
         "service": "http",
         "protocol": "tcp",
         "destination_port": int(os.getenv("AEGIS_WEB_PORT", "8080")),
         "method": request.method,
-        "path": request.path[:512],
-        "user_agent": (request.headers.get("User-Agent") or "")[:1024],
+        "path": bounded_text(request.path, 512, "observed.path", audit),
+        "user_agent": bounded_text(
+            request.headers.get("User-Agent") or "",
+            1024,
+            "observed.user_agent",
+            audit,
+        ),
     }
 
 
@@ -42,7 +48,9 @@ def headers(response):
 
 @app.get("/")
 def index():
-    sensor.emit("web.request", _base_observed())
+    audit: dict = {}
+    observed = attach_capture_metadata(_base_observed(audit), audit)
+    sensor.emit("web.request", observed)
     return """<!doctype html><html><head><meta charset="utf-8"><title>Meridian Portal</title></head>
 <body><h1>Meridian Logistics — Staff Portal</h1><form method="post" action="/login">
 <label>User <input name="username" maxlength="128"></label><label>Password <input type="password" name="password" maxlength="256"></label>
@@ -51,11 +59,21 @@ def index():
 
 @app.post("/login")
 def login():
-    username = (request.form.get("username") or "")[:128]
-    password = (request.form.get("password") or "")[:256]
-    observed = _base_observed()
+    audit: dict = {}
+    raw_username = request.form.get("username") or ""
+    raw_password = request.form.get("password") or ""
+    username = bounded_text(raw_username, 128, "observed.credential.username", audit)
+    password = bounded_text(
+        raw_password,
+        4096,
+        "observed.credential.password",
+        audit,
+        fingerprint_original=True,
+    )
+    observed = _base_observed(audit)
     observed["credential"] = {"username": username, "password": password}
-    combined = f"{username} {password}"
+    attach_capture_metadata(observed, audit)
+    combined = f"{raw_username} {raw_password}"
     derived = {}
     severity = "medium"
     if SQLI.search(combined):
@@ -67,15 +85,18 @@ def login():
 
 @app.route("/internal-db", methods=["GET", "POST"])
 def internal_db():
-    query = (request.values.get("q") or "")[:2048]
-    observed = _base_observed()
+    audit: dict = {}
+    raw_query = request.values.get("q") or ""
+    query = bounded_text(raw_query, 2048, "observed.payload", audit)
+    observed = _base_observed(audit)
     observed["payload"] = query
+    attach_capture_metadata(observed, audit)
     derived = {}
     severity = "low"
-    if SQLI.search(query):
+    if SQLI.search(raw_query):
         derived["ioc"] = [{"type": "pattern", "value": "sqli-like-input", "evidence": ["observed.payload"]}]
         severity = "high"
-    if SHELLISH.search(query):
+    if SHELLISH.search(raw_query):
         derived.setdefault("ioc", []).append({"type": "pattern", "value": "command-staging-like-input", "evidence": ["observed.payload"]})
         severity = "high"
     sensor.emit("web.payload", observed, severity, derived)
@@ -84,12 +105,15 @@ def internal_db():
 
 @app.get("/viewer")
 def viewer():
-    document = (request.args.get("doc") or "")[:2048]
-    observed = _base_observed()
+    audit: dict = {}
+    raw_document = request.args.get("doc") or ""
+    document = bounded_text(raw_document, 2048, "observed.payload", audit)
+    observed = _base_observed(audit)
     observed["payload"] = document
+    attach_capture_metadata(observed, audit)
     derived = {}
     severity = "low"
-    if TRAVERSAL.search(document):
+    if TRAVERSAL.search(raw_document):
         derived["ioc"] = [{"type": "pattern", "value": "path-traversal-like-input", "evidence": ["observed.payload"]}]
         severity = "high"
     sensor.emit("web.payload", observed, severity, derived)

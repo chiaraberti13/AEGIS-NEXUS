@@ -77,8 +77,13 @@ def session_markdown(report: dict[str, Any], lang: str = "it") -> str:
             lines.extend([
                 _bullet("Event ID", item.get("event_id")),
                 _bullet("Username", item.get("username")),
-                _bullet("Lunghezza password" if it else "Password length", item.get("password_length")),
-                _bullet("SHA-256 password", item.get("password_sha256")),
+                _bullet("Lunghezza ricevuta dal collector" if it else "Collector-received length", item.get("password_length")),
+                _bullet("SHA-256 password (ricevuto dal collector)" if it else "Password SHA-256 (collector-received)", item.get("password_sha256")),
+                _bullet("Cattura completa" if it else "Complete capture", item.get("password_complete")),
+                *([
+                    _bullet("Lunghezza originale dichiarata dal sensore" if it else "Sensor-reported original length", item.get("sensor_reported_password_length")),
+                    _bullet("SHA-256 originale dichiarato dal sensore" if it else "Sensor-reported original SHA-256", item.get("sensor_reported_password_sha256")),
+                ] if item.get("password_complete") is False else []),
                 "",
             ])
     else:
@@ -169,6 +174,14 @@ def session_markdown(report: dict[str, Any], lang: str = "it") -> str:
             _code(event.get("observed") or {}),
             "",
         ])
+        collector = event.get("collector") if isinstance(event.get("collector"), dict) else {}
+        if collector:
+            lines.extend([
+                "#### " + ("METADATI COLLECTOR" if it else "COLLECTOR METADATA"),
+                "",
+                _code(collector),
+                "",
+            ])
         if event.get("enrichment"):
             lines.extend(["#### " + ("ENRICHMENT ESTERNO" if it else "EXTERNAL ENRICHMENT"), "", _code(event["enrichment"]), ""])
         if event.get("derived"):

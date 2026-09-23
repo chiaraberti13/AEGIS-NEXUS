@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import socketserver
 import time
@@ -7,6 +8,7 @@ import uuid
 
 import paramiko
 
+from .capture import attach_capture_metadata, bounded_text, mark_truncation
 from .client import SensorClient
 from .server import BoundedThreadingTCPServer
 
@@ -38,15 +40,26 @@ class AegisSSHServer(paramiko.ServerInterface):
         self.username = ""
 
     def check_auth_password(self, username: str, password: str):
-        self.username = username[:128]
-        self.client.emit(
-            "credential",
-            {
-                **_base_observed(self.source_ip, self.sensor_session_id),
-                "credential": {"username": self.username, "password": password[:256]},
-            },
-            "medium",
+        audit: dict = {}
+        self.username = bounded_text(
+            username,
+            128,
+            "observed.credential.username",
+            audit,
         )
+        captured_password = bounded_text(
+            password,
+            4096,
+            "observed.credential.password",
+            audit,
+            fingerprint_original=True,
+        )
+        observed = {
+            **_base_observed(self.source_ip, self.sensor_session_id),
+            "credential": {"username": self.username, "password": captured_password},
+        }
+        attach_capture_metadata(observed, audit)
+        self.client.emit("credential", observed, "medium")
         return paramiko.AUTH_SUCCESSFUL
 
     def get_allowed_auths(self, username: str):
@@ -85,6 +98,38 @@ def _fake_command(command: str) -> str:
     return f"bash: {clean.split()[0][:64]}: command not found\n"
 
 
+def _read_command(channel) -> tuple[str | None, dict]:
+    """Read one hostile command with bounded memory and explicit truncation metadata."""
+    prefix = bytearray()
+    original_length = 0
+    digest = hashlib.sha256()
+    truncated = False
+
+    while True:
+        chunk = channel.recv(256)
+        if not chunk:
+            return None, {}
+        for value in chunk:
+            if value in (10, 13):
+                audit: dict = {}
+                if truncated:
+                    mark_truncation(
+                        audit,
+                        "observed.command",
+                        original_length=original_length,
+                        captured_length=len(prefix),
+                        original_sha256=digest.hexdigest(),
+                    )
+                command = bytes(prefix).decode("utf-8", "replace").strip()
+                return command, audit
+            original_length += 1
+            digest.update(bytes((value,)))
+            if len(prefix) < MAX_COMMAND:
+                prefix.append(value)
+            else:
+                truncated = True
+
+
 class SSHHandler(socketserver.BaseRequestHandler):
     sensor = SensorClient("ssh-decoy-01")
 
@@ -107,27 +152,19 @@ class SSHHandler(socketserver.BaseRequestHandler):
                 return
             channel.settimeout(30)
             channel.send("Ubuntu 22.04.5 LTS\r\n\r\nops@meridian-edge-01:~$ ")
-            buffer = b""
             while transport.is_active():
-                chunk = channel.recv(256)
-                if not chunk:
+                command, audit = _read_command(channel)
+                if command is None:
                     break
-                buffer += chunk
-                if len(buffer) > MAX_COMMAND:
-                    buffer = buffer[:MAX_COMMAND]
-                if b"\n" not in buffer and b"\r" not in buffer:
-                    continue
-                raw = buffer.replace(b"\r", b"\n").split(b"\n", 1)[0]
-                buffer = b""
-                command = raw.decode("utf-8", "replace").strip()[:MAX_COMMAND]
                 if not command:
                     channel.send("ops@meridian-edge-01:~$ ")
                     continue
-                self.sensor.emit(
-                    "command",
-                    {**_base_observed(source_ip, sensor_session_id), "command": command},
-                    "medium",
-                )
+                observed = {
+                    **_base_observed(source_ip, sensor_session_id),
+                    "command": command,
+                }
+                attach_capture_metadata(observed, audit)
+                self.sensor.emit("command", observed, "medium")
                 response = _fake_command(command)
                 if response == "__EXIT__":
                     channel.send("logout\r\n")

@@ -15,7 +15,10 @@ jobs:
       - run: python -m pip install -e '.[dev]'
       - run: python -m compileall -q src
       - run: python -m py_compile scripts/smoke_test.py scripts/send_suricata_event.py scripts/backup.py
-      - run: make -n install test run up down ps smoke logs backup
+      - run: bash -n scripts/egress_guard.sh
+      - run: bash scripts/egress_guard.sh validate
+      - run: '! AEGIS_SSH_EXPOSURE_SUBNET=999.0.0.0/24 bash scripts/egress_guard.sh validate'
+      - run: make -n install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove
       - run: node --check src/aegis_nexus/static/app.js
       - run: node --check src/aegis_nexus/static/i18n.js
       - run: pytest -q

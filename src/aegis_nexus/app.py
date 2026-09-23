@@ -35,14 +35,43 @@ def _load_sensor_keys(raw: str) -> dict[str, str]:
         return {}
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
+    except json.JSONDecodeError as exc:
+        raise ValueError("AEGIS_SENSOR_KEYS must be valid JSON") from exc
     if not isinstance(parsed, dict):
-        return {}
+        raise ValueError("AEGIS_SENSOR_KEYS must be a JSON object")
+
     result: dict[str, str] = {}
     for sensor, key in list(parsed.items())[:128]:
-        if isinstance(sensor, str) and isinstance(key, str) and sensor and key:
-            result[sensor[:96]] = key[:512]
+        if not isinstance(sensor, str) or not sensor or len(sensor) > 96:
+            raise ValueError("invalid sensor id in AEGIS_SENSOR_KEYS")
+        if key in (None, ""):
+            continue
+        if not isinstance(key, str):
+            raise ValueError(f"invalid secret for sensor {sensor}")
+        result[sensor] = key[:512]
+    return result
+
+
+def _load_sensor_source_cidrs(raw: str) -> dict[str, ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("AEGIS_SENSOR_SOURCE_CIDRS must be valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("AEGIS_SENSOR_SOURCE_CIDRS must be a JSON object")
+
+    result: dict[str, ipaddress.IPv4Network | ipaddress.IPv6Network] = {}
+    for sensor, cidr in list(parsed.items())[:128]:
+        if not isinstance(sensor, str) or not sensor or len(sensor) > 96:
+            raise ValueError("invalid sensor id in AEGIS_SENSOR_SOURCE_CIDRS")
+        if not isinstance(cidr, str) or not cidr:
+            raise ValueError(f"invalid source CIDR for sensor {sensor}")
+        try:
+            result[sensor] = ipaddress.ip_network(cidr, strict=False)
+        except ValueError as exc:
+            raise ValueError(f"invalid source CIDR for sensor {sensor}") from exc
     return result
 
 
@@ -81,10 +110,12 @@ def create_app(test_config: dict | None = None) -> Flask:
         DATABASE_PATH=os.getenv("AEGIS_DATABASE_PATH", "./data/aegis.db"),
         INGEST_API_KEY=os.getenv("AEGIS_INGEST_API_KEY", ""),
         SENSOR_KEYS=_load_sensor_keys(os.getenv("AEGIS_SENSOR_KEYS", "")),
+        SENSOR_SOURCE_CIDRS=_load_sensor_source_cidrs(os.getenv("AEGIS_SENSOR_SOURCE_CIDRS", "")),
         RETENTION_DAYS=int(os.getenv("AEGIS_RETENTION_DAYS", "30")),
         MAX_DB_EVENTS=int(os.getenv("AEGIS_MAX_DB_EVENTS", "500000")),
         ANALYTICS_MAX_EVENTS=int(os.getenv("AEGIS_ANALYTICS_MAX_EVENTS", "20000")),
         SESSION_MAX_EVENTS=int(os.getenv("AEGIS_SESSION_MAX_EVENTS", "5000")),
+        RELATION_MAX_NODES=int(os.getenv("AEGIS_RELATION_MAX_NODES", "160")),
         MAX_CASES=int(os.getenv("AEGIS_MAX_CASES", "10000")),
         CASE_RETENTION_DAYS=int(os.getenv("AEGIS_CASE_RETENTION_DAYS", "0")),
         MIN_FREE_BYTES=int(os.getenv("AEGIS_MIN_FREE_BYTES", "67108864")),
@@ -111,6 +142,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         max_events=int(app.config.get("MAX_DB_EVENTS", 500000)),
         analytics_max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)),
         session_max_events=int(app.config.get("SESSION_MAX_EVENTS", 5000)),
+        relation_max_nodes=int(app.config.get("RELATION_MAX_NODES", 160)),
         max_cases=int(app.config.get("MAX_CASES", 10000)),
         case_retention_days=int(app.config.get("CASE_RETENTION_DAYS", 0)),
     )
@@ -157,10 +189,45 @@ def create_app(test_config: dict | None = None) -> Flask:
             return str(sensor_keys.get(sensor_id) or "")
         return str(app.config.get("INGEST_API_KEY", ""))
 
+    def remote_ip_address():
+        try:
+            return ipaddress.ip_address(request.remote_addr or "")
+        except ValueError:
+            return None
+
+    def sensor_source_allowed(sensor_id: str) -> bool:
+        source_cidrs = app.config.get("SENSOR_SOURCE_CIDRS") or {}
+        network = source_cidrs.get(sensor_id)
+        if network is None:
+            return True
+        if isinstance(network, str):
+            try:
+                network = ipaddress.ip_network(network, strict=False)
+            except ValueError:
+                return False
+        remote = remote_ip_address()
+        return remote is not None and remote.version == network.version and remote in network
+
+    def remote_is_sensor_network() -> bool:
+        remote = remote_ip_address()
+        if remote is None:
+            return False
+        for network in (app.config.get("SENSOR_SOURCE_CIDRS") or {}).values():
+            if isinstance(network, str):
+                try:
+                    network = ipaddress.ip_network(network, strict=False)
+                except ValueError:
+                    continue
+            if remote.version == network.version and remote in network:
+                return True
+        return False
+
     def sensor_authorized(sensor_id: str, raw_body: bytes) -> bool:
         supplied_key = request.headers.get("X-Aegis-Key", "")
         supplied_sensor = request.headers.get("X-Aegis-Sensor", "")
         if supplied_sensor and supplied_sensor != sensor_id:
+            return False
+        if not sensor_source_allowed(sensor_id):
             return False
         expected = sensor_secret(sensor_id)
         if not expected or not hmac.compare_digest(expected, supplied_key):
@@ -183,12 +250,18 @@ def create_app(test_config: dict | None = None) -> Flask:
         return bool(supplied) and hmac.compare_digest(expected, supplied)
 
     @app.before_request
-    def protect_operator_api():
+    def protect_trust_boundaries():
+        sensor_ingest = (
+            request.method == "POST"
+            and request.path in {"/api/v1/events", "/api/v1/integrations/suricata/eve"}
+        )
+        if remote_is_sensor_network() and not sensor_ingest:
+            return jsonify({"error": "sensor_network_denied"}), 403
         if not request.path.startswith("/api/v1/"):
             return None
-        if request.path == "/api/v1/operator/status":
+        if sensor_ingest:
             return None
-        if request.method == "POST" and request.path in {"/api/v1/events", "/api/v1/integrations/suricata/eve"}:
+        if request.path == "/api/v1/operator/status":
             return None
         if not operator_authorized():
             return jsonify({"error": "operator_unauthorized"}), 401
@@ -239,6 +312,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                 "shared_key" if app.config.get("INGEST_API_KEY") else "unconfigured"
             )
             payload["sensor_allowlist_count"] = len(sensor_keys)
+            payload["sensor_source_binding_count"] = len(app.config.get("SENSOR_SOURCE_CIDRS") or {})
         return jsonify(payload)
 
     @app.get("/api/v1/operations/status")

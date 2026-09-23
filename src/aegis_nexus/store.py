@@ -37,6 +37,7 @@ class Store:
         max_events: int = 500_000,
         analytics_max_events: int = 20_000,
         session_max_events: int = 5_000,
+        relation_max_nodes: int = 160,
         max_cases: int = 10_000,
         case_retention_days: int = 0,
     ):
@@ -45,6 +46,7 @@ class Store:
         self.max_events = max(1_000, max_events)
         self.analytics_max_events = max(100, min(analytics_max_events, self.max_events))
         self.session_max_events = max(100, min(int(session_max_events), self.max_events))
+        self.relation_max_nodes = max(32, min(int(relation_max_nodes), 1_000))
         self.max_cases = max(1, min(int(max_cases), 1_000_000))
         self.case_retention_days = max(0, min(int(case_retention_days), 3650))
         self._ingest_since_maintenance = 0
@@ -78,7 +80,7 @@ class Store:
                     session_id TEXT NOT NULL, protocol TEXT, service TEXT, destination_port INTEGER,
                     country TEXT, asn TEXT, latitude REAL, longitude REAL,
                     observed TEXT NOT NULL, enrichment TEXT NOT NULL, derived TEXT NOT NULL,
-                    hypotheses TEXT NOT NULL, schema_version TEXT NOT NULL,
+                    hypotheses TEXT NOT NULL, collector TEXT NOT NULL DEFAULT '{}', schema_version TEXT NOT NULL,
                     collector_received_at TEXT NOT NULL,
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
                 );
@@ -142,6 +144,8 @@ class Store:
                     "UPDATE events SET collector_received_at=COALESCE(received_at, timestamp) "
                     "WHERE collector_received_at IS NULL"
                 )
+            if "collector" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN collector TEXT NOT NULL DEFAULT '{}'")
             conn.execute(
                 "UPDATE events SET received_at=collector_received_at "
                 "WHERE received_at IS NULL AND collector_received_at IS NOT NULL"
@@ -245,9 +249,9 @@ class Store:
             conn.execute("""
                 INSERT INTO events(
                     id,timestamp,received_at,honeypot,event_type,severity,source_ip,session_id,protocol,service,
-                    destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version,
+                    destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,collector,schema_version,
                     collector_received_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 event["id"], event["timestamp"], received_at, event["honeypot"], event["event_type"], event["severity"],
                 observed.get("source_ip"), session_id, observed.get("protocol"), observed.get("service"),
@@ -255,7 +259,9 @@ class Store:
                 json.dumps(event["observed"], ensure_ascii=False),
                 json.dumps(event["enrichment"], ensure_ascii=False),
                 json.dumps(event["derived"], ensure_ascii=False),
-                json.dumps(event["hypotheses"], ensure_ascii=False), event["schema_version"], received_at,
+                json.dumps(event["hypotheses"], ensure_ascii=False),
+                json.dumps(event.get("collector", {}), ensure_ascii=False),
+                event["schema_version"], received_at,
             ))
         self._ingest_since_maintenance += 1
         self.maintain()
@@ -295,8 +301,9 @@ class Store:
     @staticmethod
     def _decode(row: sqlite3.Row) -> dict[str, Any]:
         data = dict(row)
-        for field in ("observed", "enrichment", "derived", "hypotheses"):
-            data[field] = json.loads(data[field])
+        for field in ("observed", "enrichment", "derived", "hypotheses", "collector"):
+            raw = data.get(field)
+            data[field] = json.loads(raw) if isinstance(raw, str) and raw else {}
         observed = data.get("observed")
         if isinstance(observed, dict):
             credential = observed.get("credential")
@@ -372,7 +379,8 @@ class Store:
         if q:
             clauses.append(
                 "(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR protocol LIKE ? OR "
-                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR observed LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
+                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR "
+                "json_remove(observed, '$.credential.password') LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
             )
             needle = f"%{q[:128]}%"
             params.extend([needle] * 10)
@@ -487,14 +495,48 @@ class Store:
                     cves.add(str(item["cve_id"]))
             iocs += len(derived.get("ioc", []) or [])
         correlation_method = "temporal_fallback"
+        correlation_strength = "heuristic"
+        correlation_basis = [
+            "observed.source_ip",
+            "honeypot",
+            "observed.service",
+            "observed.protocol",
+            "observed.destination_port",
+            "event.timestamp",
+            "session_gap",
+        ]
         if any(event["observed"].get("sensor_session_id") for event in events):
             correlation_method = "sensor_connection_id"
+            correlation_strength = "explicit"
+            correlation_basis = [
+                "observed.source_ip",
+                "honeypot",
+                "observed.service",
+                "observed.protocol",
+                "observed.destination_port",
+                "observed.sensor_session_id",
+            ]
         elif any(event["observed"].get("flow_id") for event in events):
             correlation_method = "suricata_flow_id"
+            correlation_strength = "explicit"
+            correlation_basis = [
+                "observed.source_ip",
+                "honeypot",
+                "observed.service",
+                "observed.protocol",
+                "observed.destination_port",
+                "observed.flow_id",
+                "observed.flow_start",
+            ]
 
         return {
             "event_count": len(events),
             "correlation_method": correlation_method,
+            "correlation": {
+                "method": correlation_method,
+                "strength": correlation_strength,
+                "basis": correlation_basis,
+            },
             "severity": dict(severity),
             "event_types": [{"label": key, "value": value} for key, value in event_types.most_common()],
             "credentials": credentials,
@@ -935,6 +977,31 @@ class Store:
     def _counter_items(counter: Counter, limit: int = 10) -> list[dict[str, Any]]:
         return [{"label": str(label), "value": int(value)} for label, value in counter.most_common(limit)]
 
+    @staticmethod
+    def _credential_secret_summary(credential: dict[str, Any]) -> dict[str, Any] | None:
+        complete = credential.get("password_complete") is not False
+        if not complete and credential.get("sensor_reported_password_sha256"):
+            digest = str(credential["sensor_reported_password_sha256"])
+            length = credential.get("sensor_reported_password_length")
+            return {
+                "label": f"sensor-sha256:{digest[:16]} · len:{length if length is not None else '?'} · truncated",
+                "sha256": digest,
+                "length": length,
+                "complete": False,
+                "provenance": "sensor_reported_original",
+            }
+        digest = credential.get("password_sha256")
+        if not digest:
+            return None
+        length = credential.get("password_length")
+        return {
+            "label": f"sha256:{str(digest)[:16]} · len:{length if length is not None else '?'}",
+            "sha256": str(digest),
+            "length": length,
+            "complete": complete,
+            "provenance": "collector_received_value",
+        }
+
     def ip_profile(self, ip: str) -> dict[str, Any]:
         with self.connect() as conn:
             rows = conn.execute(
@@ -963,10 +1030,9 @@ class Store:
             if isinstance(credential, dict):
                 if credential.get("username"):
                     usernames[str(credential["username"])[:160]] += 1
-                secret_hash = credential.get("password_sha256")
-                if secret_hash:
-                    length = credential.get("password_length")
-                    credential_secrets[f"sha256:{str(secret_hash)[:16]} · len:{length if length is not None else '?'}"] += 1
+                secret = self._credential_secret_summary(credential)
+                if secret:
+                    credential_secrets[secret["label"]] += 1
             if observed.get("command"):
                 commands[str(observed["command"])[:160]] += 1
             if observed.get("payload"):
@@ -1203,7 +1269,8 @@ class Store:
         if q:
             clauses.append(
                 "(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR protocol LIKE ? OR "
-                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR observed LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
+                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR "
+                "json_remove(observed, '$.credential.password') LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
             )
             needle = f"%{q[:128]}%"
             params.extend([needle] * 10)
@@ -1227,9 +1294,43 @@ class Store:
         credentials, credential_secrets = Counter(), Counter()
         commands, payloads = Counter(), Counter()
         mitre, cves, ids, iocs = Counter(), Counter(), Counter(), Counter()
+        normalization_counts: Counter[str] = Counter()
+        sensor_capture_counts: Counter[str] = Counter()
         map_groups: dict[tuple[str, float, float], dict[str, Any]] = {}
 
         for event in events:
+            normalization = (event.get("collector") or {}).get("normalization")
+            if isinstance(normalization, dict):
+                counts = normalization.get("counts")
+                counts = counts if isinstance(counts, dict) else {}
+                for key in (
+                    "truncated_strings",
+                    "truncated_collections",
+                    "dropped_keys",
+                    "coerced_values",
+                    "credential_secrets_redacted",
+                ):
+                    try:
+                        normalization_counts[key] += max(0, int(counts.get(key) or 0))
+                    except (TypeError, ValueError):
+                        continue
+                if normalization.get("truncated"):
+                    normalization_counts["events_with_truncation"] += 1
+                if normalization.get("lossy"):
+                    normalization_counts["events_with_lossy_normalization"] += 1
+                if normalization.get("redacted"):
+                    normalization_counts["events_with_credential_redaction"] += 1
+
+            sensor_capture = (event.get("observed") or {}).get("sensor_capture")
+            if isinstance(sensor_capture, dict):
+                if sensor_capture.get("truncated"):
+                    sensor_capture_counts["events_with_truncation"] += 1
+                if sensor_capture.get("rejected"):
+                    sensor_capture_counts["events_with_rejection"] += 1
+                entries = sensor_capture.get("truncated_fields")
+                if isinstance(entries, list):
+                    sensor_capture_counts["truncated_fields"] += len(entries)
+
             ts = datetime.fromisoformat(event["timestamp"])
             bucket = ts.strftime("%Y-%m-%dT%H:00Z")
             timeline[bucket] += 1
@@ -1240,10 +1341,9 @@ class Store:
             if isinstance(credential, dict):
                 if credential.get("username"):
                     credentials[str(credential["username"])] += 1
-                if credential.get("password_sha256"):
-                    length = credential.get("password_length")
-                    label = f"sha256:{str(credential['password_sha256'])[:16]} · len:{length if length is not None else '?'}"
-                    credential_secrets[label] += 1
+                secret = self._credential_secret_summary(credential)
+                if secret:
+                    credential_secrets[secret["label"]] += 1
             if event["observed"].get("command"):
                 commands[str(event["observed"]["command"])[:120]] += 1
             if event["observed"].get("payload"):
@@ -1325,6 +1425,7 @@ class Store:
                     "observed": ["events", "source_ip", "destination_port", "protocol", "service", "honeypot", "credentials", "commands", "payloads", "ids_alerts"],
                     "enrichment": ["country", "asn", "map_points"],
                     "derived": ["sessions", "credential_secret_fingerprints", "iocs", "mitre", "cves"],
+                    "collector": ["normalization"],
                     "hypotheses_in_analytics": False,
                 },
             },
@@ -1333,6 +1434,19 @@ class Store:
                 "unique_source_ip": len({event["source_ip"] for event in events if event.get("source_ip")}),
                 "sessions": len({event["session_id"] for event in events}),
                 "critical": sum(1 for event in events if event["severity"] == "critical"),
+            },
+            "data_quality": {
+                "events_with_truncation": int(normalization_counts["events_with_truncation"]),
+                "events_with_lossy_normalization": int(normalization_counts["events_with_lossy_normalization"]),
+                "events_with_credential_redaction": int(normalization_counts["events_with_credential_redaction"]),
+                "truncated_strings": int(normalization_counts["truncated_strings"]),
+                "truncated_collections": int(normalization_counts["truncated_collections"]),
+                "dropped_keys": int(normalization_counts["dropped_keys"]),
+                "coerced_values": int(normalization_counts["coerced_values"]),
+                "credential_secrets_redacted": int(normalization_counts["credential_secrets_redacted"]),
+                "events_with_sensor_truncation": int(sensor_capture_counts["events_with_truncation"]),
+                "events_with_sensor_rejection": int(sensor_capture_counts["events_with_rejection"]),
+                "sensor_truncated_fields": int(sensor_capture_counts["truncated_fields"]),
             },
             "timeline": [{"label": key, "value": timeline[key]} for key in sorted(timeline)],
             "unique_source_ip_timeline": [
@@ -1380,11 +1494,16 @@ class Store:
         for event in events:
             credential = event["observed"].get("credential")
             if isinstance(credential, dict):
+                secret = self._credential_secret_summary(credential)
                 credentials.append({
                     "event_id": event["id"],
                     "username": credential.get("username"),
                     "password_length": credential.get("password_length"),
                     "password_sha256": credential.get("password_sha256"),
+                    "password_complete": credential.get("password_complete"),
+                    "sensor_reported_password_length": credential.get("sensor_reported_password_length"),
+                    "sensor_reported_password_sha256": credential.get("sensor_reported_password_sha256"),
+                    "correlation_fingerprint": secret,
                 })
             if event["observed"].get("command"):
                 commands.append({"event_id": event["id"], "command": event["observed"]["command"]})
@@ -1397,6 +1516,26 @@ class Store:
             for family in ("mitre", "cve"):
                 for item in event["derived"].get(family, []) or []:
                     mappings.append({"event_id": event["id"], "family": family, "mapping": item})
+        normalization_events = [
+            event for event in events
+            if isinstance((event.get("collector") or {}).get("normalization"), dict)
+            and (event.get("collector") or {}).get("normalization", {}).get("lossy")
+        ]
+        truncated_normalization_events = [
+            event for event in events
+            if isinstance((event.get("collector") or {}).get("normalization"), dict)
+            and (event.get("collector") or {}).get("normalization", {}).get("truncated")
+        ]
+        sensor_truncated_events = [
+            event for event in events
+            if isinstance((event.get("observed") or {}).get("sensor_capture"), dict)
+            and (event.get("observed") or {}).get("sensor_capture", {}).get("truncated")
+        ]
+        sensor_rejected_events = [
+            event for event in events
+            if isinstance((event.get("observed") or {}).get("sensor_capture"), dict)
+            and (event.get("observed") or {}).get("sensor_capture", {}).get("rejected")
+        ]
         limitations = [
             "IP, ASN and geolocation do not establish human identity or attribution.",
             "External enrichment is contextual and may be stale or inaccurate.",
@@ -1405,6 +1544,18 @@ class Store:
             "collector_received_at is collector-controlled receipt metadata; event timestamp remains sensor-reported.",
             "Rows created before collector receipt tracking was introduced may have collector_received_at backfilled from the event timestamp.",
         ]
+        if truncated_normalization_events:
+            limitations.append(
+                "One or more stored events contain explicitly disclosed field/collection truncation; inspect collector.normalization before treating payload text as complete."
+            )
+        if sensor_truncated_events:
+            limitations.append(
+                "One or more sensors captured only a bounded prefix of hostile input; inspect observed.sensor_capture before treating credentials, commands or payloads as complete."
+            )
+        if sensor_rejected_events:
+            limitations.append(
+                "One or more sensor inputs were rejected because a capture limit was exceeded; the rejection event proves the limit condition, not the full rejected content."
+            )
         if bundle.get("analysis", {}).get("truncated"):
             limitations.append(
                 "Session analysis was truncated to the configured latest-event limit; this report is not a complete retained-session timeline."
@@ -1417,6 +1568,10 @@ class Store:
             "summary": bundle["summary"],
             "facts": {
                 "event_count": len(events),
+                "events_with_lossy_normalization": len(normalization_events),
+                "events_with_field_truncation": len(truncated_normalization_events),
+                "events_with_sensor_truncation": len(sensor_truncated_events),
+                "events_with_sensor_rejection": len(sensor_rejected_events),
                 "event_types": sorted({event["event_type"] for event in events}),
                 "source_ips": sorted({event["source_ip"] for event in events if event.get("source_ip")}),
                 "services": sorted({event["service"] for event in events if event.get("service")}),
@@ -1452,13 +1607,18 @@ class Store:
 
         nodes: dict[str, dict[str, Any]] = {}
         edges: set[tuple[str, str, str]] = set()
+        graph_truncated = False
 
         def add(kind: str, value: Any, provenance: str, metadata: dict[str, Any] | None = None) -> str | None:
+            nonlocal graph_truncated
             if value in (None, ""):
                 return None
             label = str(value)
             digest = hashlib.sha256(f"{kind}\0{label}".encode("utf-8", "replace")).hexdigest()[:20]
             node_id = f"{kind}:{digest}"
+            if node_id not in nodes and len(nodes) >= self.relation_max_nodes:
+                graph_truncated = True
+                return None
             node = {
                 "id": node_id,
                 "kind": kind,
@@ -1472,8 +1632,15 @@ class Store:
 
         for event in bundle["events"]:
             event_node = add("event", event["id"], "observed")
+            if event_node is None and graph_truncated:
+                break
+            summary = bundle.get("summary", {})
             session_node = add("session", event["session_id"], "derived", {
-                "correlation": bundle.get("summary", {}).get("correlation_method", "temporal_fallback")
+                "correlation": deepcopy(summary.get("correlation") or {
+                    "method": summary.get("correlation_method", "temporal_fallback"),
+                    "strength": "heuristic",
+                    "basis": [],
+                })
             })
             ip_node = add("ip", event.get("source_ip"), "observed")
             asn_node = add("asn", event.get("asn"), "enrichment")
@@ -1486,13 +1653,18 @@ class Store:
             credential = credential if isinstance(credential, dict) else {}
             user_node = add("credential", credential.get("username"), "observed")
             secret_node = None
-            if credential.get("password_sha256"):
-                length = credential.get("password_length")
+            secret = self._credential_secret_summary(credential)
+            if secret:
                 secret_node = add(
                     "credential_secret_fingerprint",
-                    f"sha256:{str(credential['password_sha256'])[:16]} · len:{length if length is not None else '?'}",
+                    secret["label"],
                     "derived",
-                    {"algorithm": "sha256", "password_length": length},
+                    {
+                        "algorithm": "sha256",
+                        "password_length": secret["length"],
+                        "complete": secret["complete"],
+                        "fingerprint_provenance": secret["provenance"],
+                    },
                 )
             command_node = add("command", event["observed"].get("command"), "observed")
             payload_node = add("payload", event["observed"].get("payload"), "observed")
@@ -1575,8 +1747,15 @@ class Store:
                     if event_node and ti_node:
                         edges.add((event_node, ti_node, "external_threat_context"))
 
+        graph_analysis = dict(bundle.get("analysis", {}))
+        graph_analysis.update({
+            "graph_truncated": graph_truncated,
+            "graph_node_limit": self.relation_max_nodes,
+            "graph_nodes_returned": len(nodes),
+            "graph_edges_returned": len(edges),
+        })
         return {
-            "analysis": bundle.get("analysis", {}),
+            "analysis": graph_analysis,
             "nodes": list(nodes.values()),
             "edges": [
                 {"source": source, "target": target, "relation": relation}
