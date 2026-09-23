@@ -180,3 +180,89 @@ def test_dashboard_discloses_when_analysis_is_truncated(tmp_path):
     assert dashboard["analysis"]["truncated"] is True
     assert dashboard["analysis"]["event_limit"] == 2
     assert dashboard["totals"]["events"] == 2
+
+
+def test_sensor_identity_is_bound_to_configured_management_cidr(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "SENSOR_KEYS": {"ssh-decoy-01": "ssh-secret"},
+        "SENSOR_SOURCE_CIDRS": {"ssh-decoy-01": "172.31.101.0/24"},
+    })
+    client = app.test_client()
+
+    payload = {
+        "id": str(uuid.uuid4()),
+        "honeypot": "ssh-decoy-01",
+        "event_type": "connection",
+        "observed": {"source_ip": "203.0.113.150", "service": "ssh", "protocol": "tcp", "destination_port": 2222},
+    }
+    body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
+    allowed = client.post(
+        "/api/v1/events",
+        data=body,
+        headers=headers,
+        environ_overrides={"REMOTE_ADDR": "172.31.101.22"},
+    )
+    assert allowed.status_code == 201
+
+    payload["id"] = str(uuid.uuid4())
+    body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
+    denied = client.post(
+        "/api/v1/events",
+        data=body,
+        headers=headers,
+        environ_overrides={"REMOTE_ADDR": "172.31.102.22"},
+    )
+    assert denied.status_code == 401
+
+
+def test_sensor_management_network_cannot_reach_operator_or_ui_surfaces(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "OPERATOR_API_KEY": "operator-secret",
+        "SENSOR_SOURCE_CIDRS": {"ssh-decoy-01": "172.31.101.0/24"},
+    })
+    client = app.test_client()
+    remote = {"REMOTE_ADDR": "172.31.101.30"}
+    operator = {"X-Aegis-Operator-Key": "operator-secret"}
+
+    dashboard = client.get("/api/v1/dashboard", headers=operator, environ_overrides=remote)
+    assert dashboard.status_code == 403
+    assert dashboard.get_json()["error"] == "sensor_network_denied"
+
+    status = client.get("/api/v1/operator/status", headers=operator, environ_overrides=remote)
+    assert status.status_code == 403
+    assert status.get_json()["error"] == "sensor_network_denied"
+
+    ui = client.get("/", environ_overrides=remote)
+    assert ui.status_code == 403
+    assert ui.get_json()["error"] == "sensor_network_denied"
+
+
+def test_unmapped_host_integration_is_not_blocked_by_sensor_cidr_binding(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "SENSOR_KEYS": {
+            "ssh-decoy-01": "ssh-secret",
+            "suricata-01": "suricata-secret",
+        },
+        "SENSOR_SOURCE_CIDRS": {"ssh-decoy-01": "172.31.101.0/24"},
+    })
+    client = app.test_client()
+    response = client.post(
+        "/api/v1/integrations/suricata/eve",
+        headers={"X-Aegis-Key": "suricata-secret", "X-Aegis-Sensor": "suricata-01"},
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+        json={
+            "event_type": "alert",
+            "src_ip": "203.0.113.151",
+            "dest_ip": "192.0.2.10",
+            "dest_port": 22,
+            "proto": "TCP",
+            "alert": {"signature": "CIDR binding fixture", "signature_id": 12001, "severity": 2},
+        },
+    )
+    assert response.status_code == 201
