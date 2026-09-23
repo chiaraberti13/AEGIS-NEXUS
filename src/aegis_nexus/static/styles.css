@@ -340,3 +340,17 @@ pre{
 .alert-evidence-item:disabled{cursor:default;opacity:.7}
 @media(max-width:1200px){.alert-grid{grid-template-columns:1fr}.alert-browser,.alert-detail{min-height:auto}}
 @media(max-width:620px){.alert-filters{grid-template-columns:1fr}}
+
+
+/* IOC investigation workspace */
+.ioc-grid{grid-template-columns:minmax(320px,.72fr) minmax(560px,1.28fr)}
+.ioc-browser,.ioc-detail{min-height:650px}
+.ioc-filters{display:grid;grid-template-columns:1fr 150px;gap:8px;margin-bottom:10px}
+.ioc-filters input,.ioc-filters select{
+  width:100%;border:1px solid var(--line);border-radius:7px;background:#09141d;color:var(--text);padding:9px 10px
+}
+.ioc-list{display:grid;gap:6px;max-height:570px;overflow:auto}
+#ioc-value{overflow-wrap:anywhere}
+#ioc-pivots{max-height:260px}
+@media(max-width:1200px){.ioc-grid{grid-template-columns:1fr}.ioc-browser,.ioc-detail{min-height:auto}}
+@media(max-width:620px){.ioc-filters{grid-template-columns:1fr}}
