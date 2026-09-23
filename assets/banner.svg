@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="AEGIS-NEXUS — Honeypot, SOC Analysis, Threat Research and Cybersecurity Learning Lab">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop stop-color="#071117"/>
+    <stop offset=".58" stop-color="#0B1620"/>
+    <stop offset="1" stop-color="#111827"/>
+  </linearGradient>
+  <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#22D3EE"/>
+    <stop offset="1" stop-color="#F2C94C"/>
+  </linearGradient>
+  <linearGradient id="scan" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#22D3EE" stop-opacity="0"/>
+    <stop offset=".5" stop-color="#22D3EE" stop-opacity=".14"/>
+    <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+  </linearGradient>
+  <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+    <path d="M28 0H0V28" fill="none" stroke="#22D3EE" stroke-opacity=".045"/>
+  </pattern>
+  <clipPath id="clip"><rect width="1280" height="320" rx="22"/></clipPath>
+</defs>
+
+<rect width="1280" height="320" rx="22" fill="url(#bg)"/>
+<rect width="1280" height="320" rx="22" fill="url(#grid)"/>
+<g clip-path="url(#clip)">
+  <rect x="0" y="-36" width="1280" height="52" fill="url(#scan)">
+    <animate attributeName="y" values="-52;320" dur="7s" repeatCount="indefinite"/>
+  </rect>
+  <path d="M852 78h280M894 108h226M836 138h318M918 168h188" stroke="#22D3EE" stroke-opacity=".10" stroke-width="2"/>
+  <circle cx="1138" cy="78" r="4" fill="#22D3EE" fill-opacity=".45"/>
+  <circle cx="1128" cy="138" r="4" fill="#F2C94C" fill-opacity=".55"/>
+</g>
+
+<rect x="0" y="0" width="10" height="320" rx="5" fill="url(#accent)"/>
+
+<circle cx="62" cy="42" r="6" fill="#FF5F57"/>
+<circle cx="84" cy="42" r="6" fill="#FEBC2E"/>
+<circle cx="106" cy="42" r="6" fill="#28C840"/>
+<text x="138" y="49" fill="#8B949E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="15">chiara@github:~$ ./aegis-nexus --monitor</text>
+
+<text x="62" y="104" fill="#22D3EE" font-family="JetBrains Mono, ui-monospace, monospace" font-size="16" font-weight="700" letter-spacing="1.4">[ HONEYPOT · SOC ]</text>
+<text x="62" y="174" fill="#E6EDF3" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="760">AEGIS-NEXUS</text>
+<text x="62" y="218" fill="#AAB7C4" font-family="Inter, Arial, sans-serif" font-size="21">Honeypot · SOC Analysis · Threat Research · Cybersecurity Learning Lab</text>
+
+<text x="62" y="274" fill="#F2C94C" font-family="JetBrains Mono, ui-monospace, monospace" font-size="17">@chiaraberti13</text>
+<rect x="213" y="257" width="10" height="21" fill="#F2C94C">
+  <animate attributeName="opacity" values="1;1;0;0;1" dur="1.15s" repeatCount="indefinite"/>
+</rect>
+
+<g transform="translate(1010 242)">
+  <rect width="204" height="44" rx="22" fill="#15232C" stroke="#22D3EE" stroke-opacity=".62"/>
+  <circle cx="25" cy="22" r="5" fill="#28C840">
+    <animate attributeName="opacity" values=".35;1;.35" dur="2.4s" repeatCount="indefinite"/>
+  </circle>
+  <text x="116" y="27" text-anchor="middle" fill="#22D3EE" font-family="JetBrains Mono, ui-monospace, monospace" font-size="14" font-weight="700">MONITORING</text>
+</g>
+</svg>
