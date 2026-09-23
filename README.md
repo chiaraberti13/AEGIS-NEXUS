@@ -189,7 +189,7 @@ When prompted, enter the value of `AEGIS_OPERATOR_API_KEY` from your `.env`. The
 
 | Component | Host endpoint | Purpose |
 |---|---:|---|
-| SSH decoy | `127.0.0.1/host:2222` | Emulated SSH interaction and command telemetry |
+| SSH decoy | `host:2222` | Emulated SSH interaction and command telemetry |
 | Web decoy | `http://host:8080` | Login, request and payload telemetry |
 | FTP decoy | `host:2121` | Legacy credential telemetry |
 | Telnet decoy | `host:2323` | Legacy credential/command telemetry |
