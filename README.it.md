@@ -15,7 +15,7 @@
 
 > Una piattaforma bilingue evidence-first per honeypot e analisi SOC, pensata per monitoraggio degli attacchi, investigazione, threat research e apprendimento della cybersecurity.
 
-<p align="center"><a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Provenienza dati</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="docs/INVESTIGATION.md">Investigazione</a> · <a href="docs/OPERATIONS.md">Operazioni</a> · <a href="LICENSE">Licenza</a></p>
+<p align="center"><a href="ROADMAP.md">Roadmap</a> · <a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Provenienza dati</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="docs/INVESTIGATION.md">Investigazione</a> · <a href="docs/OPERATIONS.md">Operazioni</a> · <a href="LICENSE">Licenza</a></p>
 
 > [!IMPORTANT]
 > Esponi sensori honeypot soltanto su infrastrutture di tua proprietà o per le quali possiedi un’autorizzazione esplicita. Prima di esporre i decoy a Internet consulta la documentazione su sicurezza, privacy e isolamento.
