@@ -977,6 +977,31 @@ class Store:
     def _counter_items(counter: Counter, limit: int = 10) -> list[dict[str, Any]]:
         return [{"label": str(label), "value": int(value)} for label, value in counter.most_common(limit)]
 
+    @staticmethod
+    def _credential_secret_summary(credential: dict[str, Any]) -> dict[str, Any] | None:
+        complete = credential.get("password_complete") is not False
+        if not complete and credential.get("sensor_reported_password_sha256"):
+            digest = str(credential["sensor_reported_password_sha256"])
+            length = credential.get("sensor_reported_password_length")
+            return {
+                "label": f"sensor-sha256:{digest[:16]} · len:{length if length is not None else '?'} · truncated",
+                "sha256": digest,
+                "length": length,
+                "complete": False,
+                "provenance": "sensor_reported_original",
+            }
+        digest = credential.get("password_sha256")
+        if not digest:
+            return None
+        length = credential.get("password_length")
+        return {
+            "label": f"sha256:{str(digest)[:16]} · len:{length if length is not None else '?'}",
+            "sha256": str(digest),
+            "length": length,
+            "complete": complete,
+            "provenance": "collector_received_value",
+        }
+
     def ip_profile(self, ip: str) -> dict[str, Any]:
         with self.connect() as conn:
             rows = conn.execute(
@@ -1005,10 +1030,9 @@ class Store:
             if isinstance(credential, dict):
                 if credential.get("username"):
                     usernames[str(credential["username"])[:160]] += 1
-                secret_hash = credential.get("password_sha256")
-                if secret_hash:
-                    length = credential.get("password_length")
-                    credential_secrets[f"sha256:{str(secret_hash)[:16]} · len:{length if length is not None else '?'}"] += 1
+                secret = self._credential_secret_summary(credential)
+                if secret:
+                    credential_secrets[secret["label"]] += 1
             if observed.get("command"):
                 commands[str(observed["command"])[:160]] += 1
             if observed.get("payload"):
@@ -1306,10 +1330,9 @@ class Store:
             if isinstance(credential, dict):
                 if credential.get("username"):
                     credentials[str(credential["username"])] += 1
-                if credential.get("password_sha256"):
-                    length = credential.get("password_length")
-                    label = f"sha256:{str(credential['password_sha256'])[:16]} · len:{length if length is not None else '?'}"
-                    credential_secrets[label] += 1
+                secret = self._credential_secret_summary(credential)
+                if secret:
+                    credential_secrets[secret["label"]] += 1
             if event["observed"].get("command"):
                 commands[str(event["observed"]["command"])[:120]] += 1
             if event["observed"].get("payload"):
@@ -1457,11 +1480,16 @@ class Store:
         for event in events:
             credential = event["observed"].get("credential")
             if isinstance(credential, dict):
+                secret = self._credential_secret_summary(credential)
                 credentials.append({
                     "event_id": event["id"],
                     "username": credential.get("username"),
                     "password_length": credential.get("password_length"),
                     "password_sha256": credential.get("password_sha256"),
+                    "password_complete": credential.get("password_complete"),
+                    "sensor_reported_password_length": credential.get("sensor_reported_password_length"),
+                    "sensor_reported_password_sha256": credential.get("sensor_reported_password_sha256"),
+                    "correlation_fingerprint": secret,
                 })
             if event["observed"].get("command"):
                 commands.append({"event_id": event["id"], "command": event["observed"]["command"]})
@@ -1591,13 +1619,18 @@ class Store:
             credential = credential if isinstance(credential, dict) else {}
             user_node = add("credential", credential.get("username"), "observed")
             secret_node = None
-            if credential.get("password_sha256"):
-                length = credential.get("password_length")
+            secret = self._credential_secret_summary(credential)
+            if secret:
                 secret_node = add(
                     "credential_secret_fingerprint",
-                    f"sha256:{str(credential['password_sha256'])[:16]} · len:{length if length is not None else '?'}",
+                    secret["label"],
                     "derived",
-                    {"algorithm": "sha256", "password_length": length},
+                    {
+                        "algorithm": "sha256",
+                        "password_length": secret["length"],
+                        "complete": secret["complete"],
+                        "fingerprint_provenance": secret["provenance"],
+                    },
                 )
             command_node = add("command", event["observed"].get("command"), "observed")
             payload_node = add("payload", event["observed"].get("payload"), "observed")
