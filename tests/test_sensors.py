@@ -1,7 +1,7 @@
 import io
 
 from aegis_nexus.sensors.legacy import _readline
-from aegis_nexus.sensors.ssh_decoy import _fake_command
+from aegis_nexus.sensors.ssh_decoy import _base_observed, _fake_command
 from aegis_nexus.sensors import web_decoy
 
 
@@ -36,3 +36,11 @@ def test_web_decoy_flags_pattern_without_claiming_cve(monkeypatch):
     derived = captured[0][0][3]
     assert derived["ioc"][0]["value"] == "path-traversal-like-input"
     assert "cve" not in derived
+
+
+def test_ssh_telemetry_uses_configured_listener_port(monkeypatch):
+    monkeypatch.setenv("AEGIS_SSH_PORT", "2222")
+    observed = _base_observed("203.0.113.50", "session-1")
+    assert observed["destination_port"] == 2222
+    assert observed["service"] == "ssh"
+    assert observed["protocol"] == "tcp"

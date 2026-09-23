@@ -24,7 +24,7 @@ services:
   collector:
     build: .
     environment:
-      AEGIS_DATABASE_PATH: /data/aegis.db
+      AEGIS_DATABASE_PATH: ${AEGIS_DATABASE_PATH:-/data/aegis.db}
       AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:-}
       AEGIS_SENSOR_KEYS: >-
         {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}
@@ -35,6 +35,8 @@ services:
       AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE: ${AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE:-1200}
       AEGIS_MAX_DB_EVENTS: ${AEGIS_MAX_DB_EVENTS:-500000}
       AEGIS_ANALYTICS_MAX_EVENTS: ${AEGIS_ANALYTICS_MAX_EVENTS:-20000}
+      AEGIS_SESSION_MAX_EVENTS: ${AEGIS_SESSION_MAX_EVENTS:-5000}
+      AEGIS_SESSION_GAP_MINUTES: ${AEGIS_SESSION_GAP_MINUTES:-15}
       AEGIS_MIN_FREE_BYTES: ${AEGIS_MIN_FREE_BYTES:-67108864}
       AEGIS_MAX_CASES: ${AEGIS_MAX_CASES:-10000}
       AEGIS_CASE_RETENTION_DAYS: ${AEGIS_CASE_RETENTION_DAYS:-0}
@@ -144,10 +146,11 @@ services:
   backup:
     build: .
     profiles: ["ops"]
+    network_mode: "none"
     command: ["python", "scripts/backup.py"]
     environment:
-      AEGIS_DATABASE_PATH: /data/aegis.db
-      AEGIS_BACKUP_DIR: /data/backups
+      AEGIS_DATABASE_PATH: ${AEGIS_DATABASE_PATH:-/data/aegis.db}
+      AEGIS_BACKUP_DIR: ${AEGIS_BACKUP_DIR:-/data/backups}
       AEGIS_BACKUP_KEEP: ${AEGIS_BACKUP_KEEP:-14}
     volumes:
       - aegis-data:/data

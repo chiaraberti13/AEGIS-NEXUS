@@ -45,55 +45,72 @@ La regola centrale è la provenienza: **dati osservati, enrichment esterni, anal
 flowchart LR
     traffic["🌐 Internet / traffico di test autorizzato"]
     operator["🧑‍💻 Operatore SOC"]
-    suricata["🛡️ Suricata EVE JSON<br/>sensore opzionale"]
+    suricata["🛡️ Forwarder Suricata<br/>opzionale · host/sorgente autorizzata"]
+
+    subgraph exposure["Reti di esposizione sensori · normali bridge Docker"]
+        sx["ssh_exposure"]
+        wx["web_exposure"]
+        lx["legacy_exposure"]
+    end
 
     subgraph traps["Decoy pubblicati"]
-        ssh["🔐 SSH Decoy<br/>:2222<br/>shell emulata"]
-        web["🌐 Web Decoy<br/>:8080<br/>login / payload trap"]
+        ssh["🔐 SSH Decoy<br/>container :2222"]
+        web["🌐 Web Decoy<br/>container :8080"]
         legacy["📟 Legacy Decoy<br/>FTP :2121 · Telnet :2323"]
     end
 
-    collector["📥 Collector + Console SOC<br/>Flask / Gunicorn · :8600<br/>auth · firme · normalizzazione · rate limit"]
-    sqlite[("🗄️ SQLite / aegis-data<br/>eventi · sessioni · casi")]
-    geo["🗺️ GeoIP / ASN MMDB<br/>opzionale · read-only"]
-    threat["🔎 Threat Context JSON locale<br/>opzionale · match esatto · read-only"]
-    backup["💾 Job di backup<br/>profilo ops"]
+    subgraph mgmt["Reti management per-sensore · internal:true"]
+        sm["ssh_mgmt"]
+        wm["web_mgmt"]
+        lm["legacy_mgmt"]
+    end
+
+    collector["📥 Collector + Console SOC<br/>Gunicorn / Flask · container :8600<br/>auth · firme · normalizzazione · rate limit"]
+    data[("🗄️ volume aegis-data<br/>SQLite eventi · sessioni · casi<br/>/data/backups")]
+    geo["🗺️ GeoIP / ASN MMDB<br/>bind mount opzionale read-only"]
+    threat["🔎 Threat Context JSON locale<br/>bind mount opzionale read-only"]
+    backup["💾 Servizio backup<br/>profilo ops · network_mode:none"]
 
     subgraph soc["Livello SOC / Investigazione"]
-        dashboard["Dashboard + Live Feed + Attack Map"]
+        dashboard["Dashboard · Live Feed · Attack Map"]
         investigation["Evento · IP · Sessione · Timeline"]
-        analysis["IOC · TI · MITRE/CVE · Relazioni"]
+        analysis["IOC · Threat Context · MITRE/CVE · Relazioni"]
         cases["Casi · Report · Study Mode"]
     end
 
-    traffic --> ssh
-    traffic --> web
-    traffic --> legacy
+    traffic --> sx --> ssh
+    traffic --> wx --> web
+    traffic --> lx --> legacy
 
-    ssh -->|"JSON firmato · ssh_mgmt (internal)"| collector
-    web -->|"JSON firmato · web_mgmt (internal)"| collector
-    legacy -->|"JSON firmato · legacy_mgmt (internal)"| collector
-    suricata -->|"EVE JSON firmato"| collector
+    ssh -->|"JSON firmato"| sm --> collector
+    web -->|"JSON firmato"| wm --> collector
+    legacy -->|"JSON firmato"| lm --> collector
+
+    suricata -->|"POST firmato /api/v1/integrations/suricata/eve"| collector
+    operator -->|"127.0.0.1:8600 + chiave operatore"| collector
 
     geo -. "enrichment locale" .-> collector
-    threat -. "contesto locale a match esatto" .-> collector
-    collector --> sqlite
-    collector --> dashboard
-    dashboard --> investigation --> analysis --> cases
-    operator -->|"127.0.0.1:8600 + chiave operatore"| collector
-    backup -->|"backup SQLite online"| sqlite
+    threat -. "contesto esterno a match esatto" .-> collector
+
+    collector --> data
+    backup -->|"backup SQLite online"| data
+    collector --> dashboard --> investigation --> analysis --> cases
 
     classDef trap fill:#302527,stroke:#b98282,color:#f4f7f8;
     classDef core fill:#23313a,stroke:#7193a7,color:#f4f7f8;
-    classDef data fill:#2b3035,stroke:#8b959e,color:#f4f7f8;
+    classDef storage fill:#2b3035,stroke:#8b959e,color:#f4f7f8;
     class ssh,web,legacy trap;
     class collector,dashboard,investigation,analysis,cases core;
-    class sqlite,geo,threat,backup data;
+    class data,geo,threat,backup storage;
 ```
 
-I tre decoy **non** condividono una rete management laterale. Ogni sensore dispone della propria rete di esposizione e della propria rete management `internal: true` collegata al collector. La console SOC viene pubblicata per default soltanto su `127.0.0.1:8600`.
+Il diagramma rappresenta la topologia Compose predefinita. I tre decoy **non** condividono una rete management laterale: ogni sensore dispone della propria rete di esposizione e della propria rete management `internal: true` collegata al collector. Le reti di esposizione sono normali bridge Docker e quindi **non costituiscono un controllo egress**; nei deployment esposti a Internet il traffico in uscita va limitato tramite firewall host/VLAN.
 
-**Flusso dati:** `attaccante/traffico di test → decoy → evento normalizzato firmato → collector → validazione/correlazione/enrichment → SQLite → dashboard/investigazione/casi/report`.
+La console SOC viene pubblicata per default soltanto su `127.0.0.1:8600`. Le porte dei sensori vengono pubblicate sull’host senza bind loopback, quindi la loro reale raggiungibilità da Internet dipende da host Docker, firewall e NAT. L’helper Suricata opzionale invia gli eventi all’endpoint di ingestione del collector; il forwarding remoto deve usare un percorso autorizzato protetto da TLS, senza esporre direttamente la console operatore.
+
+Il servizio di backup condivide soltanto il volume persistente `aegis-data` e viene eseguito con `network_mode: none`.
+
+**Flusso dati:** `attaccante/traffico di test → rete di esposizione → decoy → evento normalizzato firmato → rete management interna → collector → validazione/correlazione/enrichment → SQLite → dashboard/investigazione/casi/report`.
 
 ## 🧭 Modello investigativo
 
@@ -120,8 +137,9 @@ Deployment consigliato:
 - Docker Engine / Docker Desktop
 - Docker Compose v2 (`docker compose version` deve funzionare)
 - porte host libere `2222`, `8080`, `2121`, `2323` e porta locale `8600`
+- per gli esempi CLI: `curl`, client OpenSSH e `nc`/netcat
 
-Python 3.12+ serve soltanto per lo sviluppo locale diretto.
+Python 3.12+ serve per lo sviluppo locale diretto e per eseguire dall’host gli script Python inclusi, ad esempio il forwarder Suricata.
 
 ### 2. Clona il repository
 
@@ -192,10 +210,10 @@ Quando richiesto inserisci il valore di `AEGIS_OPERATOR_API_KEY` presente nel fi
 | SSH decoy | `host:2222` | Interazione SSH emulata e telemetria dei comandi |
 | Web decoy | `http://host:8080` | Telemetria login, richieste e payload |
 | FTP decoy | `host:2121` | Telemetria credential legacy |
-| Telnet decoy | `host:2323` | Telemetria credential/comandi legacy |
+| Telnet decoy | `host:2323` | Telemetria credential legacy |
 | Console SOC | `http://127.0.0.1:8600` | Dashboard e API riservate all’operatore |
 
-Le porte dei sensori possono essere modificate tramite le variabili `AEGIS_PUBLIC_*_PORT`. Mantieni privata la console operatore; per accesso remoto usa TLS e controlli perimetrali, ad esempio partendo da `deploy/nginx.conf.example`.
+Le porte dei sensori possono essere modificate tramite le variabili `AEGIS_PUBLIC_*_PORT`. A differenza della console, i sensori non sono vincolati a loopback per default: limita l’esposizione con firewall/NAT. Mantieni privata la console operatore; per accesso remoto usa TLS e controlli perimetrali, ad esempio partendo da `deploy/nginx.conf.example`.
 
 ## 🎮 Istruzioni d’uso
 
@@ -222,7 +240,7 @@ FTP/Telnet con `nc`:
 
 ```bash
 printf "USER demo\r\nPASS demo\r\nQUIT\r\n" | nc 127.0.0.1 2121
-printf "demo\r\ndemo\r\nhelp\r\n" | nc 127.0.0.1 2323
+printf "demo\r\ndemo\r\n" | nc 127.0.0.1 2323
 ```
 
 Gli eventi risultanti compaiono nel Live Feed e diventano disponibili per ricerca, correlazione delle sessioni, grafo delle relazioni, casi, report e Study Mode.
@@ -278,10 +296,10 @@ docker compose \
 
 ## 🛡️ Ingestione Suricata
 
-Imposta una `AEGIS_SURICATA_SENSOR_API_KEY` indipendente in `.env`, quindi inoltra record EVE JSON con lo script incluso:
+Imposta una `AEGIS_SURICATA_SENSOR_API_KEY` indipendente in `.env`. Lo script incluso è un utility Python eseguita sull’host: installa prima il package (`python -m pip install -e .`), quindi inoltra i record EVE JSON:
 
 ```bash
-export AEGIS_SENSOR_API_KEY="<stesso-segreto-suricata>"
+export AEGIS_SURICATA_SENSOR_API_KEY="<segreto-suricata-configurato-in-.env>"
 python scripts/send_suricata_event.py --file /var/log/suricata/eve.json --sensor suricata-01
 ```
 
