@@ -6,7 +6,7 @@ Honeypot telemetry may contain IP addresses, usernames, passwords, payloads and 
 
 Default controls:
 
-- cleartext passwords are **not stored**; AEGIS keeps a SHA-256 fingerprint and length for reuse/correlation studies;
+- cleartext passwords are **not stored**; AEGIS keeps a SHA-256 fingerprint and length for reuse/correlation studies; when a built-in sensor must truncate an oversized credential, AEGIS explicitly distinguishes the collector-received prefix fingerprint from the sensor-reported original-value fingerprint;
 - raw password storage requires the explicit `AEGIS_STORE_CREDENTIAL_SECRETS=true` opt-in and should only be used in a controlled lab with a documented purpose;
 - even with that opt-in, decoded operator APIs, the console and JSON/CSV/Markdown reports never return the cleartext password; global search also removes `observed.credential.password` before matching, preventing password-existence probing through search results; operator surfaces expose only the bounded username plus password SHA-256 fingerprint/length needed for correlation;
 - the collector rejects oversized bodies and bounds nested structures and strings;
@@ -33,7 +33,7 @@ La telemetria di un honeypot può contenere indirizzi IP, username, password, pa
 
 Controlli predefiniti:
 
-- le password in chiaro **non vengono archiviate**; AEGIS conserva fingerprint SHA-256 e lunghezza per studi di riuso/correlazione;
+- le password in chiaro **non vengono archiviate**; AEGIS conserva fingerprint SHA-256 e lunghezza per studi di riuso/correlazione; quando un sensore built-in deve troncare una credential sovradimensionata, AEGIS distingue esplicitamente il fingerprint del prefisso ricevuto dal collector dal fingerprint del valore originale dichiarato dal sensore;
 - l'archiviazione raw richiede l'opt-in esplicito `AEGIS_STORE_CREDENTIAL_SECRETS=true` e va usata solo in laboratorio controllato con finalità documentata;
 - anche con questo opt-in, API operatore decodificate, console e report JSON/CSV/Markdown non restituiscono mai la password in chiaro; anche la ricerca globale rimuove `observed.credential.password` prima del matching, impedendo di verificare indirettamente l'esistenza di una password tramite i risultati; le superfici operatore espongono soltanto username limitato, fingerprint SHA-256 e lunghezza necessari alla correlazione;
 - il collector rifiuta body eccessivi e limita profondità, cardinalità e lunghezza delle stringhe;
