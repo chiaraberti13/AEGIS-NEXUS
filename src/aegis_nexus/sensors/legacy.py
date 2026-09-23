@@ -6,6 +6,7 @@ import threading
 import uuid
 from typing import BinaryIO
 
+from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
 from .server import BoundedThreadingTCPServer
 
@@ -82,6 +83,7 @@ class FTPHandler(BaseHandler):
         self.emit("connection", {"destination_port": self.destination_port})
         self.wfile.write(b"220 Meridian FTP Service\r\n")
         username = ""
+        username_audit: dict = {}
         for _ in range(6):
             line = self.read_line("observed.legacy_line")
             if line is None or not line:
@@ -89,16 +91,41 @@ class FTPHandler(BaseHandler):
             command, _, argument = line.partition(" ")
             command = command.upper()
             if command == "USER":
-                username = argument[:128]
+                username_audit = {}
+                username = bounded_text(
+                    argument,
+                    128,
+                    "observed.credential.username",
+                    username_audit,
+                )
                 self.wfile.write(b"331 Password required\r\n")
             elif command == "PASS":
-                self.emit("credential", {"destination_port": self.destination_port, "credential": {"username": username, "password": argument[:256]}}, "medium")
+                audit = {
+                    "truncated_fields": list(username_audit.get("truncated_fields", []))
+                } if username_audit.get("truncated_fields") else {}
+                password = bounded_text(
+                    argument,
+                    4096,
+                    "observed.credential.password",
+                    audit,
+                    fingerprint_original=True,
+                )
+                observed = {
+                    "destination_port": self.destination_port,
+                    "credential": {"username": username, "password": password},
+                }
+                attach_capture_metadata(observed, audit)
+                self.emit("credential", observed, "medium")
                 self.wfile.write(b"530 Login incorrect\r\n")
             elif command == "QUIT":
                 self.wfile.write(b"221 Goodbye\r\n")
                 break
             else:
-                self.emit("legacy.command", {"destination_port": self.destination_port, "command": line[:256]}, "low")
+                audit: dict = {}
+                captured_line = bounded_text(line, 256, "observed.command", audit)
+                observed = {"destination_port": self.destination_port, "command": captured_line}
+                attach_capture_metadata(observed, audit)
+                self.emit("legacy.command", observed, "low")
                 self.wfile.write(b"500 Command not understood\r\n")
 
 
@@ -111,13 +138,30 @@ class TelnetHandler(BaseHandler):
         username_line = self.read_line("observed.credential.username")
         if username_line is None:
             return
-        username = username_line[:128]
+        audit: dict = {}
+        username = bounded_text(
+            username_line,
+            128,
+            "observed.credential.username",
+            audit,
+        )
         self.wfile.write(b"Password: ")
         password_line = self.read_line("observed.credential.password")
         if password_line is None:
             return
-        password = password_line
-        self.emit("credential", {"destination_port": self.destination_port, "credential": {"username": username, "password": password}}, "medium")
+        password = bounded_text(
+            password_line,
+            4096,
+            "observed.credential.password",
+            audit,
+            fingerprint_original=True,
+        )
+        observed = {
+            "destination_port": self.destination_port,
+            "credential": {"username": username, "password": password},
+        }
+        attach_capture_metadata(observed, audit)
+        self.emit("credential", observed, "medium")
         self.wfile.write(b"Login incorrect\r\n")
 
 
