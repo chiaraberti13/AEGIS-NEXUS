@@ -13,11 +13,20 @@ MAX_LINE = 512
 TIMEOUT = 15.0
 
 
-def _readline(stream: BinaryIO) -> str:
+def _readline_with_status(stream: BinaryIO) -> tuple[str, dict | None]:
     data = stream.readline(MAX_LINE + 1)
     if len(data) > MAX_LINE:
-        return ""
-    return data.decode("utf-8", "replace").strip()
+        return "", {
+            "reason": "line_too_long",
+            "limit": MAX_LINE,
+            "bytes_observed_at_least": len(data),
+        }
+    return data.decode("utf-8", "replace").strip(), None
+
+
+def _readline(stream: BinaryIO) -> str:
+    line, _status = _readline_with_status(stream)
+    return line
 
 
 class BaseHandler(socketserver.StreamRequestHandler):
@@ -47,6 +56,24 @@ class BaseHandler(socketserver.StreamRequestHandler):
         }
         self.sensor.emit(event_type, base, severity)
 
+    def read_line(self, path: str) -> str | None:
+        line, rejected = _readline_with_status(self.rfile)
+        if rejected is None:
+            return line
+        self.emit(
+            "sensor.input_rejected",
+            {
+                "destination_port": self.destination_port,
+                "sensor_capture": {
+                    "rejected": True,
+                    "path": path,
+                    **rejected,
+                },
+            },
+            "low",
+        )
+        return None
+
 
 class FTPHandler(BaseHandler):
     service = "ftp"
@@ -56,8 +83,8 @@ class FTPHandler(BaseHandler):
         self.wfile.write(b"220 Meridian FTP Service\r\n")
         username = ""
         for _ in range(6):
-            line = _readline(self.rfile)
-            if not line:
+            line = self.read_line("observed.legacy_line")
+            if line is None or not line:
                 break
             command, _, argument = line.partition(" ")
             command = command.upper()
@@ -81,9 +108,15 @@ class TelnetHandler(BaseHandler):
     def handle(self):
         self.emit("connection", {"destination_port": self.destination_port})
         self.wfile.write(b"Meridian Gateway\r\nlogin: ")
-        username = _readline(self.rfile)[:128]
+        username_line = self.read_line("observed.credential.username")
+        if username_line is None:
+            return
+        username = username_line[:128]
         self.wfile.write(b"Password: ")
-        password = _readline(self.rfile)[:256]
+        password_line = self.read_line("observed.credential.password")
+        if password_line is None:
+            return
+        password = password_line
         self.emit("credential", {"destination_port": self.destination_port, "credential": {"username": username, "password": password}}, "medium")
         self.wfile.write(b"Login incorrect\r\n")
 
