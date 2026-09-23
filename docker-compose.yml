@@ -28,6 +28,8 @@ services:
       AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:-}
       AEGIS_SENSOR_KEYS: >-
         {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}
+      AEGIS_SENSOR_SOURCE_CIDRS: >-
+        {"ssh-decoy-01":"${AEGIS_SSH_MGMT_SUBNET:-172.31.101.0/24}","web-decoy-01":"${AEGIS_WEB_MGMT_SUBNET:-172.31.102.0/24}","legacy-decoy-01":"${AEGIS_LEGACY_MGMT_SUBNET:-172.31.103.0/24}"}
       AEGIS_OPERATOR_API_KEY: ${AEGIS_OPERATOR_API_KEY:?set AEGIS_OPERATOR_API_KEY in .env}
       AEGIS_REQUIRE_SENSOR_SIGNATURE: ${AEGIS_REQUIRE_SENSOR_SIGNATURE:-true}
       AEGIS_SENSOR_SIGNATURE_MAX_SKEW: ${AEGIS_SENSOR_SIGNATURE_MAX_SKEW:-300}
@@ -179,10 +181,19 @@ networks:
         - subnet: "${AEGIS_LEGACY_EXPOSURE_SUBNET:-172.30.103.0/24}"
   ssh_mgmt:
     internal: true
+    ipam:
+      config:
+        - subnet: "${AEGIS_SSH_MGMT_SUBNET:-172.31.101.0/24}"
   web_mgmt:
     internal: true
+    ipam:
+      config:
+        - subnet: "${AEGIS_WEB_MGMT_SUBNET:-172.31.102.0/24}"
   legacy_mgmt:
     internal: true
+    ipam:
+      config:
+        - subnet: "${AEGIS_LEGACY_MGMT_SUBNET:-172.31.103.0/24}"
 
 volumes:
   aegis-data:
