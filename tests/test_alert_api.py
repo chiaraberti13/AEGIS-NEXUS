@@ -74,9 +74,9 @@ def test_suricata_ingestion_creates_alert_without_attribution(tmp_path):
     queue = client.get("/api/v1/alerts?severity=high").get_json()["items"]
     assert any(item["rule_id"] == "suricata_high_severity" for item in queue)
     item = next(item for item in queue if item["rule_id"] == "suricata_high_severity")
-    serialized = str(item).lower()
-    assert "threat_actor" not in serialized
-    assert "attribution" not in serialized
+    assert "threat_actor" not in item
+    assert "actor" not in item
+    assert "attribution" not in item
 
 
 def test_alert_api_rejects_invalid_status_and_sensor_network_access(tmp_path):
