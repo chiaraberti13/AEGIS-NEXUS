@@ -518,3 +518,44 @@ def test_future_suricata_timestamp_is_rejected(tmp_path):
     )
     assert response.status_code == 422
     assert response.get_json()["error"] == "clock_validation_error"
+
+
+def test_global_search_never_uses_retained_cleartext_password_as_searchable_text(tmp_path, monkeypatch):
+    monkeypatch.setenv("AEGIS_STORE_CREDENTIAL_SECRETS", "true")
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "secret",
+    })
+    client = app.test_client()
+
+    created = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "secret"},
+        json={
+            "honeypot": "ssh-1",
+            "event_type": "credential",
+            "observed": {
+                "source_ip": "203.0.113.160",
+                "service": "ssh",
+                "protocol": "tcp",
+                "destination_port": 22,
+                "credential": {
+                    "username": "searchable-user",
+                    "password": "retained-but-not-searchable-secret",
+                },
+            },
+        },
+    )
+    assert created.status_code == 201
+
+    by_username = client.get("/api/v1/events?q=searchable-user").get_json()
+    assert len(by_username["items"]) == 1
+
+    by_secret = client.get("/api/v1/events?q=retained-but-not-searchable-secret").get_json()
+    assert by_secret["items"] == []
+
+    dashboard = client.get(
+        "/api/v1/dashboard?q=retained-but-not-searchable-secret&include_simulation=true"
+    ).get_json()
+    assert dashboard["totals"]["events"] == 0
