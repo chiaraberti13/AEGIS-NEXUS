@@ -141,7 +141,7 @@ def test_credential_reuse_uses_fingerprint_across_sources_without_attribution():
 def test_web_scanning_and_path_traversal_sequence_are_threshold_based():
     engine = DetectionEngine()
     scans = [
-        _context_event(f"web-{i}", i % 5, event_type="web.request", port=8080, path=f"/probe-{i}")
+        _context_event(f"web-{i}", 0, event_type="web.request", port=8080, path=f"/probe-{i}")
         for i in range(8)
     ]
     ids = {item["rule_id"] for item in engine.evaluate(scans[-1], scans)}
