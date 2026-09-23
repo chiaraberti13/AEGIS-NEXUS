@@ -1311,6 +1311,8 @@
       const quality = dashboard.data_quality || {};
       $("quality-lossy").textContent = String(quality.events_with_lossy_normalization || 0);
       $("quality-truncated").textContent = String(quality.events_with_truncation || 0);
+      $("quality-sensor-truncated").textContent = String(quality.events_with_sensor_truncation || 0);
+      $("quality-sensor-rejected").textContent = String(quality.events_with_sensor_rejection || 0);
       $("quality-redacted").textContent = String(quality.events_with_credential_redaction || 0);
       $("quality-dropped-keys").textContent = String(quality.dropped_keys || 0);
       const analyticsWarning = $("analytics-warning");
