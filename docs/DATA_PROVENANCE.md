@@ -11,7 +11,7 @@ Sensor time and collector time are intentionally distinct:
 Collector receipt time is system provenance, not attacker enrichment. The canonical `collector_received_at` drives retention, capacity eviction and operational freshness, while `timestamp` remains the investigation timeline time.
 
 
-- `observed`: values captured directly by a sensor or honeypot. Sensor metadata such as `sensor_session_id`, Suricata `flow_id` and `flow_start` also remains observed data.
+- `observed`: values captured directly by a sensor or honeypot. Sensor metadata such as `sensor_session_id`, Suricata `flow_id`, `flow_start` and `sensor_capture` also remains observed data. `observed.sensor_capture` is sensor-reported provenance: it discloses fields truncated before transmission or inputs rejected at a sensor boundary.
 - `enrichment`: external context; every block requires `source` and `observed_at`.
 - `derived`: deterministic or analyst-produced values derived from evidence. MITRE/CVE entries require both `rationale` and `evidence`.
 - `hypotheses`: explicitly non-factual analytical possibilities.
@@ -31,7 +31,7 @@ For databases created before receipt-time tracking existed, the migration backfi
 
 AEGIS treats every sensor field as hostile input and applies bounded normalization. The collector now discloses these transformations instead of silently presenting transformed content as complete. `collector.normalization.lossy` identifies events where truncation, key dropping or coercion occurred; `paths` records a bounded set of affected evidence paths; `limits` records the active normalization ceilings.
 
-Credential handling is ordered deliberately: when a password is observed, AEGIS computes `password_length` and `password_sha256` from the original submitted value before any storage bound is applied. Cleartext remains redacted by default. If explicit cleartext storage is enabled, an over-limit stored value may still be truncated, but the fingerprint and original length continue to describe the submitted secret and the truncation is disclosed.
+Credential handling is ordered deliberately. If the collector receives the complete credential value, `password_length` and `password_sha256` describe exactly what the collector received before collector-side storage bounds and redaction. If a built-in sensor had to truncate the value first, the credential is marked `password_complete: false`; the collector-received fingerprint remains separate from `sensor_reported_password_length` / `sensor_reported_password_sha256`, which describe the full input according to the authenticated sensor. This avoids presenting a prefix fingerprint as if it represented complete evidence.
 
 ### Deterministic observed-artifact extraction
 
@@ -52,7 +52,7 @@ Tempo sensore e tempo collector sono volutamente distinti:
 Il tempo di ricezione è provenienza di sistema, non enrichment dell'attaccante. Il canonico `collector_received_at` governa retention, eviction per capacità e freschezza operativa, mentre `timestamp` resta il tempo della timeline investigativa.
 
 
-- `observed`: valori catturati direttamente da un sensore o honeypot. Anche metadata del sensore come `sensor_session_id`, `flow_id` e `flow_start` Suricata restano dati osservati.
+- `observed`: valori catturati direttamente da un sensore o honeypot. Anche metadata del sensore come `sensor_session_id`, `flow_id`, `flow_start` Suricata e `sensor_capture` restano dati osservati. `observed.sensor_capture` è provenienza dichiarata dal sensore: esplicita i campi troncati prima della trasmissione o gli input rifiutati al confine del sensore.
 - `enrichment`: contesto esterno; ogni blocco richiede `source` e `observed_at`.
 - `derived`: valori deterministici o prodotti dall'analista a partire da evidenze. Le voci MITRE/CVE richiedono `rationale` ed `evidence`.
 - `hypotheses`: possibilità analitiche esplicitamente non fattuali.
@@ -72,7 +72,7 @@ Per database creati prima del tracking del tempo di ricezione, la migrazione val
 
 AEGIS tratta ogni campo del sensore come input ostile e applica una normalizzazione bounded. Il collector espone ora queste trasformazioni invece di presentare silenziosamente il contenuto trasformato come completo. `collector.normalization.lossy` identifica gli eventi in cui si sono verificati troncamenti, eliminazione di chiavi o coercizioni; `paths` conserva un insieme limitato dei percorsi di evidenza interessati; `limits` registra i limiti di normalizzazione attivi.
 
-La gestione delle credenziali segue un ordine intenzionale: quando viene osservata una password, AEGIS calcola `password_length` e `password_sha256` sul valore originale ricevuto prima di applicare eventuali limiti di storage. Il cleartext resta redatto per impostazione predefinita. Se la memorizzazione esplicita del cleartext viene abilitata, un valore oltre limite può comunque essere troncato nello storage, ma fingerprint e lunghezza originale continuano a descrivere il segreto ricevuto e il troncamento viene dichiarato.
+La gestione delle credenziali segue un ordine intenzionale. Se il collector riceve il valore completo, `password_length` e `password_sha256` descrivono esattamente ciò che ha ricevuto prima dei limiti di storage e della redazione. Se invece un sensore built-in ha dovuto troncare il valore prima della trasmissione, la credential viene marcata `password_complete: false`; il fingerprint del valore ricevuto dal collector resta distinto da `sensor_reported_password_length` / `sensor_reported_password_sha256`, che descrivono l'input completo secondo il sensore autenticato. In questo modo il fingerprint di un prefisso non viene presentato come evidenza completa.
 
 ### Estrazione deterministica degli artefatti osservati
 
