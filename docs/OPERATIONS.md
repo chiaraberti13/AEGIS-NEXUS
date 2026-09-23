@@ -60,7 +60,7 @@ Use SQLite's online backup API instead of copying a live WAL database directly:
 docker compose --profile ops run --rm backup
 ```
 
-Backups are written under `/data/backups` and rotated according to `AEGIS_BACKUP_KEEP`. The Compose backup service uses the shared `aegis-data` volume with `network_mode: none`, because it does not require network access. Apply the same privacy, access-control and retention rules to backups as to the primary telemetry database. Test restoration periodically.
+Backups are written under `AEGIS_BACKUP_DIR` (default `/data/backups`) and rotated according to `AEGIS_BACKUP_KEEP`. The Compose backup service uses the shared `aegis-data` volume with `network_mode: none`, because it does not require network access. Apply the same privacy, access-control and retention rules to backups as to the primary telemetry database. Test restoration periodically.
 
 ---
 
@@ -124,4 +124,4 @@ Usa l'API di backup online di SQLite invece di copiare direttamente un database 
 docker compose --profile ops run --rm backup
 ```
 
-I backup vengono salvati in `/data/backups` e ruotati secondo `AEGIS_BACKUP_KEEP`. Il servizio backup del Compose usa il volume condiviso `aegis-data` con `network_mode: none`, perché non necessita di accesso di rete. Applica a backup e database primario le stesse regole di privacy, controllo accessi e retention. Verifica periodicamente il ripristino.
+I backup vengono salvati in `AEGIS_BACKUP_DIR` (default `/data/backups`) e ruotati secondo `AEGIS_BACKUP_KEEP`. Il servizio backup del Compose usa il volume condiviso `aegis-data` con `network_mode: none`, perché non necessita di accesso di rete. Applica a backup e database primario le stesse regole di privacy, controllo accessi e retention. Verifica periodicamente il ripristino.
