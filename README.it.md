@@ -1,6 +1,7 @@
 <p align="center"><a href="README.md">🇬🇧 English</a> · <a href="README.it.md">🇮🇹 Italiano</a></p>
 
 <p align="center">
+  <img src="https://github.com/chiaraberti13/AEGIS-NEXUS/actions/workflows/ci.yml/badge.svg" alt="CI">
   <img src="https://img.shields.io/badge/status-active-F2C94C?style=flat-square" alt="Active">
   <img src="https://img.shields.io/badge/category-CYBERSECURITY-22D3EE?style=flat-square" alt="Cybersecurity">
   <img src="https://img.shields.io/badge/stack-Python%20%2B%20Flask-8B949E?style=flat-square" alt="Python and Flask">
@@ -20,7 +21,7 @@
 
 AEGIS-NEXUS è una piattaforma **Honeypot + SOC Analysis + Threat Research + Cybersecurity Learning Lab**. Espone decoy volutamente limitati SSH, web, FTP e Telnet, raccoglie telemetria ostile tramite canali sensore autenticati e la trasforma in un flusso investigativo senza eseguire comandi o payload forniti dall’attaccante.
 
-La regola centrale è la provenienza: **dati osservati, enrichment esterni, analisi derivate e ipotesi restano separati**. GeoIP, ASN, match di threat context locale, estrazione IOC, mapping MITRE ATT&CK e riferimenti CVE non vengono mai presentati come fatti se l’evidenza memorizzata non li supporta.
+La regola centrale è la provenienza: **dati osservati, enrichment esterni, analisi derivate e ipotesi restano separati**, mentre i metadata di normalizzazione controllati dal collector dichiarano esplicitamente eventuali troncamenti, redazioni o trasformazioni. GeoIP, ASN, match di threat context locale, estrazione IOC, mapping MITRE ATT&CK e riferimenti CVE non vengono mai presentati come fatti se l’evidenza memorizzata non li supporta.
 
 ## ✨ Funzionalità principali
 
@@ -37,6 +38,8 @@ La regola centrale è la provenienza: **dati osservati, enrichment esterni, anal
 - Ingestione nativa di eventi Suricata EVE JSON.
 - Interfaccia bilingue IT/EN tramite dizionari i18n centrali.
 - Container hardenizzati: runtime non-root, filesystem read-only, capability rimosse, `no-new-privileges`, limiti di risorse e reti management separate.
+- Egress guard Linux host-side su `DOCKER-USER` per bloccare nuove connessioni originate dai decoy mantenendo il traffico di risposta delle porte honeypot pubblicate.
+- Evidence Integrity con metadata collector separati, indicatori di troncamento/redazione e fingerprint credenziali calcolati sul valore originale prima dei limiti di storage.
 - Retention temporale/capacitiva, backup SQLite online, readiness check e paginazione storica bounded.
 
 ## 🗺️ Diagramma dell’architettura
