@@ -785,15 +785,25 @@
   async function relations(sessionId) {
     const svg = $("relation-graph");
     svg.replaceChildren();
+    const warning = $("relation-warning");
+    warning.hidden = true;
+    warning.textContent = "";
     if (!sessionId) {
       $("relation-count").textContent = "0";
       graphLegend([]);
       return;
     }
     const graph = await safeGet("/api/v1/relations?session_id=" + encodeURIComponent(sessionId));
-    const nodes = (graph?.nodes || []).slice(0, 80);
+    const nodes = graph?.nodes || [];
     const allowedIds = new Set(nodes.map((node) => node.id));
     const edges = (graph?.edges || []).filter((edge) => allowedIds.has(edge.source) && allowedIds.has(edge.target));
+    const graphAnalysis = graph?.analysis || {};
+    if (graphAnalysis.graph_truncated) {
+      warning.hidden = false;
+      warning.textContent = t("relations.truncated")
+        .replace("{limit}", String(graphAnalysis.graph_node_limit || nodes.length))
+        .replace("{nodes}", String(graphAnalysis.graph_nodes_returned || nodes.length));
+    }
     $("relation-count").textContent = String(nodes.length);
     graphLegend(nodes);
     if (!nodes.length) return;
