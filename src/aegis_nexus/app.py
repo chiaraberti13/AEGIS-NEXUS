@@ -367,7 +367,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
-            for finding in detection_engine.evaluate(stored):
+            for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
                 alert_store.record(finding, stored["timestamp"])
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
@@ -406,7 +406,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
-            for finding in detection_engine.evaluate(stored):
+            for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
                 alert_store.record(finding, stored["timestamp"])
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
