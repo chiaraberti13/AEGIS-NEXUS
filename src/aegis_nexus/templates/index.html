@@ -27,6 +27,7 @@
     <nav>
       <button class="nav-item active" data-view-target="dashboard" data-i18n="nav.dashboard"></button>
       <button class="nav-item" data-view-target="alerts" data-i18n="nav.alerts"></button>
+      <button class="nav-item" data-view-target="iocs" data-i18n="nav.iocs"></button>
       <button class="nav-item" data-view-target="investigate" data-i18n="nav.investigate"></button>
       <button class="nav-item" data-view-target="cases" data-i18n="nav.cases"></button>
       <button class="nav-item" data-view-target="relations" data-i18n="nav.relations"></button>
@@ -252,6 +253,46 @@
               <div id="alert-notes" class="case-notes"></div>
             </section>
             <p class="panel-note" data-i18n="alerts.limit"></p>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <section class="workspace" data-view="iocs">
+      <section class="grid ioc-grid">
+        <article class="panel ioc-browser">
+          <div class="panel-head">
+            <div><span class="eyebrow" data-i18n="iocs.eyebrow"></span><h2 data-i18n="iocs.title"></h2></div>
+            <span id="ioc-count" class="badge">0</span>
+          </div>
+          <div class="ioc-filters">
+            <input id="ioc-search" type="search" data-i18n-placeholder="iocs.search" autocomplete="off">
+            <select id="ioc-type-filter">
+              <option value="" data-i18n="iocs.allTypes"></option>
+              <option value="domain">domain</option><option value="url">url</option><option value="ip">ip</option>
+              <option value="sha256">sha256</option><option value="sha1">sha1</option><option value="md5">md5</option>
+              <option value="pattern">pattern</option>
+            </select>
+          </div>
+          <div id="ioc-list" class="ioc-list"></div>
+        </article>
+
+        <article class="panel ioc-detail">
+          <div id="ioc-empty" class="empty" data-i18n="iocs.select"></div>
+          <div id="ioc-detail-content" hidden>
+            <div class="panel-head">
+              <div><span class="eyebrow" data-i18n="iocs.classification"></span><h2 id="ioc-value"></h2><p id="ioc-id" class="muted"></p></div>
+              <span id="ioc-type" class="badge"></span>
+            </div>
+            <div class="fact-grid alert-facts">
+              <div><span data-i18n="iocs.firstSeen"></span><strong id="ioc-first-seen"></strong></div>
+              <div><span data-i18n="iocs.lastSeen"></span><strong id="ioc-last-seen"></strong></div>
+              <div><span data-i18n="iocs.occurrences"></span><strong id="ioc-occurrences"></strong></div>
+              <div><span data-i18n="iocs.sources"></span><strong id="ioc-source-count"></strong></div>
+            </div>
+            <section class="case-section"><div class="panel-head"><h3 data-i18n="iocs.pivots"></h3><span class="provenance derived" data-i18n="provenance.derived"></span></div><pre id="ioc-pivots"></pre></section>
+            <section class="case-section"><div class="panel-head"><h3 data-i18n="iocs.events"></h3><span id="ioc-event-count" class="badge">0</span></div><div id="ioc-events" class="alert-evidence"></div></section>
+            <p class="panel-note" data-i18n="iocs.limit"></p>
           </div>
         </article>
       </section>
