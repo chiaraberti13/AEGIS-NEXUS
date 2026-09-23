@@ -85,9 +85,9 @@ This document is the project's implementation checklist. Items are checked only 
 - [ ] Introduce explainable correlation scoring
 - [ ] Store correlation method, score and evidence basis
 - [ ] Prevent correlation score from being presented as attribution
-- [ ] Add IOC Workspace
-- [ ] Add IOC first-seen / last-seen / occurrence statistics
-- [ ] Link IOC to sessions, source IPs, sensors, alerts and cases
+- [x] Add IOC Workspace
+- [x] Add IOC first-seen / last-seen / occurrence statistics
+- [x] Link IOC to sessions, source IPs, sensors, alerts and cases
 - [ ] Add IOC search/filter/export
 - [ ] Upgrade Relationship Graph with node-type filters
 - [ ] Add on-demand graph expansion
@@ -352,7 +352,7 @@ These requirements apply to **every** roadmap cycle.
 |---|---|
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
-| B — Correlation & Investigation 2.0 | ⬜ Planned |
+| B — Correlation & Investigation 2.0 | 🟨 In progress |
 | C — Network Evidence & Visibility | ⬜ Planned |
 | D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
 | E — Threat Intelligence & CTI | ⬜ Planned |
