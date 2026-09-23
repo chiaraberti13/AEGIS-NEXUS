@@ -78,7 +78,7 @@ class Store:
                     session_id TEXT NOT NULL, protocol TEXT, service TEXT, destination_port INTEGER,
                     country TEXT, asn TEXT, latitude REAL, longitude REAL,
                     observed TEXT NOT NULL, enrichment TEXT NOT NULL, derived TEXT NOT NULL,
-                    hypotheses TEXT NOT NULL, schema_version TEXT NOT NULL,
+                    hypotheses TEXT NOT NULL, collector TEXT NOT NULL DEFAULT '{}', schema_version TEXT NOT NULL,
                     collector_received_at TEXT NOT NULL,
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
                 );
@@ -142,6 +142,8 @@ class Store:
                     "UPDATE events SET collector_received_at=COALESCE(received_at, timestamp) "
                     "WHERE collector_received_at IS NULL"
                 )
+            if "collector" not in event_columns:
+                conn.execute("ALTER TABLE events ADD COLUMN collector TEXT NOT NULL DEFAULT '{}'")
             conn.execute(
                 "UPDATE events SET received_at=collector_received_at "
                 "WHERE received_at IS NULL AND collector_received_at IS NOT NULL"
@@ -245,9 +247,9 @@ class Store:
             conn.execute("""
                 INSERT INTO events(
                     id,timestamp,received_at,honeypot,event_type,severity,source_ip,session_id,protocol,service,
-                    destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,schema_version,
+                    destination_port,country,asn,latitude,longitude,observed,enrichment,derived,hypotheses,collector,schema_version,
                     collector_received_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 event["id"], event["timestamp"], received_at, event["honeypot"], event["event_type"], event["severity"],
                 observed.get("source_ip"), session_id, observed.get("protocol"), observed.get("service"),
@@ -255,7 +257,9 @@ class Store:
                 json.dumps(event["observed"], ensure_ascii=False),
                 json.dumps(event["enrichment"], ensure_ascii=False),
                 json.dumps(event["derived"], ensure_ascii=False),
-                json.dumps(event["hypotheses"], ensure_ascii=False), event["schema_version"], received_at,
+                json.dumps(event["hypotheses"], ensure_ascii=False),
+                json.dumps(event.get("collector", {}), ensure_ascii=False),
+                event["schema_version"], received_at,
             ))
         self._ingest_since_maintenance += 1
         self.maintain()
@@ -295,8 +299,9 @@ class Store:
     @staticmethod
     def _decode(row: sqlite3.Row) -> dict[str, Any]:
         data = dict(row)
-        for field in ("observed", "enrichment", "derived", "hypotheses"):
-            data[field] = json.loads(data[field])
+        for field in ("observed", "enrichment", "derived", "hypotheses", "collector"):
+            raw = data.get(field)
+            data[field] = json.loads(raw) if isinstance(raw, str) and raw else {}
         observed = data.get("observed")
         if isinstance(observed, dict):
             credential = observed.get("credential")
@@ -1227,9 +1232,32 @@ class Store:
         credentials, credential_secrets = Counter(), Counter()
         commands, payloads = Counter(), Counter()
         mitre, cves, ids, iocs = Counter(), Counter(), Counter(), Counter()
+        normalization_counts: Counter[str] = Counter()
         map_groups: dict[tuple[str, float, float], dict[str, Any]] = {}
 
         for event in events:
+            normalization = (event.get("collector") or {}).get("normalization")
+            if isinstance(normalization, dict):
+                counts = normalization.get("counts")
+                counts = counts if isinstance(counts, dict) else {}
+                for key in (
+                    "truncated_strings",
+                    "truncated_collections",
+                    "dropped_keys",
+                    "coerced_values",
+                    "credential_secrets_redacted",
+                ):
+                    try:
+                        normalization_counts[key] += max(0, int(counts.get(key) or 0))
+                    except (TypeError, ValueError):
+                        continue
+                if normalization.get("truncated"):
+                    normalization_counts["events_with_truncation"] += 1
+                if normalization.get("lossy"):
+                    normalization_counts["events_with_lossy_normalization"] += 1
+                if normalization.get("redacted"):
+                    normalization_counts["events_with_credential_redaction"] += 1
+
             ts = datetime.fromisoformat(event["timestamp"])
             bucket = ts.strftime("%Y-%m-%dT%H:00Z")
             timeline[bucket] += 1
@@ -1325,6 +1353,7 @@ class Store:
                     "observed": ["events", "source_ip", "destination_port", "protocol", "service", "honeypot", "credentials", "commands", "payloads", "ids_alerts"],
                     "enrichment": ["country", "asn", "map_points"],
                     "derived": ["sessions", "credential_secret_fingerprints", "iocs", "mitre", "cves"],
+                    "collector": ["normalization"],
                     "hypotheses_in_analytics": False,
                 },
             },
@@ -1333,6 +1362,16 @@ class Store:
                 "unique_source_ip": len({event["source_ip"] for event in events if event.get("source_ip")}),
                 "sessions": len({event["session_id"] for event in events}),
                 "critical": sum(1 for event in events if event["severity"] == "critical"),
+            },
+            "data_quality": {
+                "events_with_truncation": int(normalization_counts["events_with_truncation"]),
+                "events_with_lossy_normalization": int(normalization_counts["events_with_lossy_normalization"]),
+                "events_with_credential_redaction": int(normalization_counts["events_with_credential_redaction"]),
+                "truncated_strings": int(normalization_counts["truncated_strings"]),
+                "truncated_collections": int(normalization_counts["truncated_collections"]),
+                "dropped_keys": int(normalization_counts["dropped_keys"]),
+                "coerced_values": int(normalization_counts["coerced_values"]),
+                "credential_secrets_redacted": int(normalization_counts["credential_secrets_redacted"]),
             },
             "timeline": [{"label": key, "value": timeline[key]} for key in sorted(timeline)],
             "unique_source_ip_timeline": [
@@ -1397,6 +1436,16 @@ class Store:
             for family in ("mitre", "cve"):
                 for item in event["derived"].get(family, []) or []:
                     mappings.append({"event_id": event["id"], "family": family, "mapping": item})
+        normalization_events = [
+            event for event in events
+            if isinstance((event.get("collector") or {}).get("normalization"), dict)
+            and (event.get("collector") or {}).get("normalization", {}).get("lossy")
+        ]
+        truncated_normalization_events = [
+            event for event in events
+            if isinstance((event.get("collector") or {}).get("normalization"), dict)
+            and (event.get("collector") or {}).get("normalization", {}).get("truncated")
+        ]
         limitations = [
             "IP, ASN and geolocation do not establish human identity or attribution.",
             "External enrichment is contextual and may be stale or inaccurate.",
@@ -1405,6 +1454,10 @@ class Store:
             "collector_received_at is collector-controlled receipt metadata; event timestamp remains sensor-reported.",
             "Rows created before collector receipt tracking was introduced may have collector_received_at backfilled from the event timestamp.",
         ]
+        if truncated_normalization_events:
+            limitations.append(
+                "One or more stored events contain explicitly disclosed field/collection truncation; inspect collector.normalization before treating payload text as complete."
+            )
         if bundle.get("analysis", {}).get("truncated"):
             limitations.append(
                 "Session analysis was truncated to the configured latest-event limit; this report is not a complete retained-session timeline."
@@ -1417,6 +1470,8 @@ class Store:
             "summary": bundle["summary"],
             "facts": {
                 "event_count": len(events),
+                "events_with_lossy_normalization": len(normalization_events),
+                "events_with_field_truncation": len(truncated_normalization_events),
                 "event_types": sorted({event["event_type"] for event in events}),
                 "source_ips": sorted({event["source_ip"] for event in events if event.get("source_ip")}),
                 "services": sorted({event["service"] for event in events if event.get("service")}),
