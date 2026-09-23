@@ -21,7 +21,7 @@ Compose enables signed sensor requests by default. A sensor sends its ID, Unix t
 For Suricata EVE JSON lines:
 
 ```bash
-export AEGIS_SENSOR_API_KEY='...'
+export AEGIS_SURICATA_SENSOR_API_KEY='...'
 python scripts/send_suricata_event.py --file /var/log/suricata/eve.json --sensor suricata-01
 ```
 
@@ -37,7 +37,7 @@ Do not use remote operator access without TLS. The example in `deploy/nginx.conf
 
 Application-level request limits protect sensor ingestion and operator APIs, but they are per process. For an Internet-facing deployment, keep an independent firewall/reverse-proxy rate limit as well.
 
-Dashboard analysis is explicitly capped by `AEGIS_ANALYTICS_MAX_EVENTS`. If the cap is reached the UI shows a warning; narrow the time window or filters before treating the displayed totals as complete.
+Dashboard analysis is explicitly capped by `AEGIS_ANALYTICS_MAX_EVENTS`. Single-session investigation loads are capped by `AEGIS_SESSION_MAX_EVENTS`, while temporal fallback correlation uses `AEGIS_SESSION_GAP_MINUTES`. The default Compose file forwards all three values from `.env`. If an analytical cap is reached the UI reports the limitation; narrow the scope before treating displayed totals as complete.
 
 ### Readiness and telemetry receipt
 
@@ -60,7 +60,7 @@ Use SQLite's online backup API instead of copying a live WAL database directly:
 docker compose --profile ops run --rm backup
 ```
 
-Backups are written under `/data/backups` and rotated according to `AEGIS_BACKUP_KEEP`. Apply the same privacy, access-control and retention rules to backups as to the primary telemetry database. Test restoration periodically.
+Backups are written under `/data/backups` and rotated according to `AEGIS_BACKUP_KEEP`. The Compose backup service uses the shared `aegis-data` volume with `network_mode: none`, because it does not require network access. Apply the same privacy, access-control and retention rules to backups as to the primary telemetry database. Test restoration periodically.
 
 ---
 
@@ -101,7 +101,7 @@ Non usare accesso operatore remoto senza TLS. L'esempio `deploy/nginx.conf.examp
 
 I limiti applicativi proteggono ingestione e API operatore, ma sono per-processo. Per un deployment esposto a Internet mantieni anche rate limiting indipendente su firewall/reverse proxy.
 
-L'analisi della dashboard è limitata esplicitamente da `AEGIS_ANALYTICS_MAX_EVENTS`. Quando il limite viene raggiunto la UI mostra un avviso: restringi intervallo temporale o filtri prima di considerare completi i totali visualizzati.
+L'analisi della dashboard è limitata esplicitamente da `AEGIS_ANALYTICS_MAX_EVENTS`. Il caricamento investigativo di una singola sessione è limitato da `AEGIS_SESSION_MAX_EVENTS`, mentre il fallback temporale della correlazione usa `AEGIS_SESSION_GAP_MINUTES`. Il Compose predefinito inoltra tutte e tre le variabili dal file `.env`. Quando viene raggiunto un limite analitico la UI lo dichiara: restringi l'ambito prima di considerare completi i totali visualizzati.
 
 ### Readiness e ricezione telemetria
 
@@ -124,4 +124,4 @@ Usa l'API di backup online di SQLite invece di copiare direttamente un database 
 docker compose --profile ops run --rm backup
 ```
 
-I backup vengono salvati in `/data/backups` e ruotati secondo `AEGIS_BACKUP_KEEP`. Applica a backup e database primario le stesse regole di privacy, controllo accessi e retention. Verifica periodicamente il ripristino.
+I backup vengono salvati in `/data/backups` e ruotati secondo `AEGIS_BACKUP_KEEP`. Il servizio backup del Compose usa il volume condiviso `aegis-data` con `network_mode: none`, perché non necessita di accesso di rete. Applica a backup e database primario le stesse regole di privacy, controllo accessi e retention. Verifica periodicamente il ripristino.
