@@ -18,7 +18,7 @@ from .casework import CaseValidationError, normalize_case_create, normalize_case
 from .detection import DetectionEngine
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
-from .model import EventValidationError, normalize_event
+from .ioc import IOCWorkspace\nfrom .model import EventValidationError, normalize_event
 from .pagination import CursorError
 from .reporting import case_markdown, session_markdown
 from .security import SlidingWindowLimiter, verify_signed_payload
@@ -149,6 +149,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         case_retention_days=int(app.config.get("CASE_RETENTION_DAYS", 0)),
     )
     alert_store = AlertStore(app.config["DATABASE_PATH"])
+    ioc_workspace = IOCWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
     detection_engine = DetectionEngine()
     limiter = SlidingWindowLimiter()
     enricher = app.config.get("ENRICHER")
@@ -168,6 +169,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     app.extensions["aegis_store"] = store
     app.extensions["aegis_alert_store"] = alert_store
+    app.extensions["aegis_ioc_workspace"] = ioc_workspace
     app.extensions["aegis_detection_engine"] = detection_engine
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
@@ -562,6 +564,23 @@ def create_app(test_config: dict | None = None) -> Flask:
         except ValueError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         return (jsonify(item), 201) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.get("/api/v1/iocs")
+    def iocs():
+        return jsonify(ioc_workspace.list(
+            limit=request.args.get("limit", 200, type=int),
+            q=request.args.get("q", type=str),
+            ioc_type=request.args.get("type", type=str),
+            hours=request.args.get("hours", 720, type=int),
+        ))
+
+    @app.get("/api/v1/iocs/<item_id>")
+    def ioc_detail(item_id: str):
+        item = ioc_workspace.get(
+            item_id[:128],
+            hours=request.args.get("hours", 720, type=int),
+        )
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
     @app.get("/api/v1/cases")
     def cases():
