@@ -165,8 +165,17 @@ services:
 
 networks:
   ssh_exposure:
+    ipam:
+      config:
+        - subnet: "${AEGIS_SSH_EXPOSURE_SUBNET:-172.30.101.0/24}"
   web_exposure:
+    ipam:
+      config:
+        - subnet: "${AEGIS_WEB_EXPOSURE_SUBNET:-172.30.102.0/24}"
   legacy_exposure:
+    ipam:
+      config:
+        - subnet: "${AEGIS_LEGACY_EXPOSURE_SUBNET:-172.30.103.0/24}"
   ssh_mgmt:
     internal: true
   web_mgmt:
