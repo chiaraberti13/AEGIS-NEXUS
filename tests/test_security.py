@@ -266,3 +266,22 @@ def test_unmapped_host_integration_is_not_blocked_by_sensor_cidr_binding(tmp_pat
         },
     )
     assert response.status_code == 201
+
+
+def test_malformed_sensor_allowlist_fails_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("AEGIS_SENSOR_KEYS", "{not-json")
+    monkeypatch.setenv("AEGIS_INGEST_API_KEY", "legacy-shared-secret")
+    with pytest.raises(ValueError, match="AEGIS_SENSOR_KEYS"):
+        create_app({
+            "TESTING": True,
+            "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        })
+
+
+def test_non_object_sensor_allowlist_fails_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("AEGIS_SENSOR_KEYS", '["ssh-secret"]')
+    with pytest.raises(ValueError, match="JSON object"):
+        create_app({
+            "TESTING": True,
+            "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        })
