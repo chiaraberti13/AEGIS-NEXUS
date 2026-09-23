@@ -1295,6 +1295,7 @@ class Store:
         commands, payloads = Counter(), Counter()
         mitre, cves, ids, iocs = Counter(), Counter(), Counter(), Counter()
         normalization_counts: Counter[str] = Counter()
+        sensor_capture_counts: Counter[str] = Counter()
         map_groups: dict[tuple[str, float, float], dict[str, Any]] = {}
 
         for event in events:
@@ -1319,6 +1320,16 @@ class Store:
                     normalization_counts["events_with_lossy_normalization"] += 1
                 if normalization.get("redacted"):
                     normalization_counts["events_with_credential_redaction"] += 1
+
+            sensor_capture = (event.get("observed") or {}).get("sensor_capture")
+            if isinstance(sensor_capture, dict):
+                if sensor_capture.get("truncated"):
+                    sensor_capture_counts["events_with_truncation"] += 1
+                if sensor_capture.get("rejected"):
+                    sensor_capture_counts["events_with_rejection"] += 1
+                entries = sensor_capture.get("truncated_fields")
+                if isinstance(entries, list):
+                    sensor_capture_counts["truncated_fields"] += len(entries)
 
             ts = datetime.fromisoformat(event["timestamp"])
             bucket = ts.strftime("%Y-%m-%dT%H:00Z")
@@ -1433,6 +1444,9 @@ class Store:
                 "dropped_keys": int(normalization_counts["dropped_keys"]),
                 "coerced_values": int(normalization_counts["coerced_values"]),
                 "credential_secrets_redacted": int(normalization_counts["credential_secrets_redacted"]),
+                "events_with_sensor_truncation": int(sensor_capture_counts["events_with_truncation"]),
+                "events_with_sensor_rejection": int(sensor_capture_counts["events_with_rejection"]),
+                "sensor_truncated_fields": int(sensor_capture_counts["truncated_fields"]),
             },
             "timeline": [{"label": key, "value": timeline[key]} for key in sorted(timeline)],
             "unique_source_ip_timeline": [
@@ -1512,6 +1526,16 @@ class Store:
             if isinstance((event.get("collector") or {}).get("normalization"), dict)
             and (event.get("collector") or {}).get("normalization", {}).get("truncated")
         ]
+        sensor_truncated_events = [
+            event for event in events
+            if isinstance((event.get("observed") or {}).get("sensor_capture"), dict)
+            and (event.get("observed") or {}).get("sensor_capture", {}).get("truncated")
+        ]
+        sensor_rejected_events = [
+            event for event in events
+            if isinstance((event.get("observed") or {}).get("sensor_capture"), dict)
+            and (event.get("observed") or {}).get("sensor_capture", {}).get("rejected")
+        ]
         limitations = [
             "IP, ASN and geolocation do not establish human identity or attribution.",
             "External enrichment is contextual and may be stale or inaccurate.",
@@ -1523,6 +1547,14 @@ class Store:
         if truncated_normalization_events:
             limitations.append(
                 "One or more stored events contain explicitly disclosed field/collection truncation; inspect collector.normalization before treating payload text as complete."
+            )
+        if sensor_truncated_events:
+            limitations.append(
+                "One or more sensors captured only a bounded prefix of hostile input; inspect observed.sensor_capture before treating credentials, commands or payloads as complete."
+            )
+        if sensor_rejected_events:
+            limitations.append(
+                "One or more sensor inputs were rejected because a capture limit was exceeded; the rejection event proves the limit condition, not the full rejected content."
             )
         if bundle.get("analysis", {}).get("truncated"):
             limitations.append(
@@ -1538,6 +1570,8 @@ class Store:
                 "event_count": len(events),
                 "events_with_lossy_normalization": len(normalization_events),
                 "events_with_field_truncation": len(truncated_normalization_events),
+                "events_with_sensor_truncation": len(sensor_truncated_events),
+                "events_with_sensor_rejection": len(sensor_rejected_events),
                 "event_types": sorted({event["event_type"] for event in events}),
                 "source_ips": sorted({event["source_ip"] for event in events if event.get("source_ip")}),
                 "services": sorted({event["service"] for event in events if event.get("service")}),
