@@ -379,7 +379,8 @@ class Store:
         if q:
             clauses.append(
                 "(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR protocol LIKE ? OR "
-                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR observed LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
+                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR "
+                "json_remove(observed, '$.credential.password') LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
             )
             needle = f"%{q[:128]}%"
             params.extend([needle] * 10)
@@ -1244,7 +1245,8 @@ class Store:
         if q:
             clauses.append(
                 "(source_ip LIKE ? OR event_type LIKE ? OR honeypot LIKE ? OR protocol LIKE ? OR "
-                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR observed LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
+                "service LIKE ? OR country LIKE ? OR asn LIKE ? OR "
+                "json_remove(observed, '$.credential.password') LIKE ? OR enrichment LIKE ? OR derived LIKE ?)"
             )
             needle = f"%{q[:128]}%"
             params.extend([needle] * 10)
