@@ -817,6 +817,19 @@ class Store:
             if session:
                 item["available"] = True
                 item["summary"] = dict(session)
+        elif evidence_type == "alert":
+            alert = conn.execute(
+                """
+                SELECT id,rule_id,rule_version,title,severity,confidence,source_ip,session_id,
+                       status,first_seen,last_seen,occurrence_count
+                FROM alerts WHERE id=?
+                """,
+                (evidence_id,),
+            ).fetchone()
+            if alert:
+                item["available"] = True
+                item["summary"] = dict(alert)
+                item["summary"]["classification_provenance"] = "detection_rule"
         return item
 
     def get_case(self, case_id: str) -> dict[str, Any] | None:
@@ -901,8 +914,12 @@ class Store:
                 raise ValueError("case_evidence_limit")
             if evidence_type == "event":
                 available = conn.execute("SELECT 1 FROM events WHERE id=?", (evidence_id,)).fetchone()
-            else:
+            elif evidence_type == "session":
                 available = conn.execute("SELECT 1 FROM sessions WHERE id=?", (evidence_id,)).fetchone()
+            elif evidence_type == "alert":
+                available = conn.execute("SELECT 1 FROM alerts WHERE id=?", (evidence_id,)).fetchone()
+            else:
+                available = None
             if not available:
                 raise ValueError("evidence_not_found")
             now = self._case_now()
