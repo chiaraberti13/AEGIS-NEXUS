@@ -26,6 +26,7 @@
     </div>
     <nav>
       <button class="nav-item active" data-view-target="dashboard" data-i18n="nav.dashboard"></button>
+      <button class="nav-item" data-view-target="alerts" data-i18n="nav.alerts"></button>
       <button class="nav-item" data-view-target="investigate" data-i18n="nav.investigate"></button>
       <button class="nav-item" data-view-target="cases" data-i18n="nav.cases"></button>
       <button class="nav-item" data-view-target="relations" data-i18n="nav.relations"></button>
@@ -176,6 +177,77 @@
           </tr></thead><tbody id="dashboard-feed"></tbody></table>
         </div>
       </article>
+    </section>
+
+    <section class="workspace" data-view="alerts">
+      <section class="grid alert-grid">
+        <article class="panel alert-browser">
+          <div class="panel-head">
+            <div><span class="eyebrow" data-i18n="alerts.eyebrow"></span><h2 data-i18n="alerts.title"></h2></div>
+            <span id="alert-count" class="badge">0</span>
+          </div>
+          <div class="alert-filters">
+            <select id="alert-status-filter">
+              <option value="" data-i18n="alerts.allStatus"></option>
+              <option value="new" data-i18n="alerts.status.new"></option>
+              <option value="acknowledged" data-i18n="alerts.status.acknowledged"></option>
+              <option value="investigating" data-i18n="alerts.status.investigating"></option>
+              <option value="closed" data-i18n="alerts.status.closed"></option>
+            </select>
+            <select id="alert-severity-filter">
+              <option value="" data-i18n="alerts.allSeverity"></option>
+              <option value="medium">MEDIUM</option><option value="high">HIGH</option><option value="critical">CRITICAL</option>
+            </select>
+          </div>
+          <div id="alert-list" class="alert-list"></div>
+        </article>
+
+        <article class="panel alert-detail">
+          <div id="alert-empty" class="empty" data-i18n="alerts.select"></div>
+          <div id="alert-detail-content" hidden>
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow" data-i18n="alerts.classification"></span>
+                <h2 id="alert-title"></h2>
+                <p id="alert-rule" class="muted"></p>
+              </div>
+              <span id="alert-severity" class="badge"></span>
+            </div>
+            <div class="fact-grid alert-facts">
+              <div><span data-i18n="alerts.confidence"></span><strong id="alert-confidence"></strong></div>
+              <div><span data-i18n="alerts.occurrences"></span><strong id="alert-occurrences"></strong></div>
+              <div><span data-i18n="common.source"></span><strong id="alert-source"></strong></div>
+              <div><span data-i18n="alerts.session"></span><strong id="alert-session"></strong></div>
+            </div>
+            <p id="alert-description" class="panel-note"></p>
+            <div class="case-form-row">
+              <label><span data-i18n="alerts.status"></span>
+                <select id="alert-status">
+                  <option value="new" data-i18n="alerts.status.new"></option>
+                  <option value="acknowledged" data-i18n="alerts.status.acknowledged"></option>
+                  <option value="investigating" data-i18n="alerts.status.investigating"></option>
+                  <option value="closed" data-i18n="alerts.status.closed"></option>
+                </select>
+              </label>
+              <label><span data-i18n="alerts.tags"></span><input id="alert-tags" maxlength="600" data-i18n-placeholder="alerts.tagsPlaceholder"></label>
+            </div>
+            <div class="case-actions"><button id="alert-save" class="compact" type="button" data-i18n="alerts.save"></button></div>
+            <section class="case-section">
+              <div class="panel-head"><h3 data-i18n="alerts.evidence"></h3><span id="alert-evidence-count" class="badge">0</span></div>
+              <div id="alert-evidence" class="alert-evidence"></div>
+            </section>
+            <section class="case-section">
+              <div class="panel-head"><h3 data-i18n="alerts.notes"></h3></div>
+              <form id="alert-note-form" class="case-note-form">
+                <textarea id="alert-note" maxlength="4000" rows="3" data-i18n-placeholder="alerts.notePlaceholder"></textarea>
+                <button class="compact" type="submit" data-i18n="alerts.addNote"></button>
+              </form>
+              <div id="alert-notes" class="case-notes"></div>
+            </section>
+            <p class="panel-note" data-i18n="alerts.limit"></p>
+          </div>
+        </article>
+      </section>
     </section>
 
     <section class="workspace" data-view="investigate">

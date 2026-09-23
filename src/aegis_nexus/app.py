@@ -13,7 +13,9 @@ import sqlite3
 from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
+from .alerts import AlertStore
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
+from .detection import DetectionEngine
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .model import EventValidationError, normalize_event
@@ -146,6 +148,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         max_cases=int(app.config.get("MAX_CASES", 10000)),
         case_retention_days=int(app.config.get("CASE_RETENTION_DAYS", 0)),
     )
+    alert_store = AlertStore(app.config["DATABASE_PATH"])
+    detection_engine = DetectionEngine()
     limiter = SlidingWindowLimiter()
     enricher = app.config.get("ENRICHER")
     if enricher is None:
@@ -163,6 +167,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         )
 
     app.extensions["aegis_store"] = store
+    app.extensions["aegis_alert_store"] = alert_store
+    app.extensions["aegis_detection_engine"] = detection_engine
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
     app.extensions["aegis_threat_context"] = threat_context
@@ -361,6 +367,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
+            for finding in detection_engine.evaluate(stored):
+                alert_store.record(finding, stored["timestamp"])
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
         except EventClockError as exc:
@@ -398,6 +406,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
+            for finding in detection_engine.evaluate(stored):
+                alert_store.record(finding, stored["timestamp"])
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
         except EventClockError as exc:
@@ -508,6 +518,50 @@ def create_app(test_config: dict | None = None) -> Flask:
                 filters=_filters_from_request(),
             )
         )
+
+    @app.get("/api/v1/alerts")
+    def alerts():
+        return jsonify({
+            "items": alert_store.list(
+                limit=request.args.get("limit", 100, type=int),
+                status=request.args.get("status", type=str),
+                severity=request.args.get("severity", type=str),
+            )
+        })
+
+    @app.get("/api/v1/alerts/<alert_id>")
+    def alert_detail(alert_id: str):
+        item = alert_store.get(alert_id[:128])
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.patch("/api/v1/alerts/<alert_id>")
+    def update_alert(alert_id: str):
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        payload = request.get_json()
+        if not isinstance(payload, dict):
+            return jsonify({"error": "validation_error"}), 422
+        status = payload.get("status")
+        tags = payload.get("tags")
+        if tags is not None and (not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags)):
+            return jsonify({"error": "validation_error", "detail": "tags must be a list of strings"}), 422
+        try:
+            item = alert_store.update(alert_id[:128], status=status, tags=tags)
+        except ValueError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.post("/api/v1/alerts/<alert_id>/notes")
+    def add_alert_note(alert_id: str):
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        payload = request.get_json()
+        body = payload.get("body") if isinstance(payload, dict) else None
+        try:
+            item = alert_store.add_note(alert_id[:128], body or "")
+        except ValueError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        return (jsonify(item), 201) if item else (jsonify({"error": "not_found"}), 404)
 
     @app.get("/api/v1/cases")
     def cases():
