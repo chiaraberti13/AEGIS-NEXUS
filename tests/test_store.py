@@ -750,3 +750,37 @@ def test_dashboard_and_relations_distinguish_sensor_truncated_credentials(tmp_pa
     assert report["credentials"][0]["password_complete"] is False
     assert report["credentials"][0]["sensor_reported_password_sha256"] == original_sha256
     assert any("observed.sensor_capture" in item for item in report["limitations"])
+
+
+def test_detection_context_is_anchored_to_event_time_and_matches_fingerprint_only(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    first = normalize_event({
+        "timestamp": "2020-01-01T10:00:00Z",
+        "honeypot": "ssh-1",
+        "event_type": "credential",
+        "observed": {
+            "source_ip": "203.0.113.201",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "credential": {"username": "root", "password": "shared-fixture"},
+        },
+    })
+    second = normalize_event({
+        "timestamp": "2020-01-01T10:05:00Z",
+        "honeypot": "ssh-2",
+        "event_type": "credential",
+        "observed": {
+            "source_ip": "203.0.113.202",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "credential": {"username": "admin", "password": "shared-fixture"},
+        },
+    })
+    store.ingest(first, collector_received_at="2026-09-23T10:00:00+00:00")
+    saved = store.ingest(second, collector_received_at="2026-09-23T10:00:01+00:00")
+    context = store.detection_context(saved)
+    assert {item["source_ip"] for item in context} == {"203.0.113.201", "203.0.113.202"}
+    assert "shared-fixture" not in str(context)
+    assert all(item["timestamp"].startswith("2020-01-01") for item in context)
