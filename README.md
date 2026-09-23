@@ -1,6 +1,7 @@
 <p align="center"><a href="README.md">🇬🇧 English</a> · <a href="README.it.md">🇮🇹 Italiano</a></p>
 
 <p align="center">
+  <img src="https://github.com/chiaraberti13/AEGIS-NEXUS/actions/workflows/ci.yml/badge.svg" alt="CI">
   <img src="https://img.shields.io/badge/status-active-F2C94C?style=flat-square" alt="Active">
   <img src="https://img.shields.io/badge/category-CYBERSECURITY-22D3EE?style=flat-square" alt="Cybersecurity">
   <img src="https://img.shields.io/badge/stack-Python%20%2B%20Flask-8B949E?style=flat-square" alt="Python and Flask">
@@ -20,7 +21,7 @@
 
 AEGIS-NEXUS is a **Honeypot + SOC Analysis + Threat Research + Cybersecurity Learning Lab**. It exposes deliberately limited SSH, web, FTP and Telnet decoys, collects hostile telemetry through authenticated sensor channels and turns it into an investigation workflow without executing attacker-supplied commands or payloads.
 
-The central design rule is provenance: **observed data, external enrichment, derived analysis and hypotheses remain separate**. GeoIP, ASN, local threat-context matches, IOC extraction, MITRE ATT&CK mappings and CVE references are never presented as facts unless the stored evidence supports them.
+The central design rule is provenance: **observed data, external enrichment, derived analysis and hypotheses remain separate**, while collector-controlled normalization metadata explicitly discloses truncation, redaction and other transformations. GeoIP, ASN, local threat-context matches, IOC extraction, MITRE ATT&CK mappings and CVE references are never presented as facts unless the stored evidence supports them.
 
 ## ✨ Key capabilities
 
@@ -37,6 +38,8 @@ The central design rule is provenance: **observed data, external enrichment, der
 - Native Suricata EVE JSON ingestion.
 - Bilingual IT/EN interface through central i18n dictionaries.
 - Hardened containers: non-root runtime, read-only filesystems, dropped capabilities, `no-new-privileges`, resource limits and separate management networks.
+- Linux host-side `DOCKER-USER` egress guard that blocks new decoy-initiated connections while preserving reply traffic for published honeypot ports.
+- Evidence Integrity with separate collector metadata, truncation/redaction indicators and credential fingerprints computed from the original value before storage bounds.
 - Time/capacity retention, online SQLite backups, readiness checks and bounded historical pagination.
 
 ## 🗺️ Architecture Diagram
