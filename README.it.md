@@ -98,10 +98,10 @@ flowchart LR
 
     classDef trap fill:#302527,stroke:#b98282,color:#f4f7f8;
     classDef core fill:#23313a,stroke:#7193a7,color:#f4f7f8;
-    classDef data fill:#2b3035,stroke:#8b959e,color:#f4f7f8;
+    classDef storage fill:#2b3035,stroke:#8b959e,color:#f4f7f8;
     class ssh,web,legacy trap;
     class collector,dashboard,investigation,analysis,cases core;
-    class data,geo,threat,backup data;
+    class data,geo,threat,backup storage;
 ```
 
 Il diagramma rappresenta la topologia Compose predefinita. I tre decoy **non** condividono una rete management laterale: ogni sensore dispone della propria rete di esposizione e della propria rete management `internal: true` collegata al collector. Le reti di esposizione sono normali bridge Docker e quindi **non costituiscono un controllo egress**; nei deployment esposti a Internet il traffico in uscita va limitato tramite firewall host/VLAN.
@@ -137,8 +137,9 @@ Deployment consigliato:
 - Docker Engine / Docker Desktop
 - Docker Compose v2 (`docker compose version` deve funzionare)
 - porte host libere `2222`, `8080`, `2121`, `2323` e porta locale `8600`
+- per gli esempi CLI: `curl`, client OpenSSH e `nc`/netcat
 
-Python 3.12+ serve soltanto per lo sviluppo locale diretto.
+Python 3.12+ serve per lo sviluppo locale diretto e per eseguire dall’host gli script Python inclusi, ad esempio il forwarder Suricata.
 
 ### 2. Clona il repository
 
@@ -239,7 +240,7 @@ FTP/Telnet con `nc`:
 
 ```bash
 printf "USER demo\r\nPASS demo\r\nQUIT\r\n" | nc 127.0.0.1 2121
-printf "demo\r\ndemo\r\nhelp\r\n" | nc 127.0.0.1 2323
+printf "demo\r\ndemo\r\n" | nc 127.0.0.1 2323
 ```
 
 Gli eventi risultanti compaiono nel Live Feed e diventano disponibili per ricerca, correlazione delle sessioni, grafo delle relazioni, casi, report e Study Mode.
@@ -295,7 +296,7 @@ docker compose \
 
 ## 🛡️ Ingestione Suricata
 
-Imposta una `AEGIS_SURICATA_SENSOR_API_KEY` indipendente in `.env`, quindi inoltra record EVE JSON con lo script incluso:
+Imposta una `AEGIS_SURICATA_SENSOR_API_KEY` indipendente in `.env`. Lo script incluso è un utility Python eseguita sull’host: installa prima il package (`python -m pip install -e .`), quindi inoltra i record EVE JSON:
 
 ```bash
 export AEGIS_SURICATA_SENSOR_API_KEY="<segreto-suricata-configurato-in-.env>"
