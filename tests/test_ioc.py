@@ -49,7 +49,7 @@ def test_ioc_workspace_aggregates_provenance_and_relationships(tmp_path):
         "evidence": [{"type": "event", "id": first["id"]}],
     }
     alert = alerts.record(finding, first["timestamp"])
-    case = store.create_case({"title": "IOC fixture", "severity": "medium", "tags": ["ioc"]})
+    case = store.create_case({"title": "IOC fixture", "summary": "", "status": "open", "severity": "medium", "tags": ["ioc"]})
     store.add_case_evidence(case["id"], "alert", alert["id"])
 
     workspace = IOCWorkspace(path)
