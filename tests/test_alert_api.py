@@ -92,3 +92,33 @@ def test_alert_api_rejects_invalid_status_and_sensor_network_access(tmp_path):
 
     missing = client.patch("/api/v1/alerts/not-found", json={"status": "bogus"})
     assert missing.status_code == 422
+
+
+def test_temporal_detection_creates_aggregated_alert_from_historical_evidence(tmp_path):
+    client = _app(tmp_path).test_client()
+    event_ids = []
+    for minute in range(5):
+        response = client.post(
+            "/api/v1/events",
+            headers={"X-Aegis-Key": "secret"},
+            json={
+                "timestamp": f"2020-01-01T10:0{minute}:00Z",
+                "honeypot": "ssh-1",
+                "event_type": "credential",
+                "observed": {
+                    "source_ip": "203.0.113.88",
+                    "service": "ssh",
+                    "protocol": "tcp",
+                    "destination_port": 22,
+                    "credential": {"username": "root", "password": f"fixture-{minute}"},
+                },
+            },
+        )
+        assert response.status_code == 201
+        event_ids.append(response.get_json()["id"])
+
+    queue = client.get("/api/v1/alerts").get_json()["items"]
+    alert = next(item for item in queue if item["rule_id"] == "multiple_auth_failures")
+    assert alert["status"] == "new"
+    assert {item["id"] for item in alert["evidence"]} == set(event_ids)
+    assert alert["confidence"] == 95
