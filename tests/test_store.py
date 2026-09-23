@@ -705,3 +705,48 @@ def test_session_summary_discloses_correlation_strength(tmp_path):
     graph = store.relations(explicit["session_id"])
     session_node = next(node for node in graph["nodes"] if node["kind"] == "session")
     assert session_node["metadata"]["correlation"]["strength"] == "explicit"
+
+
+def test_dashboard_and_relations_distinguish_sensor_truncated_credentials(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    original = "v" * 5000
+    captured = original[:4096]
+    import hashlib
+    original_sha256 = hashlib.sha256(original.encode()).hexdigest()
+
+    saved = store.ingest(normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "credential",
+        "observed": {
+            "source_ip": "203.0.113.171",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "credential": {"username": "root", "password": captured},
+            "sensor_capture": {
+                "truncated": True,
+                "truncated_fields": [{
+                    "path": "observed.credential.password",
+                    "original_length": len(original),
+                    "captured_length": len(captured),
+                    "original_sha256": original_sha256,
+                }],
+            },
+        },
+    }))
+
+    dashboard = store.dashboard(hours=24, include_simulation=True)
+    assert dashboard["data_quality"]["events_with_sensor_truncation"] == 1
+    assert dashboard["credential_secret_fingerprints"][0]["label"].startswith("sensor-sha256:")
+    assert "truncated" in dashboard["credential_secret_fingerprints"][0]["label"]
+
+    graph = store.relations(saved["session_id"])
+    secret = next(node for node in graph["nodes"] if node["kind"] == "credential_secret_fingerprint")
+    assert secret["metadata"]["complete"] is False
+    assert secret["metadata"]["fingerprint_provenance"] == "sensor_reported_original"
+
+    report = store.report(saved["session_id"])
+    assert report["facts"]["events_with_sensor_truncation"] == 1
+    assert report["credentials"][0]["password_complete"] is False
+    assert report["credentials"][0]["sensor_reported_password_sha256"] == original_sha256
+    assert any("observed.sensor_capture" in item for item in report["limitations"])
