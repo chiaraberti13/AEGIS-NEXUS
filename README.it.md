@@ -189,7 +189,7 @@ Quando richiesto inserisci il valore di `AEGIS_OPERATOR_API_KEY` presente nel fi
 
 | Componente | Endpoint host | Funzione |
 |---|---:|---|
-| SSH decoy | `127.0.0.1/host:2222` | Interazione SSH emulata e telemetria dei comandi |
+| SSH decoy | `host:2222` | Interazione SSH emulata e telemetria dei comandi |
 | Web decoy | `http://host:8080` | Telemetria login, richieste e payload |
 | FTP decoy | `host:2121` | Telemetria credential legacy |
 | Telnet decoy | `host:2323` | Telemetria credential/comandi legacy |
