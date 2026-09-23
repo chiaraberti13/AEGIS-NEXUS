@@ -18,7 +18,7 @@ The default Compose stack uses separate `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_S
 
 Compose enables signed sensor requests by default. A sensor sends its ID, Unix timestamp and an HMAC-SHA256 signature over `timestamp + "." + raw_body`. The collector rejects invalid or stale signatures. Normal decoy events include a UUID, so an exact replay is rejected as a duplicate.
 
-For Suricata EVE JSON lines:
+For Suricata EVE JSON lines, install the project package on the forwarding host first (`python -m pip install -e .`), then:
 
 ```bash
 export AEGIS_SURICATA_SENSOR_API_KEY='...'
