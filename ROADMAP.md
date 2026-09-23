@@ -55,20 +55,20 @@ This document is the project's implementation checklist. Items are checked only 
 - [x] Implement alert lifecycle: New → Acknowledged → Investigating → Closed
 - [x] Add analyst notes and tags to alerts
 - [x] Add Alerts API
-- [ ] Add SOC Alert Queue
-- [ ] Add Alert Detail investigation view
-- [ ] Link alerts to events, sessions, IOC and cases
-- [ ] Implement `multiple_auth_failures`
-- [ ] Implement `credential_reuse`
-- [ ] Implement `credential_bruteforce`
-- [ ] Implement `web_scanning`
-- [ ] Implement `path_traversal_sequence`
-- [ ] Implement `recon_burst`
+- [x] Add SOC Alert Queue
+- [x] Add Alert Detail investigation view
+- [x] Link alerts to events, sessions, IOC and cases
+- [x] Implement `multiple_auth_failures`
+- [x] Implement `credential_reuse`
+- [x] Implement `credential_bruteforce`
+- [x] Implement `web_scanning`
+- [x] Implement `path_traversal_sequence`
+- [x] Implement `recon_burst`
 - [x] Implement `command_staging_detected`
 - [x] Implement `download_attempt`
-- [ ] Implement `rapid_port_sequence`
+- [x] Implement `rapid_port_sequence`
 - [x] Implement `suricata_high_severity`
-- [ ] Add detection-rule tests and false-positive regression fixtures
+- [x] Add detection-rule tests and false-positive regression fixtures
 - [x] Document detection semantics and limitations in IT/EN
 
 **Done when:** every alert can be traced back to concrete stored evidence and the UI explains why the detection fired.
@@ -351,7 +351,7 @@ These requirements apply to **every** roadmap cycle.
 | Cycle | Status |
 |---|---|
 | Foundation | ✅ Completed |
-| A — SOC Detection & Alerting | 🟨 In progress |
+| A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ⬜ Planned |
 | C — Network Evidence & Visibility | ⬜ Planned |
 | D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
