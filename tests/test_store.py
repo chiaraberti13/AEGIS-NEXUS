@@ -781,6 +781,6 @@ def test_detection_context_is_anchored_to_event_time_and_matches_fingerprint_onl
     store.ingest(first, collector_received_at="2026-09-23T10:00:00+00:00")
     saved = store.ingest(second, collector_received_at="2026-09-23T10:00:01+00:00")
     context = store.detection_context(saved)
-    assert {item["source_ip"] for item in context} == {"203.0.113.201", "203.0.113.202"}
+    assert {item.get("source_ip") or item["observed"]["source_ip"] for item in context} == {"203.0.113.201", "203.0.113.202"}
     assert "shared-fixture" not in str(context)
     assert all(item["timestamp"].startswith("2020-01-01") for item in context)
