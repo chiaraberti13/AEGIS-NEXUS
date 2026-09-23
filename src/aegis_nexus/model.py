@@ -11,10 +11,11 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 MAX_STRING = 4096
 MAX_ITEMS = 128
 MAX_DEPTH = 6
+MAX_AUDIT_PATHS = 64
 _ALLOWED_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
 _MITRE_ID = re.compile(r"^T\d{4}(?:\.\d{3})?$")
@@ -39,7 +40,23 @@ def _utc_iso(value: Any | None = None) -> str:
     return parsed.astimezone(timezone.utc).isoformat()
 
 
-def _bounded(value: Any, depth: int = 0) -> Any:
+def _record_audit(audit: dict[str, Any] | None, key: str, path: str) -> None:
+    if audit is None:
+        return
+    audit[key] = int(audit.get(key, 0)) + 1
+    paths_key = f"{key}_paths"
+    paths = audit.setdefault(paths_key, [])
+    if isinstance(paths, list) and len(paths) < MAX_AUDIT_PATHS and path not in paths:
+        paths.append(path)
+
+
+def _bounded(
+    value: Any,
+    depth: int = 0,
+    *,
+    path: str = "value",
+    audit: dict[str, Any] | None = None,
+) -> Any:
     if depth > MAX_DEPTH:
         raise EventValidationError("payload nesting too deep")
     if value is None or isinstance(value, bool):
@@ -51,18 +68,71 @@ def _bounded(value: Any, depth: int = 0) -> Any:
             raise EventValidationError("non-finite numeric value")
         return value
     if isinstance(value, str):
+        if len(value) > MAX_STRING:
+            _record_audit(audit, "truncated_strings", path)
         return value[:MAX_STRING]
     if isinstance(value, list):
-        return [_bounded(v, depth + 1) for v in value[:MAX_ITEMS]]
+        if len(value) > MAX_ITEMS:
+            _record_audit(audit, "truncated_collections", path)
+        return [
+            _bounded(v, depth + 1, path=f"{path}[]", audit=audit)
+            for v in value[:MAX_ITEMS]
+        ]
     if isinstance(value, dict):
         clean: dict[str, Any] = {}
-        for raw_key, raw_value in list(value.items())[:MAX_ITEMS]:
+        items = list(value.items())
+        if len(items) > MAX_ITEMS:
+            _record_audit(audit, "truncated_collections", path)
+        for raw_key, raw_value in items[:MAX_ITEMS]:
             key = str(raw_key)
             if not _SAFE_KEY.fullmatch(key):
+                _record_audit(audit, "dropped_keys", path)
                 continue
-            clean[key] = _bounded(raw_value, depth + 1)
+            clean[key] = _bounded(
+                raw_value,
+                depth + 1,
+                path=f"{path}.{key}",
+                audit=audit,
+            )
         return clean
-    return str(value)[:MAX_STRING]
+    _record_audit(audit, "coerced_values", path)
+    text = str(value)
+    if len(text) > MAX_STRING:
+        _record_audit(audit, "truncated_strings", path)
+    return text[:MAX_STRING]
+
+
+def _normalization_summary(audit: dict[str, Any]) -> dict[str, Any]:
+    count_keys = (
+        "truncated_strings",
+        "truncated_collections",
+        "dropped_keys",
+        "coerced_values",
+        "credential_secrets_redacted",
+    )
+    counts = {key: int(audit.get(key, 0)) for key in count_keys}
+    lossy = any(
+        counts[key] > 0
+        for key in ("truncated_strings", "truncated_collections", "dropped_keys", "coerced_values")
+    )
+    paths = {
+        key: list(audit.get(f"{key}_paths", []))
+        for key in count_keys
+        if audit.get(f"{key}_paths")
+    }
+    return {
+        "lossy": lossy,
+        "truncated": counts["truncated_strings"] > 0 or counts["truncated_collections"] > 0,
+        "redacted": counts["credential_secrets_redacted"] > 0,
+        "counts": counts,
+        "paths": paths,
+        "limits": {
+            "max_string": MAX_STRING,
+            "max_items": MAX_ITEMS,
+            "max_depth": MAX_DEPTH,
+            "audit_paths": MAX_AUDIT_PATHS,
+        },
+    }
 
 
 def _normalize_ip(value: Any, field: str = "source_ip") -> str | None:
@@ -88,7 +158,7 @@ def _normalize_port(value: Any, field: str) -> int | None:
     return port
 
 
-def _redact_credentials(observed: dict[str, Any]) -> dict[str, Any]:
+def _redact_credentials(observed: dict[str, Any], audit: dict[str, Any] | None = None) -> dict[str, Any]:
     observed = deepcopy(observed)
     credential = observed.get("credential")
     if not isinstance(credential, dict):
@@ -101,6 +171,7 @@ def _redact_credentials(observed: dict[str, Any]) -> dict[str, Any]:
     credential["password_sha256"] = hashlib.sha256(password_text.encode("utf-8", "replace")).hexdigest()
     if os.getenv("AEGIS_STORE_CREDENTIAL_SECRETS", "false").lower() not in {"1", "true", "yes"}:
         credential["password"] = "[redacted]"
+        _record_audit(audit, "credential_secrets_redacted", "observed.credential.password")
     return observed
 
 
@@ -150,17 +221,24 @@ def _validate_enrichment(enrichment: dict[str, Any]) -> None:
 def normalize_event(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise EventValidationError("event must be a JSON object")
-    observed = _bounded(payload.get("observed") or {})
-    enrichment = _bounded(payload.get("enrichment") or {})
-    derived = _bounded(payload.get("derived") or {})
-    hypotheses = _bounded(payload.get("hypotheses") or [])
+    audit: dict[str, Any] = {}
+    raw_observed = payload.get("observed") or {}
+    if not isinstance(raw_observed, dict):
+        raise EventValidationError("observed must be an object")
+    observed = _bounded(
+        _redact_credentials(raw_observed, audit),
+        path="observed",
+        audit=audit,
+    )
+    enrichment = _bounded(payload.get("enrichment") or {}, path="enrichment", audit=audit)
+    derived = _bounded(payload.get("derived") or {}, path="derived", audit=audit)
+    hypotheses = _bounded(payload.get("hypotheses") or [], path="hypotheses", audit=audit)
     if not isinstance(observed, dict) or not isinstance(enrichment, dict) or not isinstance(derived, dict):
         raise EventValidationError("observed, enrichment and derived must be objects")
     if not isinstance(hypotheses, list):
         raise EventValidationError("hypotheses must be a list")
     _validate_enrichment(enrichment)
     _validate_derived(derived)
-    observed = _redact_credentials(observed)
     severity = str(payload.get("severity", "info")).lower()
     if severity not in _ALLOWED_SEVERITIES:
         raise EventValidationError("invalid severity")
@@ -194,6 +272,9 @@ def normalize_event(payload: dict[str, Any]) -> dict[str, Any]:
         "enrichment": enrichment,
         "derived": derived,
         "hypotheses": hypotheses,
+        "collector": {
+            "normalization": _normalization_summary(audit),
+        },
     }
 
 
