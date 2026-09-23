@@ -50,10 +50,24 @@ subnets=(
 )
 
 validate_subnets() {
-  local subnet
+  local subnet ip prefix octet
+  local -a octets
   for subnet in "${subnets[@]}"; do
     [[ "$subnet" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$ ]] || die "invalid IPv4 CIDR: $subnet"
+    IFS=/ read -r ip prefix <<< "$subnet"
+    IFS=. read -r -a octets <<< "$ip"
+    (( ${#octets[@]} == 4 )) || die "invalid IPv4 CIDR: $subnet"
+    for octet in "${octets[@]}"; do
+      (( 10#$octet <= 255 )) || die "invalid IPv4 CIDR: $subnet"
+    done
+    (( 10#$prefix <= 32 )) || die "invalid IPv4 CIDR: $subnet"
   done
+}
+
+validate_only() {
+  validate_subnets
+  printf 'Exposure CIDRs are syntactically valid:\n'
+  printf '  %s\n' "${subnets[@]}"
 }
 
 install_guard() {
@@ -101,5 +115,6 @@ case "${1:-status}" in
   install) install_guard ;;
   remove) remove_guard ;;
   status) status_guard ;;
-  *) die "usage: $0 {install|status|remove}" ;;
+  validate) validate_only ;;
+  *) die "usage: $0 {install|status|remove|validate}" ;;
 esac
