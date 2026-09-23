@@ -1,4 +1,6 @@
-from datetime import datetime, timedelta, timezone\n\nfrom aegis_nexus.app import create_app
+from datetime import datetime, timedelta, timezone
+
+from aegis_nexus.app import create_app
 
 
 def _ingest(client, event_id, timestamp, *, service="ssh", token=None):
