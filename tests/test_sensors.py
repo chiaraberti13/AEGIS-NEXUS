@@ -91,3 +91,16 @@ def test_legacy_reader_reports_oversized_input_rejection():
     assert status["reason"] == "line_too_long"
     assert status["limit"] == 512
     assert status["bytes_observed_at_least"] == 513
+
+
+def test_web_decoy_captures_unknown_paths_for_scan_detection(monkeypatch):
+    captured = []
+    monkeypatch.setattr(web_decoy.sensor, "emit", lambda *args, **kwargs: captured.append((args, kwargs)) or True)
+    client = web_decoy.app.test_client()
+    response = client.get("/wp-admin/probe-fixture")
+    assert response.status_code == 404
+    assert captured
+    args, _kwargs = captured[-1]
+    assert args[0] == "web.request"
+    assert args[1]["path"] == "/wp-admin/probe-fixture"
+    assert args[2] == "low"
