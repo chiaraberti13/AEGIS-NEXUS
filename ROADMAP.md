@@ -47,14 +47,14 @@ This document is the project's implementation checklist. Items are checked only 
 
 **Goal:** turn raw telemetry into evidence-backed SOC alerts without inventing attribution or unsupported conclusions.
 
-- [ ] Define versioned detection-rule schema
-- [ ] Implement Detection Engine
-- [ ] Keep detection `severity` and `confidence` separate
-- [ ] Store rule ID, rule version and evidence references for every alert
-- [ ] Implement alert deduplication and aggregation
-- [ ] Implement alert lifecycle: New → Acknowledged → Investigating → Closed
-- [ ] Add analyst notes and tags to alerts
-- [ ] Add Alerts API
+- [x] Define versioned detection-rule schema
+- [x] Implement Detection Engine
+- [x] Keep detection `severity` and `confidence` separate
+- [x] Store rule ID, rule version and evidence references for every alert
+- [x] Implement alert deduplication and aggregation
+- [x] Implement alert lifecycle: New → Acknowledged → Investigating → Closed
+- [x] Add analyst notes and tags to alerts
+- [x] Add Alerts API
 - [ ] Add SOC Alert Queue
 - [ ] Add Alert Detail investigation view
 - [ ] Link alerts to events, sessions, IOC and cases
@@ -64,12 +64,12 @@ This document is the project's implementation checklist. Items are checked only 
 - [ ] Implement `web_scanning`
 - [ ] Implement `path_traversal_sequence`
 - [ ] Implement `recon_burst`
-- [ ] Implement `command_staging_detected`
-- [ ] Implement `download_attempt`
+- [x] Implement `command_staging_detected`
+- [x] Implement `download_attempt`
 - [ ] Implement `rapid_port_sequence`
-- [ ] Implement `suricata_high_severity`
+- [x] Implement `suricata_high_severity`
 - [ ] Add detection-rule tests and false-positive regression fixtures
-- [ ] Document detection semantics and limitations in IT/EN
+- [x] Document detection semantics and limitations in IT/EN
 
 **Done when:** every alert can be traced back to concrete stored evidence and the UI explains why the detection fired.
 
@@ -351,7 +351,7 @@ These requirements apply to **every** roadmap cycle.
 | Cycle | Status |
 |---|---|
 | Foundation | ✅ Completed |
-| A — SOC Detection & Alerting | ⬜ Planned |
+| A — SOC Detection & Alerting | 🟨 In progress |
 | B — Correlation & Investigation 2.0 | ⬜ Planned |
 | C — Network Evidence & Visibility | ⬜ Planned |
 | D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
