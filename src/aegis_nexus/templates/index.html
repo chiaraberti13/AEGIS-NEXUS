@@ -231,10 +231,17 @@
               </label>
               <label><span data-i18n="alerts.tags"></span><input id="alert-tags" maxlength="600" data-i18n-placeholder="alerts.tagsPlaceholder"></label>
             </div>
-            <div class="case-actions"><button id="alert-save" class="compact" type="button" data-i18n="alerts.save"></button></div>
+            <div class="case-actions">
+              <button id="alert-save" class="compact" type="button" data-i18n="alerts.save"></button>
+              <button id="case-from-alert" class="compact" type="button" data-i18n="alerts.createCase"></button>
+            </div>
             <section class="case-section">
               <div class="panel-head"><h3 data-i18n="alerts.evidence"></h3><span id="alert-evidence-count" class="badge">0</span></div>
               <div id="alert-evidence" class="alert-evidence"></div>
+            </section>
+            <section class="case-section">
+              <div class="panel-head"><h3 data-i18n="alerts.iocs"></h3><span class="provenance derived" data-i18n="provenance.derived"></span></div>
+              <div id="alert-iocs" class="alert-evidence"></div>
             </section>
             <section class="case-section">
               <div class="panel-head"><h3 data-i18n="alerts.notes"></h3></div>
