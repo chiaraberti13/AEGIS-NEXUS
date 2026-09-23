@@ -149,7 +149,7 @@ services:
     network_mode: "none"
     command: ["python", "scripts/backup.py"]
     environment:
-      AEGIS_DATABASE_PATH: /data/aegis.db
+      AEGIS_DATABASE_PATH: ${AEGIS_DATABASE_PATH:-/data/aegis.db}
       AEGIS_BACKUP_DIR: ${AEGIS_BACKUP_DIR:-/data/backups}
       AEGIS_BACKUP_KEEP: ${AEGIS_BACKUP_KEEP:-14}
     volumes:
