@@ -1,19 +1,24 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="AEGIS-NEXUS — Honeypot, SOC Analysis, Threat Research and Cybersecurity Learning Lab" width="100%">
+</p>
+
 <p align="center"><a href="README.md">🇬🇧 English</a> · <a href="README.it.md">🇮🇹 Italiano</a></p>
 
 <p align="center">
   <img src="https://github.com/chiaraberti13/AEGIS-NEXUS/actions/workflows/ci.yml/badge.svg" alt="CI">
-  <img src="https://img.shields.io/badge/status-active-F2C94C?style=flat-square" alt="Active">
-  <img src="https://img.shields.io/badge/category-CYBERSECURITY-22D3EE?style=flat-square" alt="Cybersecurity">
+  <img src="https://img.shields.io/badge/status-active-F2C94C?style=flat-square" alt="Project status: active">
+  <img src="https://img.shields.io/badge/category-HONEYPOT%20%2B%20SOC-22D3EE?style=flat-square" alt="Honeypot and SOC">
   <img src="https://img.shields.io/badge/stack-Python%20%2B%20Flask-8B949E?style=flat-square" alt="Python and Flask">
   <img src="https://img.shields.io/badge/languages-EN%20%7C%20IT-8B5CF6?style=flat-square" alt="English and Italian">
   <img src="https://img.shields.io/badge/licence-MIT-2EA043?style=flat-square" alt="MIT">
 </p>
 
-# 🛡️ AEGIS-NEXUS
+> An evidence-first bilingual honeypot and SOC analysis platform for attack monitoring, investigation, threat research and cybersecurity learning.
 
-> Honeypot telemetry, SOC investigation, threat research and cybersecurity learning in one evidence-first platform.
+<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Data provenance</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="docs/INVESTIGATION.md">Investigation</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">Licence</a></p>
 
-<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="docs/INVESTIGATION.md">Investigation workflow</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">MIT Licence</a></p>
+> [!IMPORTANT]
+> Deploy honeypot sensors only on infrastructure you own or are explicitly authorized to monitor. Review the security, privacy and isolation documentation before exposing decoys to the Internet.
 
 ---
 
@@ -399,4 +404,8 @@ Released under the [MIT License](LICENSE). Use AEGIS-NEXUS only on infrastructur
 
 ---
 
-© Chiara Berti — 2026
+<p align="center">
+  <sub>Made with 🛡️ by <a href="https://github.com/chiaraberti13">chiaraberti13</a> · © 2026 Chiara Berti</sub>
+</p>
+
+---
