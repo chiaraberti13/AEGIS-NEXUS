@@ -38,6 +38,7 @@ La regola centrale è la provenienza: **dati osservati, enrichment esterni, anal
 - Ingestione nativa di eventi Suricata EVE JSON.
 - Interfaccia bilingue IT/EN tramite dizionari i18n centrali.
 - Container hardenizzati: runtime non-root, filesystem read-only, capability rimosse, `no-new-privileges`, limiti di risorse e reti management separate.
+- Binding CIDR management per sensore: le identità dei decoy built-in sono accettate soltanto dalla subnet interna attesa e le trust zone dei sensori non possono raggiungere API operatore/UI.
 - Egress guard Linux host-side su `DOCKER-USER` per bloccare nuove connessioni originate dai decoy mantenendo il traffico di risposta delle porte honeypot pubblicate.
 - Evidence Integrity con metadata collector separati, indicatori di troncamento/redazione e fingerprint credenziali calcolati sul valore originale prima dei limiti di storage.
 - Retention temporale/capacitiva, backup SQLite online, readiness check e paginazione storica bounded.
