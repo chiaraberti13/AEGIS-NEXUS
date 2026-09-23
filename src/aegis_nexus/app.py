@@ -18,7 +18,8 @@ from .casework import CaseValidationError, normalize_case_create, normalize_case
 from .detection import DetectionEngine
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
-from .ioc import IOCWorkspace\nfrom .model import EventValidationError, normalize_event
+from .ioc import IOCWorkspace
+from .model import EventValidationError, normalize_event
 from .pagination import CursorError
 from .reporting import case_markdown, session_markdown
 from .security import SlidingWindowLimiter, verify_signed_payload
