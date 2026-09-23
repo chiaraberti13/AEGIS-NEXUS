@@ -1,4 +1,4 @@
-.PHONY: install test run up down ps smoke logs backup
+.PHONY: install test run up down ps smoke logs backup egress-guard egress-status egress-remove
 
 install:
 	python -m pip install -e '.[dev]'
@@ -28,3 +28,12 @@ logs:
 
 backup:
 	docker compose --profile ops run --rm backup
+
+egress-guard:
+	@sudo bash scripts/egress_guard.sh install
+
+egress-status:
+	@sudo bash scripts/egress_guard.sh status
+
+egress-remove:
+	@sudo bash scripts/egress_guard.sh remove
