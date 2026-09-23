@@ -81,6 +81,20 @@
         <article><span data-i18n="kpi.critical"></span><strong id="kpi-critical">0</strong></article>
       </section>
 
+      <article class="panel integrity-panel">
+        <div class="panel-head">
+          <div><span class="eyebrow" data-i18n="integrity.eyebrow"></span><h2 data-i18n="integrity.title"></h2></div>
+          <span class="provenance collector-meta" data-i18n="provenance.collector"></span>
+        </div>
+        <div class="integrity-grid">
+          <div><span data-i18n="integrity.lossyEvents"></span><strong id="quality-lossy">0</strong></div>
+          <div><span data-i18n="integrity.truncatedEvents"></span><strong id="quality-truncated">0</strong></div>
+          <div><span data-i18n="integrity.redactedCredentials"></span><strong id="quality-redacted">0</strong></div>
+          <div><span data-i18n="integrity.droppedKeys"></span><strong id="quality-dropped-keys">0</strong></div>
+        </div>
+        <p class="panel-note" data-i18n="integrity.limit"></p>
+      </article>
+
       <section class="grid primary-grid">
         <article class="panel">
           <div class="panel-head">
@@ -204,6 +218,7 @@
               <section><span class="provenance enrichment" data-i18n="provenance.enrichment"></span><pre id="detail-enrichment"></pre></section>
               <section><span class="provenance derived" data-i18n="provenance.derived"></span><pre id="detail-derived"></pre></section>
               <section><span class="provenance hypotheses" data-i18n="provenance.hypotheses"></span><pre id="detail-hypotheses"></pre></section>
+              <section class="collector-integrity"><span class="provenance collector-meta" data-i18n="provenance.collector"></span><pre id="detail-collector"></pre></section>
             </div>
           </div>
         </article>
