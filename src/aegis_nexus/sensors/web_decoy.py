@@ -46,6 +46,16 @@ def headers(response):
     return response
 
 
+@app.errorhandler(404)
+def not_found(_error):
+    # Unknown paths are valuable scan evidence. Capture only bounded request metadata;
+    # do not reflect attacker-controlled path content into an HTML response.
+    audit: dict = {}
+    observed = attach_capture_metadata(_base_observed(audit), audit)
+    sensor.emit("web.request", observed, "low")
+    return jsonify({"status": "not_found"}), 404
+
+
 @app.get("/")
 def index():
     audit: dict = {}
