@@ -158,6 +158,34 @@ def _normalize_port(value: Any, field: str) -> int | None:
     return port
 
 
+def _sensor_credential_truncation(
+    observed: dict[str, Any],
+    captured_length: int,
+) -> dict[str, Any] | None:
+    capture = observed.get("sensor_capture")
+    if not isinstance(capture, dict):
+        return None
+    entries = capture.get("truncated_fields")
+    if not isinstance(entries, list):
+        return None
+    for entry in entries[:MAX_ITEMS]:
+        if not isinstance(entry, dict) or entry.get("path") != "observed.credential.password":
+            continue
+        try:
+            original_length = int(entry.get("original_length"))
+            declared_captured = int(entry.get("captured_length"))
+        except (TypeError, ValueError):
+            continue
+        if original_length < captured_length or declared_captured != captured_length:
+            continue
+        result: dict[str, Any] = {"original_length": original_length}
+        fingerprint = str(entry.get("original_sha256") or "").lower()
+        if re.fullmatch(r"[a-f0-9]{64}", fingerprint):
+            result["original_sha256"] = fingerprint
+        return result
+    return None
+
+
 def _redact_credentials(observed: dict[str, Any], audit: dict[str, Any] | None = None) -> dict[str, Any]:
     observed = deepcopy(observed)
     credential = observed.get("credential")
@@ -169,6 +197,12 @@ def _redact_credentials(observed: dict[str, Any], audit: dict[str, Any] | None =
     password_text = str(password)
     credential["password_length"] = len(password_text)
     credential["password_sha256"] = hashlib.sha256(password_text.encode("utf-8", "replace")).hexdigest()
+    sensor_truncation = _sensor_credential_truncation(observed, len(password_text))
+    credential["password_complete"] = sensor_truncation is None
+    if sensor_truncation is not None:
+        credential["sensor_reported_password_length"] = sensor_truncation["original_length"]
+        if sensor_truncation.get("original_sha256"):
+            credential["sensor_reported_password_sha256"] = sensor_truncation["original_sha256"]
     if os.getenv("AEGIS_STORE_CREDENTIAL_SECRETS", "false").lower() not in {"1", "true", "yes"}:
         credential["password"] = "[redacted]"
         _record_audit(audit, "credential_secrets_redacted", "observed.credential.password")
