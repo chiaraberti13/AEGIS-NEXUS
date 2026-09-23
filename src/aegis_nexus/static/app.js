@@ -577,7 +577,12 @@
       return;
     }
     const summary = bundle.summary || {};
+    const correlation = summary.correlation || {};
     fact(root, t("session.correlation"), t("session.correlation." + (summary.correlation_method || "temporal_fallback")));
+    fact(root, t("session.correlationStrength"), t("session.correlationStrength." + (correlation.strength || "heuristic")));
+    if (Array.isArray(correlation.basis) && correlation.basis.length) {
+      fact(root, t("session.correlationBasis"), correlation.basis);
+    }
     fact(root, t("session.events"), summary.event_count || 0);
     fact(root, t("session.credentials"), summary.credentials || 0);
     fact(root, t("session.commands"), summary.commands || 0);
@@ -853,6 +858,7 @@
     $("detail-enrichment").textContent = pretty(event.enrichment);
     $("detail-derived").textContent = pretty(event.derived);
     $("detail-hypotheses").textContent = pretty(event.hypotheses);
+    $("detail-collector").textContent = pretty(event.collector);
     renderFeed("event-feed", state.events);
     renderFeed("dashboard-feed", state.events, 12);
 
@@ -1292,6 +1298,11 @@
       $("kpi-ips").textContent = String(dashboard.totals.unique_source_ip);
       $("kpi-sessions").textContent = String(dashboard.totals.sessions);
       $("kpi-critical").textContent = String(dashboard.totals.critical);
+      const quality = dashboard.data_quality || {};
+      $("quality-lossy").textContent = String(quality.events_with_lossy_normalization || 0);
+      $("quality-truncated").textContent = String(quality.events_with_truncation || 0);
+      $("quality-redacted").textContent = String(quality.events_with_credential_redaction || 0);
+      $("quality-dropped-keys").textContent = String(quality.dropped_keys || 0);
       const analyticsWarning = $("analytics-warning");
       analyticsWarning.hidden = !dashboard.analysis?.truncated;
       if (dashboard.analysis?.truncated) {
