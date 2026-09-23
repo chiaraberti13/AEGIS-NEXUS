@@ -13,6 +13,16 @@ from .server import BoundedThreadingTCPServer
 HOST_KEY = paramiko.RSAKey.generate(2048)
 MAX_COMMAND = 512
 
+def _base_observed(source_ip: str, sensor_session_id: str) -> dict:
+    return {
+        "source_ip": source_ip,
+        "service": "ssh",
+        "protocol": "tcp",
+        "destination_port": int(os.getenv("AEGIS_SSH_PORT", "2222")),
+        "sensor_session_id": sensor_session_id,
+    }
+
+
 FAKE_FILES = {
     "/etc/hostname": "meridian-edge-01\n",
     "/etc/os-release": 'NAME="Ubuntu"\nVERSION="22.04.5 LTS (Jammy Jellyfish)"\n',
@@ -32,11 +42,7 @@ class AegisSSHServer(paramiko.ServerInterface):
         self.client.emit(
             "credential",
             {
-                "source_ip": self.source_ip,
-                "service": "ssh",
-                "protocol": "tcp",
-                "destination_port": 22,
-                "sensor_session_id": self.sensor_session_id,
+                **_base_observed(self.source_ip, self.sensor_session_id),
                 "credential": {"username": self.username, "password": password[:256]},
             },
             "medium",
@@ -88,13 +94,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
         self.request.settimeout(20)
         self.sensor.emit(
             "connection",
-            {
-                "source_ip": source_ip,
-                "service": "ssh",
-                "protocol": "tcp",
-                "destination_port": 22,
-                "sensor_session_id": sensor_session_id,
-            },
+            _base_observed(source_ip, sensor_session_id),
         )
         transport = paramiko.Transport(self.request)
         transport.local_version = "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10"
@@ -125,7 +125,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
                     continue
                 self.sensor.emit(
                     "command",
-                    {"source_ip": source_ip, "service": "ssh", "protocol": "tcp", "destination_port": 22, "sensor_session_id": sensor_session_id, "command": command},
+                    {**_base_observed(source_ip, sensor_session_id), "command": command},
                     "medium",
                 )
                 response = _fake_command(command)
