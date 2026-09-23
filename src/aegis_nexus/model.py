@@ -222,17 +222,34 @@ def normalize_event(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise EventValidationError("event must be a JSON object")
     audit: dict[str, Any] = {}
-    raw_observed = payload.get("observed") or {}
+    raw_observed = payload.get("observed", {})
+    raw_enrichment = payload.get("enrichment", {})
+    raw_derived = payload.get("derived", {})
+    raw_hypotheses = payload.get("hypotheses", [])
+    if raw_observed is None:
+        raw_observed = {}
+    if raw_enrichment is None:
+        raw_enrichment = {}
+    if raw_derived is None:
+        raw_derived = {}
+    if raw_hypotheses is None:
+        raw_hypotheses = []
     if not isinstance(raw_observed, dict):
         raise EventValidationError("observed must be an object")
+    if not isinstance(raw_enrichment, dict):
+        raise EventValidationError("enrichment must be an object")
+    if not isinstance(raw_derived, dict):
+        raise EventValidationError("derived must be an object")
+    if not isinstance(raw_hypotheses, list):
+        raise EventValidationError("hypotheses must be a list")
     observed = _bounded(
         _redact_credentials(raw_observed, audit),
         path="observed",
         audit=audit,
     )
-    enrichment = _bounded(payload.get("enrichment") or {}, path="enrichment", audit=audit)
-    derived = _bounded(payload.get("derived") or {}, path="derived", audit=audit)
-    hypotheses = _bounded(payload.get("hypotheses") or [], path="hypotheses", audit=audit)
+    enrichment = _bounded(raw_enrichment, path="enrichment", audit=audit)
+    derived = _bounded(raw_derived, path="derived", audit=audit)
+    hypotheses = _bounded(raw_hypotheses, path="hypotheses", audit=audit)
     if not isinstance(observed, dict) or not isinstance(enrichment, dict) or not isinstance(derived, dict):
         raise EventValidationError("observed, enrichment and derived must be objects")
     if not isinstance(hypotheses, list):
