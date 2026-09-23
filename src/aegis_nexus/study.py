@@ -13,6 +13,7 @@ def explain(event: dict[str, Any], lang: str = "it") -> dict[str, Any]:
     observed = event["observed"]
     derived = event.get("derived", {})
     enrichment = event.get("enrichment", {})
+    normalization = (event.get("collector") or {}).get("normalization") or {}
 
     labels = {
         "credential": ("Tentativo di autenticazione", "Authentication attempt"),
@@ -106,6 +107,18 @@ def explain(event: dict[str, Any], lang: str = "it") -> dict[str, Any]:
             if it else
             "Review the context and evidence for each extracted IOC/artifact: presence in a payload or command does not automatically imply maliciousness."
         )
+    if normalization.get("truncated"):
+        checklist.append(
+            "Il collector ha troncato almeno un campo o una collezione: verifica i percorsi in collector.normalization prima di considerare completo l'artefatto o l'estrazione IOC."
+            if it else
+            "The collector truncated at least one field or collection: review collector.normalization paths before treating the artifact or IOC extraction as complete."
+        )
+    if normalization.get("lossy") and not normalization.get("truncated"):
+        checklist.append(
+            "La normalizzazione ha modificato il contenuto ricevuto: verifica chiavi scartate o coercizioni dichiarate dal collector."
+            if it else
+            "Normalization modified received content: review collector-disclosed dropped keys or coercions."
+        )
     if not checklist:
         checklist.append(
             "Esamina gli eventi vicini nella stessa sessione prima di formulare ipotesi."
@@ -131,19 +144,33 @@ def explain(event: dict[str, Any], lang: str = "it") -> dict[str, Any]:
         ),
     ]
 
+    limitations = [
+        (
+            "Il singolo evento non dimostra identità, intenzione o attribuzione."
+            if it else
+            "A single event does not prove identity, intent or attribution."
+        )
+    ]
+    if normalization.get("truncated"):
+        limitations.append(
+            "Una parte dell'evidenza memorizzata è troncata per limiti di sicurezza/risorsa; le analisi derivate da quei campi possono essere incomplete."
+            if it else
+            "Part of the stored evidence is truncated by security/resource bounds; analysis derived from those fields may be incomplete."
+        )
+    if normalization.get("redacted"):
+        limitations.append(
+            "I segreti delle credenziali sono redatti per policy; fingerprint e lunghezza descrivono il valore originale ricevuto."
+            if it else
+            "Credential secrets are policy-redacted; fingerprint and length describe the original submitted value."
+        )
+
     return {
         "title": title,
         "why_interesting": " ".join(why_parts),
         "soc_checklist": checklist,
         "questions": questions,
-        "provenance": ["observed", "enrichment", "derived", "hypotheses"],
-        "limitations": [
-            (
-                "Il singolo evento non dimostra identità, intenzione o attribuzione."
-                if it else
-                "A single event does not prove identity, intent or attribution."
-            )
-        ],
+        "provenance": ["observed", "enrichment", "derived", "hypotheses", "collector"],
+        "limitations": limitations,
     }
 
 
@@ -154,6 +181,15 @@ def explain_session(bundle: dict[str, Any], lang: str = "it") -> dict[str, Any]:
     events = bundle.get("events", [])
     analysis = bundle.get("analysis", {})
     truncated = bool(analysis.get("truncated"))
+    correlation = summary.get("correlation") or {}
+    normalized_lossy = [
+        event for event in events
+        if ((event.get("collector") or {}).get("normalization") or {}).get("lossy")
+    ]
+    normalized_truncated = [
+        event for event in events
+        if ((event.get("collector") or {}).get("normalization") or {}).get("truncated")
+    ]
 
     facts = []
     event_count = int(summary.get("event_count") or len(events))
@@ -180,6 +216,12 @@ def explain_session(bundle: dict[str, Any], lang: str = "it") -> dict[str, Any]:
             f"Servizio: {session['service']} su {session.get('protocol', 'unknown')}/{session.get('destination_port', 0)}."
             if it else
             f"Service: {session['service']} on {session.get('protocol', 'unknown')}/{session.get('destination_port', 0)}."
+        )
+    if normalized_lossy:
+        facts.append(
+            f"{len(normalized_lossy)} eventi contengono trasformazioni lossy dichiarate dal collector; {len(normalized_truncated)} includono troncamenti."
+            if it else
+            f"{len(normalized_lossy)} events contain collector-disclosed lossy transformations; {len(normalized_truncated)} include truncation."
         )
 
     focus = []
@@ -249,9 +291,9 @@ def explain_session(bundle: dict[str, Any], lang: str = "it") -> dict[str, Any]:
             "Review external enrichment separately and record source, timestamp and possible limitations."
         ),
         (
-            "Mantieni distinte osservazioni, enrichment, dati derivati e ipotesi nel report finale."
+            "Mantieni distinte osservazioni, enrichment, dati derivati, ipotesi e metadata controllati dal collector nel report finale."
             if it else
-            "Keep observations, enrichment, derived data and hypotheses separate in the final report."
+            "Keep observations, enrichment, derived data, hypotheses and collector-controlled metadata separate in the final report."
         ),
     ]
 
@@ -268,10 +310,25 @@ def explain_session(bundle: dict[str, Any], lang: str = "it") -> dict[str, Any]:
                     "The session exceeds the configured analysis limit: timeline, graph, report and Study Mode use only the indicated latest subset."
                 )
             ] if truncated else []),
+            *([
+                (
+                    "Uno o più eventi hanno evidenza troncata dal collector: comandi, payload o IOC derivati da quei campi possono essere incompleti."
+                    if it else
+                    "One or more events contain collector-truncated evidence: commands, payloads or IOCs derived from those fields may be incomplete."
+                )
+            ] if normalized_truncated else []),
             (
-                "La sessione usa ID espliciti di connessione/flow quando disponibili e fallback temporale negli altri casi; nessun metodo dimostra l'identità della persona dietro gli eventi."
-                if it else
-                "The session uses explicit connection/flow IDs when available and temporal fallback otherwise; no method proves the identity of the person behind the events."
+                (
+                    "La correlazione della sessione è euristica e usa identità tecnica più finestra temporale; eventi distinti possono essere aggregati o una singola attività può essere separata."
+                    if it else
+                    "Session correlation is heuristic and uses technical identity plus a time window; distinct activity may be grouped or one activity may be split."
+                )
+                if correlation.get("strength") == "heuristic"
+                else (
+                    "La correlazione usa un identificatore esplicito di connessione/flow, ma questo non dimostra l'identità della persona dietro gli eventi."
+                    if it else
+                    "Correlation uses an explicit connection/flow identifier, but this does not prove the identity of the person behind the events."
+                )
             ),
             (
                 "Geolocalizzazione, ASN e reputazione IP descrivono infrastruttura, non identità umana."
