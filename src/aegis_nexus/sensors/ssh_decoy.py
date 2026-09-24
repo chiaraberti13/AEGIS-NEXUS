@@ -13,6 +13,7 @@ from .capture import attach_capture_metadata, bounded_text, mark_truncation
 from .client import SensorClient
 from ..network_evidence import make_network_evidence
 from .server import BoundedThreadingTCPServer
+from .persona import load_persona
 from .registry import register_sensor
 
 HOST_KEY = paramiko.RSAKey.generate(2048)
@@ -48,11 +49,8 @@ def _base_observed(
     return observed
 
 
-FAKE_FILES = {
-    "/etc/hostname": "meridian-edge-01\n",
-    "/etc/os-release": 'NAME="Ubuntu"\nVERSION="22.04.5 LTS (Jammy Jellyfish)"\n',
-    "/home/ops/readme.txt": "Maintenance window: Sunday 02:00 UTC.\n",
-}
+PERSONA = load_persona()
+FAKE_FILES = PERSONA.fake_files
 
 
 class AegisSSHServer(paramiko.ServerInterface):
@@ -112,18 +110,18 @@ def _fake_command(command: str) -> str:
     if clean in {"exit", "logout"}:
         return "__EXIT__"
     if clean == "pwd":
-        return "/home/ops\n"
+        return f"/home/{PERSONA.username}\\n"
     if clean in {"whoami", "id -un"}:
-        return "ops\n"
+        return f"{PERSONA.username}\\n"
     if clean == "id":
-        return "uid=1001(ops) gid=1001(ops) groups=1001(ops),27(sudo)\n"
+        return f"uid=1001({PERSONA.username}) gid=1001({PERSONA.username}) groups=1001({PERSONA.username}),27(sudo)\\n"
     if clean in {"ls", "ls -la", "ls -l"}:
-        return "drwxr-xr-x 2 ops ops 4096 Sep 22 10:14 .\ndrwxr-xr-x 4 root root 4096 Sep 20 08:02 ..\n-rw-r--r-- 1 ops ops 48 Sep 21 17:44 readme.txt\n"
+        return f"drwxr-xr-x 2 {PERSONA.username} {PERSONA.username} 4096 Sep 22 10:14 .\\ndrwxr-xr-x 4 root root 4096 Sep 20 08:02 ..\\n-rw-r--r-- 1 {PERSONA.username} {PERSONA.username} 48 Sep 21 17:44 readme.txt\\n"
     if clean == "uname -a":
-        return "Linux meridian-edge-01 5.15.0-119-generic #129-Ubuntu SMP x86_64 GNU/Linux\n"
+        return f"Linux {PERSONA.hostname} 5.15.0-119-generic #129-{PERSONA.os_name} SMP x86_64 GNU/Linux\\n"
     if clean.startswith("cat "):
         path = clean[4:].strip()
-        normalized = "/home/ops/readme.txt" if path in {"readme.txt", "./readme.txt"} else path
+        normalized = f"/home/{PERSONA.username}/readme.txt" if path in {"readme.txt", "./readme.txt"} else path
         return FAKE_FILES.get(normalized, f"cat: {path}: No such file or directory\n")
     return f"bash: {clean.split()[0][:64]}: command not found\n"
 
@@ -175,7 +173,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
             _base_observed(source_ip, sensor_session_id, source_port, destination_port=destination_port),
         )
         transport = paramiko.Transport(self.request)
-        transport.local_version = "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10"
+        transport.local_version = PERSONA.ssh_version
         transport.add_server_key(HOST_KEY)
         server = AegisSSHServer(self.sensor, source_ip, source_port, destination_port, sensor_session_id)
         try:
@@ -184,13 +182,13 @@ class SSHHandler(socketserver.BaseRequestHandler):
             if channel is None:
                 return
             channel.settimeout(30)
-            channel.send("Ubuntu 22.04.5 LTS\r\n\r\nops@meridian-edge-01:~$ ")
+            channel.send(f"{PERSONA.os_name} {PERSONA.os_version}\\r\\n\\r\\n{PERSONA.prompt()}")
             while transport.is_active():
                 command, audit = _read_command(channel)
                 if command is None:
                     break
                 if not command:
-                    channel.send("ops@meridian-edge-01:~$ ")
+                    channel.send(PERSONA.prompt())
                     continue
                 observed = {
                     **_base_observed(source_ip, sensor_session_id, source_port, destination_port=destination_port),
@@ -202,7 +200,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
                 if response == "__EXIT__":
                     channel.send("logout\r\n")
                     break
-                channel.send(response.replace("\n", "\r\n") + "ops@meridian-edge-01:~$ ")
+                channel.send(response.replace("\n", "\r\n") + PERSONA.prompt())
         except (paramiko.SSHException, EOFError, OSError):
             return
         finally:
