@@ -28,9 +28,15 @@ Suricata EVE records can provide flow duration, byte/packet counters, transport 
 
 `PassiveFingerprintProvider` is an optional provider interface over already observed network metadata. Providers must return exact evidence paths. The interface supports TLS/application fingerprints and bounded TCP-stack hints; it deliberately does not expose a direct operating-system attribution kind. Any future hint remains analysis backed by evidence, not an identity or actor claim.
 
+### Optional bounded PCAP evidence
+
+PCAP evidence mode is disabled by default. When `AEGIS_PCAP_ENABLED=true`, an authenticated operator can attach a PCAP/PCAPNG artifact to an existing AEGIS session or invoke a configured `PcapCaptureProvider`. The default capture provider is disabled: enabling PCAP storage does not grant the collector `NET_RAW`, `NET_ADMIN` or any packet-sniffing capability.
+
+Every retained artifact has a generated storage name, strict `AEGIS_PCAP_MAX_BYTES` limit, `AEGIS_PCAP_RETENTION_DAYS`, `AEGIS_PCAP_MAX_FILES`, SHA-256 fingerprint and explicit session ID. Downloads verify size and SHA-256 before returning evidence. Original upload filenames are never used as filesystem paths.
+
 ### Privacy and safety
 
-All network metadata passes through the same hostile-input normalization and bounded-storage rules as other telemetry. HTTP values are captured with sensor-side limits and truncation provenance. Packet capture is not enabled by this schema and no payload retention is implied by byte/packet counters.
+All network metadata passes through the same hostile-input normalization and bounded-storage rules as other telemetry. HTTP values are captured with sensor-side limits and truncation provenance. PCAP may contain sensitive payloads, so it is opt-in, operator-only, bounded and independently retained. Byte/packet counters alone never imply payload retention.
 
 ---
 
@@ -60,6 +66,12 @@ I record Suricata EVE possono fornire durata flow, contatori byte/pacchetti, met
 
 `PassiveFingerprintProvider` è un'interfaccia opzionale che opera sui metadata di rete già osservati. I provider devono restituire evidence path esatti. L'interfaccia supporta fingerprint TLS/applicativi e hint bounded sullo stack TCP; volutamente non espone un tipo di attribuzione diretta del sistema operativo. Ogni futuro hint resta analisi supportata da evidenza, non una dichiarazione di identità o actor.
 
+### Evidenza PCAP opzionale e bounded
+
+La modalità PCAP è disabilitata per default. Con `AEGIS_PCAP_ENABLED=true`, un operatore autenticato può associare un artefatto PCAP/PCAPNG a una sessione AEGIS esistente oppure invocare un `PcapCaptureProvider` configurato. Il capture provider predefinito è disabilitato: abilitare lo storage PCAP non assegna al collector `NET_RAW`, `NET_ADMIN` o capacità di sniffing.
+
+Ogni artefatto conservato usa un nome storage generato, limite rigido `AEGIS_PCAP_MAX_BYTES`, `AEGIS_PCAP_RETENTION_DAYS`, `AEGIS_PCAP_MAX_FILES`, fingerprint SHA-256 e session ID esplicito. Il download verifica dimensione e SHA-256 prima di restituire l'evidenza. I filename originali dell'upload non vengono mai usati come path filesystem.
+
 ### Privacy e sicurezza
 
-Tutti i metadata network attraversano le stesse regole di normalizzazione hostile-input e bounded storage della restante telemetria. I valori HTTP hanno limiti lato sensore e provenance di troncamento. Lo schema non abilita packet capture e i contatori byte/pacchetti non implicano conservazione del payload.
+Tutti i metadata network attraversano le stesse regole di normalizzazione hostile-input e bounded storage della restante telemetria. I valori HTTP hanno limiti lato sensore e provenance di troncamento. Un PCAP può contenere payload sensibili, quindi è opt-in, accessibile solo all'operatore, bounded e con retention indipendente. I soli contatori byte/pacchetti non implicano mai conservazione del payload.
