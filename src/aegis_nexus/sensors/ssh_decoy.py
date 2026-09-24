@@ -8,10 +8,12 @@ import uuid
 
 import paramiko
 
+from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text, mark_truncation
 from .client import SensorClient
 from ..network_evidence import make_network_evidence
 from .server import BoundedThreadingTCPServer
+from .registry import register_sensor
 
 HOST_KEY = paramiko.RSAKey.generate(2048)
 MAX_COMMAND = 512
@@ -22,8 +24,9 @@ def _base_observed(
     source_port: int | None = None,
     *,
     duration_ms: int | None = None,
+    destination_port: int | None = None,
 ) -> dict:
-    destination_port = int(os.getenv("AEGIS_SSH_PORT", "2222"))
+    destination_port = int(destination_port or os.getenv("AEGIS_SSH_PORT", "2222"))
     transport = {"protocol": "tcp", "destination_port": destination_port}
     observed = {
         "source_ip": source_ip,
@@ -53,10 +56,11 @@ FAKE_FILES = {
 
 
 class AegisSSHServer(paramiko.ServerInterface):
-    def __init__(self, client: SensorClient, source_ip: str, source_port: int, sensor_session_id: str):
+    def __init__(self, client: SensorClient, source_ip: str, source_port: int, destination_port: int, sensor_session_id: str):
         self.client = client
         self.source_ip = source_ip
         self.source_port = source_port
+        self.destination_port = destination_port
         self.sensor_session_id = sensor_session_id
         self.username = ""
 
@@ -76,7 +80,12 @@ class AegisSSHServer(paramiko.ServerInterface):
             fingerprint_original=True,
         )
         observed = {
-            **_base_observed(self.source_ip, self.sensor_session_id, self.source_port),
+            **_base_observed(
+                self.source_ip,
+                self.sensor_session_id,
+                self.source_port,
+                destination_port=self.destination_port,
+            ),
             "credential": {"username": self.username, "password": captured_password},
         }
         attach_capture_metadata(observed, audit)
@@ -158,16 +167,17 @@ class SSHHandler(socketserver.BaseRequestHandler):
         source_ip = str(self.client_address[0])
         source_port = int(self.client_address[1])
         sensor_session_id = uuid.uuid4().hex
+        destination_port = int(self.server.server_address[1])
         connection_started = time.monotonic()
         self.request.settimeout(20)
         self.sensor.emit(
             "connection",
-            _base_observed(source_ip, sensor_session_id, source_port),
+            _base_observed(source_ip, sensor_session_id, source_port, destination_port=destination_port),
         )
         transport = paramiko.Transport(self.request)
         transport.local_version = "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10"
         transport.add_server_key(HOST_KEY)
-        server = AegisSSHServer(self.sensor, source_ip, source_port, sensor_session_id)
+        server = AegisSSHServer(self.sensor, source_ip, source_port, destination_port, sensor_session_id)
         try:
             transport.start_server(server=server)
             channel = transport.accept(10)
@@ -183,7 +193,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
                     channel.send("ops@meridian-edge-01:~$ ")
                     continue
                 observed = {
-                    **_base_observed(source_ip, sensor_session_id, source_port),
+                    **_base_observed(source_ip, sensor_session_id, source_port, destination_port=destination_port),
                     "command": command,
                 }
                 attach_capture_metadata(observed, audit)
@@ -204,17 +214,53 @@ class SSHHandler(socketserver.BaseRequestHandler):
                     sensor_session_id,
                     source_port,
                     duration_ms=duration_ms,
+                    destination_port=destination_port,
                 ),
             )
             transport.close()
 
 
+@register_sensor
+class SSHSensorPlugin:
+    name = "ssh"
+    capabilities = SensorCapabilities(
+        protocols=("ssh", "tcp"),
+        event_types=("connection", "connection.closed", "credential", "command"),
+        interaction_mode="emulated",
+        network_evidence=("transport", "connection"),
+        captures_credentials=True,
+        captures_commands=True,
+        executes_attacker_input=False,
+    )
+
+    @classmethod
+    def config_from_env(cls) -> SensorConfig:
+        return SensorConfig(
+            sensor_id=os.getenv("AEGIS_HONEYPOT_ID", "ssh-decoy-01")[:96],
+            enabled=os.getenv("AEGIS_SSH_ENABLED", "true").lower() in {"1", "true", "yes"},
+            bind_host=os.getenv("AEGIS_SSH_BIND", "0.0.0.0"),
+            ports={"ssh": int(os.getenv("AEGIS_SSH_PORT", "2222"))},
+            options={
+                "max_connections": max(1, min(int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32")), 256)),
+            },
+        )
+
+    @classmethod
+    def run(cls, config: SensorConfig) -> None:
+        if not config.enabled:
+            return
+        port = config.port("ssh")
+        SSHHandler.sensor = SensorClient(config.sensor_id)
+        with BoundedThreadingTCPServer(
+            (config.bind_host, port),
+            SSHHandler,
+            max_connections=int(config.options.get("max_connections", 32)),
+        ) as server:
+            server.serve_forever()
+
+
 def main():
-    port = int(os.getenv("AEGIS_SSH_PORT", "2222"))
-    max_connections = int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32"))
-    SSHHandler.sensor = SensorClient(os.getenv("AEGIS_HONEYPOT_ID", "ssh-decoy-01"))
-    with BoundedThreadingTCPServer(("0.0.0.0", port), SSHHandler, max_connections=max_connections) as server:
-        server.serve_forever()
+    SSHSensorPlugin.run(SSHSensorPlugin.config_from_env())
 
 
 if __name__ == "__main__":
