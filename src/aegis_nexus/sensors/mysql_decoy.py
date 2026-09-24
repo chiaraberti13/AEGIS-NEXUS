@@ -127,7 +127,7 @@ class MySQLHandler(socketserver.StreamRequestHandler):
         upper = (SERVER_CAPABILITIES >> 16) & 0xFFFF
         return (
             b"\x0a"
-            + (PERSONA.mysql_version + "\\x00").encode("ascii", "replace")
+            + (PERSONA.mysql_version + "\x00").encode("ascii", "replace")
             + (1337).to_bytes(4, "little")
             + self.challenge[:8]
             + b"\x00"
