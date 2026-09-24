@@ -285,3 +285,60 @@ def test_non_object_sensor_allowlist_fails_closed(tmp_path, monkeypatch):
             "TESTING": True,
             "DATABASE_PATH": str(tmp_path / "aegis.db"),
         })
+
+
+def test_signed_sensor_heartbeat_is_source_bound_and_does_not_create_attack_event(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "heartbeat.db"),
+        "SENSOR_KEYS": {"ssh-decoy-01": "ssh-secret"},
+        "SENSOR_SOURCE_CIDRS": {"ssh-decoy-01": "172.31.101.0/24"},
+        "REQUIRE_SENSOR_SIGNATURE": True,
+        "SENSOR_HEARTBEAT_STALE_SECONDS": 180,
+    })
+    client = app.test_client()
+    payload = {
+        "sensor_id": "ssh-decoy-01",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
+
+    denied = client.post(
+        "/api/v1/sensors/heartbeat",
+        data=body,
+        headers=headers,
+        environ_overrides={"REMOTE_ADDR": "172.31.102.20"},
+    )
+    assert denied.status_code == 401
+
+    accepted = client.post(
+        "/api/v1/sensors/heartbeat",
+        data=body,
+        headers=headers,
+        environ_overrides={"REMOTE_ADDR": "172.31.101.20"},
+    )
+    assert accepted.status_code == 202
+    assert accepted.get_json()["status"] == "healthy"
+
+    operator = {"X-Aegis-Operator-Key": ""}  # TESTING permits operator access without a configured key.
+    status = client.get("/api/v1/operations/status", headers=operator).get_json()
+    sensor = next(item for item in status["telemetry"]["items"] if item["sensor_id"] == "ssh-decoy-01")
+    assert sensor["heartbeat_state"] == "healthy"
+    assert sensor["recent_events"] == 0
+
+    dashboard = client.get("/api/v1/dashboard?include_simulation=true", headers=operator).get_json()
+    assert dashboard["totals"]["events"] == 0
+
+
+def test_heartbeat_sensor_identity_must_match_signed_header(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "heartbeat-identity.db"),
+        "SENSOR_KEYS": {"ssh-decoy-01": "ssh-secret", "web-decoy-01": "web-secret"},
+        "REQUIRE_SENSOR_SIGNATURE": True,
+    })
+    client = app.test_client()
+    payload = {"sensor_id": "web-decoy-01", "timestamp": datetime.now(timezone.utc).isoformat()}
+    body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
+    response = client.post("/api/v1/sensors/heartbeat", data=body, headers=headers)
+    assert response.status_code == 401
