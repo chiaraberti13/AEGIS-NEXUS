@@ -93,7 +93,7 @@ class SMTPHandler(socketserver.StreamRequestHandler):
 
     def handle(self):
         self.emit("connection")
-        self.wfile.write(f"220 {PERSONA.smtp_hostname} ESMTP ready\\r\\n".encode("ascii", "replace"))
+        self.wfile.write(f"220 {PERSONA.smtp_hostname} ESMTP ready\r\n".encode("ascii", "replace"))
         for _ in range(20):
             line = self.read_line()
             if line is None or not line:
@@ -107,7 +107,7 @@ class SMTPHandler(socketserver.StreamRequestHandler):
                 observed = {"smtp": {"command": verb, "helo": value}}
                 attach_capture_metadata(observed, audit)
                 self.emit("smtp.command", observed)
-                self.wfile.write(f"250-{PERSONA.smtp_hostname}\\r\\n250 AUTH PLAIN LOGIN\\r\\n".encode("ascii", "replace"))
+                self.wfile.write(f"250-{PERSONA.smtp_hostname}\r\n250 AUTH PLAIN LOGIN\r\n".encode("ascii", "replace"))
             elif verb == "AUTH":
                 mechanism, _, blob = argument.partition(" ")
                 auth = {"mechanism": bounded_text(mechanism.upper(), 32, "observed.smtp.auth_mechanism", audit)}
