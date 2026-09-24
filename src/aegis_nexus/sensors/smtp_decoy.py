@@ -15,7 +15,9 @@ from .persona import load_persona
 from .server import BoundedThreadingTCPServer
 
 MAX_LINE = 1024
-PERSONA = load_persona()\n\nTIMEOUT = 20.0
+PERSONA = load_persona()
+
+TIMEOUT = 20.0
 
 
 class SMTPHandler(socketserver.StreamRequestHandler):
