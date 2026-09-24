@@ -788,3 +788,33 @@ def test_detection_context_is_anchored_to_event_time_and_matches_fingerprint_onl
     assert {item.get("source_ip") or item["observed"]["source_ip"] for item in context} == {"203.0.113.201", "203.0.113.202"}
     assert "shared-fixture" not in str(context)
     assert all(item["timestamp"].startswith("2020-01-01") for item in context)
+
+
+def test_sensor_heartbeat_distinguishes_silent_healthy_stale_and_never(tmp_path):
+    store = Store(str(tmp_path / "heartbeat.db"))
+    now = datetime.now(timezone.utc)
+    store.record_sensor_heartbeat(
+        "ssh-decoy-01",
+        sensor_timestamp=(now - timedelta(seconds=2)).isoformat(),
+        collector_received_at=(now - timedelta(seconds=2)).isoformat(),
+    )
+    store.record_sensor_heartbeat(
+        "web-decoy-01",
+        sensor_timestamp=(now - timedelta(minutes=10)).isoformat(),
+        collector_received_at=(now - timedelta(minutes=10)).isoformat(),
+    )
+
+    status = store.sensor_telemetry_observation(
+        configured_sensor_ids={"ssh-decoy-01", "web-decoy-01", "redis-decoy-01"},
+        recent_hours=24,
+        heartbeat_stale_seconds=180,
+    )
+    items = {item["sensor_id"]: item for item in status["items"]}
+
+    assert items["ssh-decoy-01"]["recent_events"] == 0
+    assert items["ssh-decoy-01"]["heartbeat_state"] == "healthy"
+    assert items["web-decoy-01"]["heartbeat_state"] == "stale"
+    assert items["redis-decoy-01"]["heartbeat_state"] == "never"
+    assert status["configured_with_healthy_heartbeat"] == 1
+    assert status["heartbeat_stale_seconds"] == 180
+    assert "collector receipt time" in status["interpretation"]
