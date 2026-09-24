@@ -1279,7 +1279,7 @@ class Store:
             "interpretation": (
                 "Heartbeat state uses collector receipt time. 'healthy' confirms recent authenticated "
                 "sensor contact; 'stale' means contact is overdue and does not by itself identify the cause. "
-                "Ordinary event telemetry receipt alone is not proof that a sensor is currently healthy or unhealthy."
+                "Ordinary event telemetry receipt alone is not proof that a sensor is online or offline."
             ),
         }
 
