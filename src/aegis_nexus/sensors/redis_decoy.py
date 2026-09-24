@@ -185,7 +185,7 @@ class RedisHandler(socketserver.StreamRequestHandler):
                 value = args[1][:256]
                 self.wfile.write(b"$" + str(len(value)).encode() + b"\r\n" + value + b"\r\n")
             elif command == "INFO":
-                body = f"# Server\\r\\nredis_version:{PERSONA.redis_version}\\r\\nredis_mode:standalone\\r\\n".encode("ascii", "replace")
+                body = f"# Server\r\nredis_version:{PERSONA.redis_version}\r\nredis_mode:standalone\r\n".encode("ascii", "replace")
                 self.wfile.write(b"$" + str(len(body)).encode() + b"\r\n" + body + b"\r\n")
             elif command in {"SET", "SELECT"}:
                 self.wfile.write(b"+OK\r\n")
