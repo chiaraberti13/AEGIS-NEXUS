@@ -15,7 +15,7 @@
 
 > An evidence-first bilingual honeypot and SOC analysis platform for attack monitoring, investigation, threat research and cybersecurity learning.
 
-<p align="center"><a href="ROADMAP.md">Roadmap</a> · <a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Data provenance</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="docs/INVESTIGATION.md">Investigation</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">Licence</a></p>
+<p align="center"><a href="ROADMAP.md">Roadmap</a> · <a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Data provenance</a> · <a href="docs/NETWORK_EVIDENCE.md">Network evidence</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="docs/INVESTIGATION.md">Investigation</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">Licence</a></p>
 
 > [!IMPORTANT]
 > Deploy honeypot sensors only on infrastructure you own or are explicitly authorized to monitor. Review the security, privacy and isolation documentation before exposing decoys to the Internet.
@@ -41,6 +41,8 @@ The central design rule is provenance: **observed data, external enrichment, der
 - Offline exact-match threat context from an operator-supplied JSON feed; captured indicators are never sent to third-party services.
 - Deterministic IOC/artifact extraction from observed commands and payloads without automatically labelling values as malicious.
 - Native Suricata EVE JSON ingestion.
+- Versioned network evidence with socket/HTTP/Suricata provenance, flow duration/counters, bounded HTTP metadata, TLS/DNS evidence and an investigation panel.
+- Optional operator-only bounded PCAP evidence with per-file/capacity/retention limits, SHA-256 integrity verification and explicit session association; elevated capture privileges remain disabled by default.
 - Bilingual IT/EN interface through central i18n dictionaries.
 - Hardened containers: non-root runtime, read-only filesystems, dropped capabilities, `no-new-privileges`, resource limits and separate management networks.
 - Per-sensor management CIDR binding: built-in decoy identities are accepted only from their expected internal subnet, while sensor trust zones cannot reach operator/UI APIs.
