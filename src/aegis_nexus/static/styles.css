@@ -191,7 +191,9 @@ pre{
 .relation-edge{stroke:#274252;stroke-width:1;opacity:.72}
 .relation-edge.provenance-enrichment{stroke-dasharray:5 4;opacity:.48}
 .relation-edge.provenance-derived{stroke-width:1.6;opacity:.82}
+.relation-edge.path-highlight{stroke:var(--amber);stroke-width:2.6;opacity:1}
 .relation-node{cursor:pointer}
+.relation-node.path-highlight circle{stroke:var(--amber);stroke-width:3}
 .relation-node circle{fill:#4f7f87;stroke:#a9d3d6;stroke-width:1.2}
 .relation-node text{fill:#8fa5b3;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:none}
 .kind-session circle{fill:#3e6e76;stroke:#b9e0e2}
