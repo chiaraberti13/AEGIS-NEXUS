@@ -5,6 +5,8 @@ import json
 import uuid
 from typing import Any
 
+from .network_evidence import suricata_flow_evidence
+
 
 class SuricataValidationError(ValueError):
     pass
@@ -51,6 +53,80 @@ def normalize_eve_event(payload: dict[str, Any], sensor_id: str) -> dict[str, An
     if isinstance(flow, dict) and flow.get("start") not in (None, ""):
         observed["flow_start"] = str(flow["start"])[:128]
 
+    network = suricata_flow_evidence(payload)
+    derived: dict[str, Any] = {}
+
+    http = payload.get("http")
+    if isinstance(http, dict):
+        network["http"] = {
+            key: http[key]
+            for key in ("hostname", "url", "http_method", "protocol", "status", "length", "http_user_agent", "http_refer")
+            if http.get(key) not in (None, "")
+        }
+
+    tls = payload.get("tls")
+    if isinstance(tls, dict):
+        tls_evidence = {
+            key: tls[key]
+            for key in ("sni", "version", "subject", "issuerdn", "serial", "fingerprint", "notbefore", "notafter")
+            if tls.get(key) not in (None, "")
+        }
+        for fingerprint_name in ("ja3", "ja3s", "ja4"):
+            fingerprint = payload.get(fingerprint_name)
+            if isinstance(fingerprint, dict):
+                tls_evidence[fingerprint_name] = {
+                    key: fingerprint[key]
+                    for key in ("hash", "string")
+                    if fingerprint.get(key) not in (None, "")
+                }
+            elif fingerprint not in (None, ""):
+                tls_evidence[fingerprint_name] = fingerprint
+        if tls_evidence:
+            network["tls"] = tls_evidence
+
+    dns = payload.get("dns")
+    if isinstance(dns, dict):
+        dns_evidence = {
+            key: dns[key]
+            for key in ("type", "id", "rrname", "rrtype", "rcode")
+            if dns.get(key) not in (None, "")
+        }
+        queries = dns.get("queries")
+        if isinstance(queries, list):
+            dns_evidence["queries"] = [
+                {
+                    key: query[key]
+                    for key in ("rrname", "rrtype")
+                    if query.get(key) not in (None, "")
+                }
+                for query in queries[:32]
+                if isinstance(query, dict)
+            ]
+        if dns_evidence:
+            network["dns"] = dns_evidence
+        names = []
+        if dns.get("rrname") not in (None, ""):
+            names.append(str(dns["rrname"]))
+        if isinstance(queries, list):
+            names.extend(
+                str(query["rrname"])
+                for query in queries[:32]
+                if isinstance(query, dict) and query.get("rrname") not in (None, "")
+            )
+        unique_names = list(dict.fromkeys(name.rstrip(".") for name in names if name.rstrip(".")))
+        if unique_names:
+            derived["ioc"] = [
+                {
+                    "type": "domain",
+                    "value": name,
+                    "classification": "observed_artifact",
+                    "evidence": ["observed.network.dns"],
+                }
+                for name in unique_names[:32]
+            ]
+
+    observed["network"] = network
+
     event_type = f"suricata.{eve_type}"
     severity = "info"
     if eve_type == "alert":
@@ -73,6 +149,6 @@ def normalize_eve_event(payload: dict[str, Any], sensor_id: str) -> dict[str, An
         "severity": severity,
         "observed": observed,
         "enrichment": {},
-        "derived": {},
+        "derived": derived,
         "hypotheses": [],
     }
