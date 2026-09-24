@@ -212,7 +212,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add sensor capability metadata
 - [x] Add SMTP decoy
 - [x] Add Redis decoy
-- [ ] Add MySQL decoy
+- [x] Add MySQL decoy
 - [ ] Add SMB decoy
 - [ ] Evaluate PostgreSQL decoy
 - [ ] Evaluate RDP handshake decoy
