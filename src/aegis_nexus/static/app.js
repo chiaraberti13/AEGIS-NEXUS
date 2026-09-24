@@ -610,20 +610,63 @@
     }
   }
 
-  function renderNetworkEvidence(bundle) {
+  async function downloadPcap(item) {
+    const response = await fetch("/api/v1/pcap/" + encodeURIComponent(item.id) + "/download", {
+      headers: apiHeaders({Accept: "application/octet-stream"}),
+    });
+    if (response.status === 401) {
+      showOperatorGate(true);
+      return;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = item.id + "." + (item.format === "pcapng" ? "pcapng" : "pcap");
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function renderNetworkEvidence(bundle, pcapData) {
     const root = $("network-evidence-list");
     root.replaceChildren();
     const items = (bundle?.events || [])
       .filter((event) => event?.observed?.network && typeof event.observed.network === "object")
       .slice(-20)
       .reverse();
-    if (!items.length) {
+    const pcaps = pcapData?.items || [];
+    if (!items.length && !pcaps.length) {
       const empty = document.createElement("p");
       empty.className = "mini-empty";
       empty.textContent = t("empty.noData");
       root.append(empty);
       return;
     }
+    pcaps.slice(0, 20).forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "network-evidence-item";
+      const head = document.createElement("div");
+      head.className = "network-evidence-head";
+      const title = document.createElement("strong");
+      title.textContent = t("network.pcap") + " · " + item.format;
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "compact";
+      action.textContent = t("network.downloadPcap");
+      action.addEventListener("click", () => downloadPcap(item).catch((error) => console.error("PCAP download failed", error)));
+      head.append(title, action);
+      const meta = document.createElement("div");
+      meta.className = "network-evidence-meta";
+      meta.textContent = formatDate(item.created_at) + " · " + item.size_bytes + " B · SHA-256 " + item.sha256;
+      const note = document.createElement("div");
+      note.className = "muted";
+      note.textContent = t("network.pcapIntegrity");
+      card.append(head, meta, note);
+      root.append(card);
+    });
     items.forEach((event) => {
       const network = event.observed.network;
       const card = document.createElement("article");
@@ -1150,12 +1193,13 @@
 
     const ip = event.source_ip;
     const sessionId = event.session_id;
-    const [eventStudy, session, profile, ti, sessionStudy] = await Promise.all([
+    const [eventStudy, session, profile, ti, sessionStudy, pcapData] = await Promise.all([
       safeGet("/api/v1/study/" + encodeURIComponent(event.id) + "?lang=" + encodeURIComponent(state.lang)),
       sessionId ? safeGet("/api/v1/sessions/" + encodeURIComponent(sessionId)) : Promise.resolve(null),
       ip ? safeGet("/api/v1/ips/" + encodeURIComponent(ip)) : Promise.resolve(null),
       ip ? safeGet("/api/v1/ips/" + encodeURIComponent(ip) + "/threat-intelligence") : Promise.resolve(null),
       sessionId ? safeGet("/api/v1/study/session/" + encodeURIComponent(sessionId) + "?lang=" + encodeURIComponent(state.lang)) : Promise.resolve(null),
+      sessionId ? safeGet("/api/v1/pcap?session_id=" + encodeURIComponent(sessionId)) : Promise.resolve(null),
     ]);
 
     state.eventStudy = eventStudy;
@@ -1166,7 +1210,7 @@
     renderSessionStudy(sessionStudy);
     renderIp(profile);
     renderSession(session);
-    renderNetworkEvidence(session);
+    renderNetworkEvidence(session, pcapData);
     renderThreatIntelligence(ti);
     renderSessionTimeline(session);
     await relations(sessionId);
