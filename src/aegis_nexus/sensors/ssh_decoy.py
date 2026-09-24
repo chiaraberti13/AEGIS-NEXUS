@@ -8,10 +8,12 @@ import uuid
 
 import paramiko
 
+from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text, mark_truncation
 from .client import SensorClient
 from ..network_evidence import make_network_evidence
 from .server import BoundedThreadingTCPServer
+from .registry import register_sensor
 
 HOST_KEY = paramiko.RSAKey.generate(2048)
 MAX_COMMAND = 512
@@ -209,12 +211,47 @@ class SSHHandler(socketserver.BaseRequestHandler):
             transport.close()
 
 
+@register_sensor
+class SSHSensorPlugin:
+    name = "ssh"
+    capabilities = SensorCapabilities(
+        protocols=("ssh", "tcp"),
+        event_types=("connection", "connection.closed", "credential", "command"),
+        interaction_mode="emulated",
+        network_evidence=("transport", "connection"),
+        captures_credentials=True,
+        captures_commands=True,
+        executes_attacker_input=False,
+    )
+
+    @classmethod
+    def config_from_env(cls) -> SensorConfig:
+        return SensorConfig(
+            sensor_id=os.getenv("AEGIS_HONEYPOT_ID", "ssh-decoy-01")[:96],
+            enabled=os.getenv("AEGIS_SSH_ENABLED", "true").lower() in {"1", "true", "yes"},
+            bind_host=os.getenv("AEGIS_SSH_BIND", "0.0.0.0"),
+            ports={"ssh": int(os.getenv("AEGIS_SSH_PORT", "2222"))},
+            options={
+                "max_connections": max(1, min(int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32")), 256)),
+            },
+        )
+
+    @classmethod
+    def run(cls, config: SensorConfig) -> None:
+        if not config.enabled:
+            return
+        port = config.port("ssh")
+        SSHHandler.sensor = SensorClient(config.sensor_id)
+        with BoundedThreadingTCPServer(
+            (config.bind_host, port),
+            SSHHandler,
+            max_connections=int(config.options.get("max_connections", 32)),
+        ) as server:
+            server.serve_forever()
+
+
 def main():
-    port = int(os.getenv("AEGIS_SSH_PORT", "2222"))
-    max_connections = int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32"))
-    SSHHandler.sensor = SensorClient(os.getenv("AEGIS_HONEYPOT_ID", "ssh-decoy-01"))
-    with BoundedThreadingTCPServer(("0.0.0.0", port), SSHHandler, max_connections=max_connections) as server:
-        server.serve_forever()
+    SSHSensorPlugin.run(SSHSensorPlugin.config_from_env())
 
 
 if __name__ == "__main__":
