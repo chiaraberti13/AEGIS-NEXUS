@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from .migrations import apply_migrations, enable_wal
+
 PCAP_MAGIC = {
     b"\xd4\xc3\xb2\xa1": "pcap",
     b"\xa1\xb2\xc3\xd4": "pcap",
@@ -60,7 +62,7 @@ class PcapEvidenceStore:
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.database_path, timeout=5)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        enable_wal(conn)
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA trusted_schema=OFF")
         conn.execute("PRAGMA busy_timeout=5000")
@@ -68,23 +70,7 @@ class PcapEvidenceStore:
 
     def _init(self) -> None:
         with self.connect() as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS pcap_evidence (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    size_bytes INTEGER NOT NULL,
-                    sha256 TEXT NOT NULL,
-                    format TEXT NOT NULL,
-                    storage_name TEXT NOT NULL UNIQUE,
-                    capture_provider TEXT,
-                    FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS idx_pcap_evidence_session
-                ON pcap_evidence(session_id, created_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_pcap_evidence_created
-                ON pcap_evidence(created_at ASC);
-            """)
+            apply_migrations(conn)
 
     @staticmethod
     def _format(data: bytes) -> str:

@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .migrations import enable_wal
+
 
 def ioc_id(ioc_type: str, value: str) -> str:
     material = (str(ioc_type) + "\0" + str(value)).encode("utf-8", "replace")
@@ -25,7 +27,7 @@ class IOCWorkspace:
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        enable_wal(conn)
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA trusted_schema=OFF")
         conn.execute("PRAGMA busy_timeout=5000")

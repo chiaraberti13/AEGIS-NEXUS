@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .correlation import explicit_session_token, session_id_for, session_id_for_explicit, session_identity, should_join
+from .migrations import LATEST_SCHEMA_VERSION, applied_migrations, apply_migrations, enable_wal, schema_version
 from .pagination import decode_cursor, encode_cursor
 
 
@@ -57,7 +58,7 @@ class Store:
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        enable_wal(conn)
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA trusted_schema=OFF")
         conn.execute("PRAGMA secure_delete=ON")
@@ -66,108 +67,7 @@ class Store:
 
     def _init(self) -> None:
         with self.connect() as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS sessions (
-                    id TEXT PRIMARY KEY, source_ip TEXT NOT NULL, honeypot TEXT NOT NULL,
-                    service TEXT NOT NULL, protocol TEXT NOT NULL DEFAULT 'unknown',
-                    destination_port INTEGER NOT NULL DEFAULT 0,
-                    started_at TEXT NOT NULL, last_seen TEXT NOT NULL,
-                    event_count INTEGER NOT NULL DEFAULT 0
-                );
-                CREATE TABLE IF NOT EXISTS events (
-                    id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, received_at TEXT NOT NULL, honeypot TEXT NOT NULL,
-                    event_type TEXT NOT NULL, severity TEXT NOT NULL, source_ip TEXT,
-                    session_id TEXT NOT NULL, protocol TEXT, service TEXT, destination_port INTEGER,
-                    country TEXT, asn TEXT, latitude REAL, longitude REAL,
-                    observed TEXT NOT NULL, enrichment TEXT NOT NULL, derived TEXT NOT NULL,
-                    hypotheses TEXT NOT NULL, collector TEXT NOT NULL DEFAULT '{}', schema_version TEXT NOT NULL,
-                    collector_received_at TEXT NOT NULL,
-                    FOREIGN KEY(session_id) REFERENCES sessions(id)
-                );
-                CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp DESC);
-                CREATE INDEX IF NOT EXISTS idx_events_page ON events(timestamp DESC, id DESC);
-                CREATE INDEX IF NOT EXISTS idx_events_source ON events(source_ip, timestamp DESC);
-                CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, timestamp ASC);
-
-                CREATE TABLE IF NOT EXISTS cases (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    severity TEXT NOT NULL,
-                    summary TEXT NOT NULL DEFAULT '',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    closed_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS case_tags (
-                    case_id TEXT NOT NULL,
-                    tag TEXT NOT NULL,
-                    PRIMARY KEY(case_id, tag),
-                    FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS case_evidence (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    case_id TEXT NOT NULL,
-                    evidence_type TEXT NOT NULL,
-                    evidence_id TEXT NOT NULL,
-                    added_at TEXT NOT NULL,
-                    UNIQUE(case_id, evidence_type, evidence_id),
-                    FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS case_notes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    case_id TEXT NOT NULL,
-                    body TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS case_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    case_id TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    detail TEXT NOT NULL,
-                    FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS idx_cases_updated ON cases(updated_at DESC);
-                CREATE INDEX IF NOT EXISTS idx_case_evidence_case ON case_evidence(case_id, added_at);
-                CREATE INDEX IF NOT EXISTS idx_case_history_case ON case_history(case_id, timestamp);
-            """)
-            event_columns = {row["name"] for row in conn.execute("PRAGMA table_info(events)")}
-            if "received_at" not in event_columns:
-                conn.execute("ALTER TABLE events ADD COLUMN received_at TEXT")
-                conn.execute("UPDATE events SET received_at=timestamp WHERE received_at IS NULL")
-                event_columns.add("received_at")
-            if "collector_received_at" not in event_columns:
-                conn.execute("ALTER TABLE events ADD COLUMN collector_received_at TEXT")
-                conn.execute(
-                    "UPDATE events SET collector_received_at=COALESCE(received_at, timestamp) "
-                    "WHERE collector_received_at IS NULL"
-                )
-            if "collector" not in event_columns:
-                conn.execute("ALTER TABLE events ADD COLUMN collector TEXT NOT NULL DEFAULT '{}'")
-            conn.execute(
-                "UPDATE events SET received_at=collector_received_at "
-                "WHERE received_at IS NULL AND collector_received_at IS NOT NULL"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_events_received "
-                "ON events(collector_received_at ASC, id ASC)"
-            )
-
-            columns = {row["name"] for row in conn.execute("PRAGMA table_info(sessions)")}
-            if "protocol" not in columns:
-                conn.execute("ALTER TABLE sessions ADD COLUMN protocol TEXT NOT NULL DEFAULT 'unknown'")
-            if "destination_port" not in columns:
-                conn.execute("ALTER TABLE sessions ADD COLUMN destination_port INTEGER NOT NULL DEFAULT 0")
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_sessions_lookup_v2 "
-                "ON sessions(source_ip, honeypot, service, protocol, destination_port, last_seen)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_sessions_page "
-                "ON sessions(last_seen DESC, id DESC)"
-            )
+            apply_migrations(conn)
 
     def _select_or_create_session(self, conn: sqlite3.Connection, event: dict[str, Any]) -> str:
         source_ip, honeypot, service, protocol, destination_port = session_identity(event)
@@ -1204,12 +1104,17 @@ class Store:
     def operational_health(self, min_free_bytes: int = 67_108_864) -> dict[str, Any]:
         threshold = max(0, int(min_free_bytes))
         database_ready = False
+        database_schema_version: int | None = None
+        database_migrations: list[dict[str, Any]] = []
         try:
             with self.connect() as conn:
                 conn.execute("SELECT 1").fetchone()
+                database_schema_version = schema_version(conn)
+                database_migrations = applied_migrations(conn)
             database_ready = True
         except sqlite3.Error:
             database_ready = False
+        schema_current = database_schema_version == LATEST_SCHEMA_VERSION
 
         storage_free_bytes: int | None = None
         try:
@@ -1219,8 +1124,14 @@ class Store:
         storage_ready = storage_free_bytes is not None and storage_free_bytes >= threshold
 
         return {
-            "ready": database_ready and storage_ready,
+            "ready": database_ready and schema_current and storage_ready,
             "database_ready": database_ready,
+            "database_schema": {
+                "version": database_schema_version,
+                "latest_supported": LATEST_SCHEMA_VERSION,
+                "current": schema_current,
+                "migrations": database_migrations,
+            },
             "storage_ready": storage_ready,
             "storage_free_bytes": storage_free_bytes,
             "min_free_bytes": threshold,

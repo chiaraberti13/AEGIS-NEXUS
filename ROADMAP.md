@@ -129,10 +129,10 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** close integrity, trust and maintainability gaps that later cycles depend on (new columns, new sensors, per-analyst workflow) before the data model grows further.
 
-**Why first:** Cycle C adds schema fields, Cycle D adds sensors and Cycle G needs analyst identity. Today tables are created with `CREATE TABLE IF NOT EXISTS` only, signed sensor requests can be replayed inside the clock-skew window, and all analysts share one operator key.
+**Why first:** new schema fields, new sensors and Cycle G analyst identity all build on this cycle. Schema changes now go through versioned migrations (`src/aegis_nexus/migrations.py`); signed sensor requests are deduplicated only by event ID (there is no per-request nonce), and all analysts share one operator key.
 
 ### Schema & data lifecycle
-- [ ] Add versioned, forward-only SQLite schema migrations (`PRAGMA user_version`)
+- [x] Add versioned, forward-only SQLite schema migrations (`PRAGMA user_version`)
 - [ ] Take an automatic online backup before applying migrations
 - [ ] Add migration tests from every previously released schema version
 - [ ] Add a versioned synthetic attack-replay corpus (SSH/Web/FTP/Telnet/Suricata fixtures) for regression tests in later cycles
@@ -499,7 +499,7 @@ These requirements apply to **every** roadmap cycle.
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
-| P — Platform Readiness & Integrity Hardening | ⬜ Planned |
+| P — Platform Readiness & Integrity Hardening | 🟨 In progress |
 | C — Network Evidence & Visibility | 🟨 Core completed · extensions planned |
 | D — Sensor Platform & Honeypot Expansion | 🟨 In progress |
 | E — Threat Intelligence & CTI | ⬜ Planned |
