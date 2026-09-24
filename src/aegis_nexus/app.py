@@ -131,6 +131,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         ALLOW_UNAUTHENTICATED_OPERATOR=os.getenv("AEGIS_ALLOW_UNAUTHENTICATED_OPERATOR", "false").lower() in {"1", "true", "yes"},
         REQUIRE_SENSOR_SIGNATURE=os.getenv("AEGIS_REQUIRE_SENSOR_SIGNATURE", "false").lower() in {"1", "true", "yes"},
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
+        SENSOR_HEARTBEAT_STALE_SECONDS=int(os.getenv("AEGIS_SENSOR_HEARTBEAT_STALE_SECONDS", "180")),
         INGEST_RATE_LIMIT=int(os.getenv("AEGIS_INGEST_RATE_LIMIT_PER_MINUTE", "600")),
         OPERATOR_RATE_LIMIT=int(os.getenv("AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE", "1200")),
         GEOIP_CITY_DB=os.getenv("AEGIS_GEOIP_CITY_DB", ""),
@@ -290,7 +291,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     def protect_trust_boundaries():
         sensor_ingest = (
             request.method == "POST"
-            and request.path in {"/api/v1/events", "/api/v1/integrations/suricata/eve"}
+            and request.path in {"/api/v1/events", "/api/v1/integrations/suricata/eve", "/api/v1/sensors/heartbeat"}
         )
         if remote_is_sensor_network() and not sensor_ingest:
             return jsonify({"error": "sensor_network_denied"}), 403
@@ -368,8 +369,34 @@ def create_app(test_config: dict | None = None) -> Flask:
             telemetry = store.sensor_telemetry_observation(
                 configured_sensor_ids=list(sensor_keys),
                 recent_hours=request.args.get("hours", 24, type=int),
+                heartbeat_stale_seconds=int(app.config.get("SENSOR_HEARTBEAT_STALE_SECONDS", 180)),
             )
         return jsonify({"collector": health, "telemetry": telemetry})
+
+    @app.post("/api/v1/sensors/heartbeat")
+    def sensor_heartbeat():
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        raw_body = request.get_data(cache=True)
+        if len(raw_body) > 4096:
+            return jsonify({"error": "payload_too_large"}), 413
+        payload = request.get_json()
+        if not isinstance(payload, dict):
+            return jsonify({"error": "invalid_json"}), 400
+        sensor_id = str(payload.get("sensor_id") or "")[:96]
+        if not sensor_id or not sensor_authorized(sensor_id, raw_body):
+            return jsonify({"error": "unauthorized"}), 401
+        remote = request.remote_addr or "unknown"
+        if not limiter.allow(f"heartbeat:{sensor_id}:{remote}", 12, 60):
+            return jsonify({"error": "rate_limited"}), 429
+        sensor_timestamp = payload.get("timestamp")
+        if sensor_timestamp is not None and not isinstance(sensor_timestamp, str):
+            return jsonify({"error": "invalid_timestamp"}), 422
+        heartbeat = store.record_sensor_heartbeat(
+            sensor_id,
+            sensor_timestamp=sensor_timestamp,
+        )
+        return jsonify(heartbeat), 202
 
     @app.post("/api/v1/events")
     def ingest_event():
