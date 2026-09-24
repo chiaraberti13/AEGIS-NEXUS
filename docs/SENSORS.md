@@ -23,6 +23,12 @@ To add a custom sensor:
 
 A custom sensor must emulate an attack surface; it must not execute commands, payloads, uploaded code or authentication material supplied by a remote client.
 
+### Deployment personas
+
+Built-in decoys load one bounded operator-controlled persona from `AEGIS_DECOY_PERSONA_JSON` or, for direct deployments, `AEGIS_DECOY_PERSONA_FILE`. A persona can change hostname, emulated username, Web title/heading, SMTP/FTP/Telnet banners, Redis/MySQL version strings and the SSH fake filesystem without changing collector logic. Persona files are limited to 64 KiB; fake files are limited in count and size, absolute paths only, and traversal paths are rejected. Protocol identity fields strip CR/LF/NUL characters before use.
+
+Personas are presentation only. They do not enable command execution, create real accounts or expose a writable filesystem. Do not place real credentials, secrets or sensitive production content in a persona.
+
 ## Italiano
 
 I decoy built-in di AEGIS implementano l'interfaccia comune in `aegis_nexus.sensors.base` e sono registrabili tramite `SensorRegistry`.
@@ -45,3 +51,9 @@ Per aggiungere un sensore custom:
 8. aggiungi test di protocollo, hostile-input, isolamento e Compose/CI prima di abilitare il sensore.
 
 Un sensore custom deve emulare una superficie di attacco; non deve eseguire comandi, payload, codice caricato o materiale di autenticazione fornito da un client remoto.
+
+### Persona di deployment
+
+I decoy built-in caricano una persona bounded controllata dall'operatore tramite `AEGIS_DECOY_PERSONA_JSON` oppure, nei deployment diretti, `AEGIS_DECOY_PERSONA_FILE`. La persona può cambiare hostname, username emulato, titolo/intestazione Web, banner SMTP/FTP/Telnet, versioni Redis/MySQL e fake filesystem SSH senza modificare il collector. Il file persona è limitato a 64 KiB; i fake file hanno limiti di numero e dimensione, accettano solo path assoluti e rifiutano traversal. I campi usati nei protocolli rimuovono CR/LF/NUL prima dell'uso.
+
+Le persona modificano soltanto la presentazione. Non abilitano esecuzione di comandi, non creano account reali e non espongono un filesystem scrivibile. Non inserire credenziali reali, secret o contenuti sensibili di produzione.
