@@ -79,25 +79,25 @@ This document is the project's implementation checklist. Items are checked only 
 
 **Goal:** make relationships between telemetry directly useful during investigations.
 
-- [ ] Extend correlation across IP, session, username and credential fingerprint
-- [ ] Correlate commands, payload hashes, URLs, domains and other IOC
-- [ ] Correlate ports, services, ASN and Suricata alerts
-- [ ] Introduce explainable correlation scoring
-- [ ] Store correlation method, score and evidence basis
-- [ ] Prevent correlation score from being presented as attribution
+- [x] Extend correlation across IP, session, username and credential fingerprint
+- [x] Correlate commands, payload hashes, URLs, domains and other IOC
+- [x] Correlate ports, services, ASN and Suricata alerts
+- [x] Introduce explainable correlation scoring
+- [x] Store correlation method, score and evidence basis
+- [x] Prevent correlation score from being presented as attribution
 - [x] Add IOC Workspace
 - [x] Add IOC first-seen / last-seen / occurrence statistics
 - [x] Link IOC to sessions, source IPs, sensors, alerts and cases
-- [ ] Add IOC search/filter/export
+- [x] Add IOC search/filter/export
 - [ ] Upgrade Relationship Graph with node-type filters
 - [ ] Add on-demand graph expansion
 - [ ] Add graph depth controls
 - [ ] Add evidence-only graph mode
 - [ ] Add provenance cues to graph nodes/edges
-- [ ] Add graph side inspector
+- [x] Add graph side inspector
 - [ ] Add evidence-path highlighting
 - [ ] Add Find Path between two investigation entities
-- [ ] Add graph/correlation regression tests
+- [x] Add graph/correlation regression tests
 
 **Done when:** an analyst can move from an alert or IOC to all supporting evidence and understand exactly why each relationship exists.
 
