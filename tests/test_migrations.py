@@ -33,6 +33,7 @@ EXPECTED_TABLES = {
     "correlation_links",
     "pcap_evidence",
     "schema_migrations",
+    "sensor_heartbeats",
 }
 
 
