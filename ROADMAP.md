@@ -215,7 +215,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Add configurable decoy personas (banners, hostnames, fake filesystem) per deployment
 - [ ] Remove static default fingerprints and test decoys against common honeypot-detection checks
 - [x] Add SMTP decoy
-- [ ] Add Redis decoy
+- [x] Add Redis decoy
 - [ ] Add MySQL decoy
 - [ ] Add SMB decoy
 - [ ] Evaluate PostgreSQL decoy
