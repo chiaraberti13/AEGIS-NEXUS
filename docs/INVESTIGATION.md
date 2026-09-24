@@ -27,6 +27,8 @@ The IP profile summarizes first/last observation, services, ports, sessions, ASN
 
 Session correlation prefers an explicit per-connection sensor ID when a decoy provides one, or a Suricata `flow_id` combined with `flow.start` when available. Only when neither is present does AEGIS fall back to source IP, honeypot, service, protocol, destination port and an inactivity window. The UI exposes the method used. Correlation groups telemetry; it never proves common human identity.
 
+Cross-session correlation is a separate deterministic investigation layer. It can compare retained sessions through exact source IP, username, safe credential-secret fingerprint, command/payload SHA-256, derived IOC (including URL/domain artifacts), Suricata signature, ASN, service and destination port. Every result stores the method, score, strength and concrete event-level evidence basis in `correlation_links`. The score expresses evidence overlap only; it is never an identity, actor or attribution probability.
+
 ### Threat Intelligence
 
 AEGIS does not invent reputation, malware family, actor or campaign information. The external-context panel keeps provider and timestamp visible and distinguishes contextual enrichment such as GeoIP/ASN from true Threat Intelligence records originating from `enrichment.threat_context`. Empty data produces an empty panel rather than an inferred classification.
@@ -41,7 +43,7 @@ Commands and payloads are scanned statically for exact URLs, domains, IP literal
 
 The IOC Workspace aggregates only deterministic artifacts already present in `derived.ioc`. Each indicator receives a stable content-derived ID and exposes type/value, first seen, last seen, occurrence count, source IPs, sessions, honeypots, services and source event references. Detail pivots also expose related alert and case IDs when those relationships exist.
 
-The workspace is bounded by the selected time window and `ANALYTICS_MAX_EVENTS`. A truncation flag is returned when the event analysis cap is reached. IOC are derived artifacts: they are not reputation, Threat Intelligence, compromise verdicts or attribution.
+The workspace is bounded by the selected time window and `ANALYTICS_MAX_EVENTS`. A truncation flag is returned when the event analysis cap is reached. Search and type filters can be exported as formula-safe CSV without exposing credential secrets. IOC are derived artifacts: they are not reputation, Threat Intelligence, compromise verdicts or attribution.
 
 ### Relationship graph
 
@@ -98,6 +100,8 @@ Il profilo IP riassume prima/ultima osservazione, servizi, porte, sessioni, cont
 
 La correlazione preferisce un ID esplicito per connessione quando fornito dal decoy, oppure il `flow_id` Suricata combinato con `flow.start` quando disponibile. Solo in assenza di entrambi AEGIS usa il fallback con IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività. L'interfaccia mostra il metodo utilizzato. La correlazione raggruppa telemetria e non dimostra un'identità umana comune.
 
+La correlazione tra sessioni è un livello investigativo deterministico separato. Può confrontare le sessioni conservate tramite IP sorgente esatto, username, fingerprint sicuro del segreto credential, SHA-256 di comandi/payload, IOC derivati (inclusi artefatti URL/dominio), signature Suricata, ASN, servizio e porta destinazione. Ogni risultato memorizza metodo, score, forza e basis di evidenza a livello evento in `correlation_links`. Lo score descrive esclusivamente sovrapposizione di evidenze e non è mai una probabilità di identità, actor o attribuzione.
+
 ### Threat Intelligence
 
 AEGIS non inventa reputazione, malware family, actor o campagne. Il pannello di contesto esterno mantiene sempre visibili provider e timestamp e distingue enrichment contestuale come GeoIP/ASN dalla vera Threat Intelligence proveniente da `enrichment.threat_context`. In assenza di dati il pannello resta vuoto invece di produrre classificazioni inferite.
@@ -112,7 +116,7 @@ Comandi e payload vengono analizzati staticamente per URL, domini, IP letterali 
 
 L'IOC Workspace aggrega esclusivamente artefatti deterministici già presenti in `derived.ioc`. Ogni indicatore riceve un ID stabile derivato dal contenuto ed espone tipo/valore, prima e ultima osservazione, occorrenze, IP sorgente, sessioni, honeypot, servizi e riferimenti agli eventi sorgente. Il dettaglio mostra anche gli ID di alert e casi correlati quando tali relazioni esistono.
 
-Lo workspace è limitato dalla finestra temporale selezionata e da `ANALYTICS_MAX_EVENTS`; quando viene raggiunto il limite viene restituito un flag di troncamento. Gli IOC sono artefatti derivati: non sono reputazione, Threat Intelligence, verdetti di compromissione o attribuzione.
+Lo workspace è limitato dalla finestra temporale selezionata e da `ANALYTICS_MAX_EVENTS`; quando viene raggiunto il limite viene restituito un flag di troncamento. Ricerca e filtro per tipo possono essere esportati in CSV con neutralizzazione delle formule e senza esporre segreti credential. Gli IOC sono artefatti derivati: non sono reputazione, Threat Intelligence, verdetti di compromissione o attribuzione.
 
 ### Grafo delle relazioni
 
