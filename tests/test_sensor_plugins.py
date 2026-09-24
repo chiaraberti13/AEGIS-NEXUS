@@ -6,6 +6,7 @@ import pytest
 from aegis_nexus.sensors.base import SensorCapabilities, SensorConfig
 from aegis_nexus.sensors.catalog import load_builtin_sensors
 from aegis_nexus.sensors.legacy import LegacySensorPlugin
+from aegis_nexus.sensors.redis_decoy import RedisHandler, RedisSensorPlugin
 from aegis_nexus.sensors.registry import SensorRegistry
 from aegis_nexus.sensors.server import BoundedThreadingTCPServer
 from aegis_nexus.sensors.smtp_decoy import SMTPHandler, SMTPSensorPlugin
@@ -16,11 +17,12 @@ from aegis_nexus.sensors.web_decoy import WebSensorPlugin
 def test_builtin_sensor_catalog_exposes_safe_capability_metadata():
     registry = load_builtin_sensors(SensorRegistry())
     registry.register(SMTPSensorPlugin)
-    assert registry.names() == ("legacy", "smtp", "ssh", "web")
+    assert registry.names() == ("legacy", "redis", "smtp", "ssh", "web")
     descriptions = {item["name"]: item["capabilities"] for item in registry.describe()}
     assert descriptions["ssh"]["captures_commands"] is True
     assert descriptions["web"]["captures_payloads"] is True
     assert descriptions["legacy"]["captures_credentials"] is True
+    assert descriptions["redis"]["captures_payloads"] is True
     assert all(item["executes_attacker_input"] is False for item in descriptions.values())
 
 
@@ -58,10 +60,12 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     monkeypatch.setenv("AEGIS_WEB_PORT", "8088")
     monkeypatch.setenv("AEGIS_FTP_PORT", "2100")
     monkeypatch.setenv("AEGIS_TELNET_PORT", "2300")
+    monkeypatch.setenv("AEGIS_REDIS_PORT", "6380")
 
     ssh = SSHSensorPlugin.config_from_env()
     web = WebSensorPlugin.config_from_env()
     legacy = LegacySensorPlugin.config_from_env()
+    redis = RedisSensorPlugin.config_from_env()
 
     assert ssh.sensor_id == "fixture-sensor"
     assert ssh.port("ssh") == 2200
@@ -69,6 +73,7 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     assert web.port("http") == 8088
     assert legacy.port("ftp") == 2100
     assert legacy.port("telnet") == 2300
+    assert redis.port("redis") == 6380
 
 
 def test_sensor_config_rejects_invalid_listener_port():
@@ -105,3 +110,71 @@ def test_smtp_decoy_hashes_auth_blob_and_never_executes_input(monkeypatch):
     assert len(evidence["credential_blob_sha256"]) == 64
     assert "dXNlcgB1c2VyAHNlY3JldA==" not in str(auth)
     assert SMTPSensorPlugin.capabilities.executes_attacker_input is False
+
+
+def _redis_exchange(monkeypatch, payload: bytes):
+    captured = []
+    monkeypatch.setattr(
+        RedisHandler.sensor,
+        "emit",
+        lambda *args, **kwargs: captured.append((args, kwargs)) or True,
+    )
+    server = BoundedThreadingTCPServer(("127.0.0.1", 0), RedisHandler, max_connections=2)
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            client.sendall(payload)
+            response = client.recv(4096)
+        thread.join(timeout=2)
+    finally:
+        server.server_close()
+    return response, captured
+
+
+def test_redis_decoy_supports_resp_ping_without_executing_input(monkeypatch):
+    response, captured = _redis_exchange(monkeypatch, b"*1\r\n$4\r\nPING\r\n")
+    assert response == b"+PONG\r\n"
+    command = next(args[1] for args, _kwargs in captured if args[0] == "redis.command")
+    assert command["redis"]["command"] == "PING"
+    assert command["service"] == "redis"
+    assert command["network"]["source"] == "sensor_socket"
+    assert RedisSensorPlugin.capabilities.executes_attacker_input is False
+
+
+def test_redis_auth_secret_is_hashed_and_not_stored(monkeypatch):
+    secret = b"super-secret-password"
+    payload = b"*2\r\n$4\r\nAUTH\r\n$" + str(len(secret)).encode() + b"\r\n" + secret + b"\r\n"
+    response, captured = _redis_exchange(monkeypatch, payload)
+    assert response.startswith(b"-WRONGPASS ")
+    auth = next(args[1] for args, _kwargs in captured if args[0] == "redis.auth_attempt")
+    evidence = auth["redis"]
+    assert evidence["credential_secret_length"] == len(secret)
+    assert len(evidence["credential_secret_sha256"]) == 64
+    assert secret.decode() not in str(auth)
+
+
+def test_redis_set_payload_is_fingerprinted_not_retained(monkeypatch):
+    value = b"attacker-controlled-payload"
+    payload = (
+        b"*3\r\n$3\r\nSET\r\n$6\r\ntarget\r\n$"
+        + str(len(value)).encode()
+        + b"\r\n"
+        + value
+        + b"\r\n"
+    )
+    response, captured = _redis_exchange(monkeypatch, payload)
+    assert response == b"+OK\r\n"
+    event = next(args[1] for args, _kwargs in captured if args[0] == "redis.command")
+    assert event["redis"]["key"] == "target"
+    assert event["redis"]["payload_length"] == len(value)
+    assert len(event["redis"]["payload_sha256"]) == 64
+    assert value.decode() not in str(event)
+
+
+def test_redis_rejects_oversized_bulk_input(monkeypatch):
+    response, captured = _redis_exchange(monkeypatch, b"*2\r\n$3\r\nSET\r\n$5000\r\n")
+    assert response == b"-ERR protocol error\r\n"
+    rejected = next(args[1] for args, _kwargs in captured if args[0] == "sensor.input_rejected")
+    assert rejected["sensor_capture"]["rejected"] is True
+    assert rejected["sensor_capture"]["reason"] == "bulk_too_large"
