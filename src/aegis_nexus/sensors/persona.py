@@ -25,7 +25,7 @@ class DecoyPersona:
     ftp_banner: str = "Meridian FTP Service"
     telnet_banner: str = "Meridian Gateway"
     redis_version: str = "7.2.0"
-    mysql_version: str = "8.0.36"
+    mysql_version: str = "8.0.36-aegis"
     fake_files: dict[str, str] = field(default_factory=lambda: {
         "/etc/hostname": "meridian-edge-01\n",
         "/etc/os-release": 'NAME="Ubuntu"\nVERSION="22.04.5 LTS (Jammy Jellyfish)"\n',
