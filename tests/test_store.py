@@ -149,6 +149,10 @@ def test_relations_expose_provenance_and_safe_credential_fingerprint(tmp_path):
     assert threat["metadata"]["source"] == "fixture-feed"
     ip = next(node for node in nodes if node["kind"] == "ip")
     assert ip["provenance"] == "observed"
+    edge_provenance = {edge["provenance"] for edge in graph["edges"]}
+    assert "observed" in edge_provenance
+    assert "derived" in edge_provenance
+    assert "enrichment" in edge_provenance
 
 
 def test_dashboard_exposes_investigation_dimensions_and_aggregates_geo_points(tmp_path):
