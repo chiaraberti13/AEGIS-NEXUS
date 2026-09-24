@@ -11,10 +11,11 @@ from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
 from .registry import register_sensor
+from .persona import load_persona
 from .server import BoundedThreadingTCPServer
 
 MAX_LINE = 1024
-TIMEOUT = 20.0
+PERSONA = load_persona()\n\nTIMEOUT = 20.0
 
 
 class SMTPHandler(socketserver.StreamRequestHandler):
@@ -90,7 +91,7 @@ class SMTPHandler(socketserver.StreamRequestHandler):
 
     def handle(self):
         self.emit("connection")
-        self.wfile.write(b"220 meridian-mail ESMTP ready\r\n")
+        self.wfile.write(f"220 {PERSONA.smtp_hostname} ESMTP ready\\r\\n".encode("ascii", "replace"))
         for _ in range(20):
             line = self.read_line()
             if line is None or not line:
@@ -104,7 +105,7 @@ class SMTPHandler(socketserver.StreamRequestHandler):
                 observed = {"smtp": {"command": verb, "helo": value}}
                 attach_capture_metadata(observed, audit)
                 self.emit("smtp.command", observed)
-                self.wfile.write(b"250-meridian-mail\r\n250 AUTH PLAIN LOGIN\r\n")
+                self.wfile.write(f"250-{PERSONA.smtp_hostname}\\r\\n250 AUTH PLAIN LOGIN\\r\\n".encode("ascii", "replace"))
             elif verb == "AUTH":
                 mechanism, _, blob = argument.partition(" ")
                 auth = {"mechanism": bounded_text(mechanism.upper(), 32, "observed.smtp.auth_mechanism", audit)}
