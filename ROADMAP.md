@@ -133,13 +133,13 @@ This document is the project's implementation checklist. Items are checked only 
 
 **Goal:** make sensors modular and add new emulated attack surfaces safely.
 
-- [ ] Define common Sensor interface
-- [ ] Implement sensor registry
-- [ ] Move existing SSH sensor to plugin architecture
-- [ ] Move existing Web sensor to plugin architecture
-- [ ] Move existing FTP/Telnet sensors to plugin architecture
-- [ ] Add declarative sensor configuration
-- [ ] Add sensor capability metadata
+- [x] Define common Sensor interface
+- [x] Implement sensor registry
+- [x] Move existing SSH sensor to plugin architecture
+- [x] Move existing Web sensor to plugin architecture
+- [x] Move existing FTP/Telnet sensors to plugin architecture
+- [x] Add declarative sensor configuration
+- [x] Add sensor capability metadata
 - [ ] Add SMTP decoy
 - [ ] Add Redis decoy
 - [ ] Add MySQL decoy
@@ -351,7 +351,7 @@ These requirements apply to **every** roadmap cycle.
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
 | C — Network Evidence & Visibility | ✅ Completed |
-| D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
+| D — Sensor Platform & Honeypot Expansion | 🟨 In progress |
 | E — Threat Intelligence & CTI | ⬜ Planned |
 | F — Behavioral Analytics | ⬜ Planned |
 | G — Cases, Reporting & SOC Workflow | ⬜ Planned |
