@@ -3,11 +3,13 @@ from __future__ import annotations
 import os
 import socketserver
 import threading
+import time
 import uuid
 from typing import BinaryIO
 
 from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
+from ..network_evidence import make_network_evidence
 from .server import BoundedThreadingTCPServer
 
 MAX_LINE = 512
@@ -38,24 +40,57 @@ class BaseHandler(socketserver.StreamRequestHandler):
         super().setup()
         self.request.settimeout(TIMEOUT)
         self.sensor_session_id = uuid.uuid4().hex
+        self.connection_started = time.monotonic()
 
     @property
     def source_ip(self) -> str:
         return str(self.client_address[0])
 
     @property
+    def source_port(self) -> int:
+        return int(self.client_address[1])
+
+    @property
     def destination_port(self) -> int:
         return int(self.server.server_address[1])
 
     def emit(self, event_type: str, observed: dict, severity: str = "info"):
+        destination_port = int(observed.get("destination_port") or self.destination_port)
+        connection = None
+        if event_type == "connection.closed":
+            connection = {
+                "duration_ms": max(
+                    0,
+                    int(round((time.monotonic() - self.connection_started) * 1000)),
+                )
+            }
         base = {
             "source_ip": self.source_ip,
+            "source_port": self.source_port,
             "service": self.service,
             "protocol": "tcp",
+            "destination_port": destination_port,
             "sensor_session_id": self.sensor_session_id,
+            "network": make_network_evidence(
+                "sensor_socket",
+                "application",
+                transport={
+                    "protocol": "tcp",
+                    "source_port": self.source_port,
+                    "destination_port": destination_port,
+                },
+                connection=connection,
+            ),
             **observed,
         }
         self.sensor.emit(event_type, base, severity)
+
+    def finish(self):
+        try:
+            if hasattr(self, "connection_started"):
+                self.emit("connection.closed", {"destination_port": self.destination_port})
+        finally:
+            super().finish()
 
     def read_line(self, path: str) -> str | None:
         line, rejected = _readline_with_status(self.rfile)
