@@ -578,6 +578,41 @@ def create_app(test_config: dict | None = None) -> Flask:
             hours=request.args.get("hours", 720, type=int),
         ))
 
+    @app.get("/api/v1/iocs/export.csv")
+    def export_iocs_csv():
+        data = ioc_workspace.list(
+            limit=500,
+            q=request.args.get("q", type=str),
+            ioc_type=request.args.get("type", type=str),
+            hours=request.args.get("hours", 720, type=int),
+        )
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "id", "type", "value", "first_seen", "last_seen", "occurrences",
+            "source_ips", "session_ids", "honeypots", "services", "provenance", "classification",
+        ])
+        for item in data["items"]:
+            writer.writerow([
+                _csv_safe(item.get("id")),
+                _csv_safe(item.get("type")),
+                _csv_safe(item.get("value")),
+                _csv_safe(item.get("first_seen")),
+                _csv_safe(item.get("last_seen")),
+                item.get("occurrences", 0),
+                _csv_safe(";".join(item.get("source_ips") or [])),
+                _csv_safe(";".join(item.get("session_ids") or [])),
+                _csv_safe(";".join(item.get("honeypots") or [])),
+                _csv_safe(";".join(item.get("services") or [])),
+                _csv_safe(item.get("provenance")),
+                _csv_safe(item.get("classification")),
+            ])
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="aegis-iocs.csv"'},
+        )
+
     @app.get("/api/v1/iocs/<item_id>")
     def ioc_detail(item_id: str):
         item = ioc_workspace.get(
