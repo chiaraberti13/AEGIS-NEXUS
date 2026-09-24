@@ -1,5 +1,6 @@
 import hashlib
 import io
+import sqlite3
 
 from aegis_nexus.app import create_app
 from aegis_nexus.pcap import PcapCaptureProvider
@@ -157,3 +158,35 @@ def test_optional_pcap_capture_provider_is_bounded_and_persisted(tmp_path):
     assert item["capture_provider"] == "fixture-capture"
     assert item["session_id"] == session_id
     assert item["sha256"] == hashlib.sha256(PCAP_FIXTURE).hexdigest()
+
+
+def test_pcap_retention_removes_expired_evidence_and_file(tmp_path):
+    app = _app(tmp_path, PCAP_RETENTION_DAYS=1)
+    client = app.test_client()
+    session_id = _create_session(client)
+    operator = {"X-Aegis-Operator-Key": "operator-secret"}
+    response = client.post(
+        "/api/v1/pcap",
+        headers=operator,
+        data={"session_id": session_id, "pcap": (io.BytesIO(PCAP_FIXTURE), "fixture.pcap")},
+        content_type="multipart/form-data",
+    )
+    item = response.get_json()
+    store = app.extensions["aegis_pcap_store"]
+
+    with sqlite3.connect(app.config["DATABASE_PATH"]) as conn:
+        storage_name = conn.execute(
+            "SELECT storage_name FROM pcap_evidence WHERE id=?",
+            (item["id"],),
+        ).fetchone()[0]
+        conn.execute(
+            "UPDATE pcap_evidence SET created_at='2000-01-01T00:00:00+00:00' WHERE id=?",
+            (item["id"],),
+        )
+    path = tmp_path / "pcap" / storage_name
+    assert path.exists()
+
+    result = store.prune()
+    assert result["expired"] == 1
+    assert not path.exists()
+    assert store.get(item["id"]) is None
