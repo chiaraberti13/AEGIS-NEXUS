@@ -229,8 +229,14 @@ class WebSensorPlugin:
     def run(cls, config: SensorConfig) -> None:
         if not config.enabled:
             return
+        global sensor
+        sensor = SensorClient(config.sensor_id)
+        heartbeat = sensor.start_heartbeat()
         app.config["MAX_CONTENT_LENGTH"] = int(config.options.get("max_body", 16384))
-        app.run(host=config.bind_host, port=config.port("http"), threaded=True)
+        try:
+            app.run(host=config.bind_host, port=config.port("http"), threaded=True)
+        finally:
+            heartbeat.stop()
 
 
 def main():
