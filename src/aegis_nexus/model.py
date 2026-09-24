@@ -11,6 +11,8 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
+from .network_evidence import NetworkEvidenceValidationError, validate_network_evidence
+
 SCHEMA_VERSION = "1.2"
 MAX_STRING = 4096
 MAX_ITEMS = 128
@@ -307,6 +309,11 @@ def normalize_event(payload: dict[str, Any]) -> dict[str, Any]:
         port = _normalize_port(observed.get(field), field)
         if port is not None:
             observed[field] = port
+    if observed.get("network") is not None:
+        try:
+            validate_network_evidence(observed["network"])
+        except NetworkEvidenceValidationError as exc:
+            raise EventValidationError(str(exc)) from exc
     event_id = str(payload.get("id") or uuid.uuid4())
     try:
         uuid.UUID(event_id)
