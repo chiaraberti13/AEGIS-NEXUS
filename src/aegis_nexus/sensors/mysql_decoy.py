@@ -298,12 +298,16 @@ class MySQLSensorPlugin:
         if not config.enabled:
             return
         MySQLHandler.sensor = SensorClient(config.sensor_id)
-        with BoundedThreadingTCPServer(
-            (config.bind_host, config.port("mysql")),
-            MySQLHandler,
-            max_connections=int(config.options.get("max_connections", 32)),
-        ) as server:
-            server.serve_forever()
+        heartbeat = MySQLHandler.sensor.start_heartbeat()
+        try:
+            with BoundedThreadingTCPServer(
+                (config.bind_host, config.port("mysql")),
+                MySQLHandler,
+                max_connections=int(config.options.get("max_connections", 32)),
+            ) as server:
+                server.serve_forever()
+        finally:
+            heartbeat.stop()
 
 
 def main():
