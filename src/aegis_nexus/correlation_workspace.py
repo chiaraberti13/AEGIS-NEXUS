@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .correlation import parse_ts
+from .migrations import apply_migrations, enable_wal
 
 
 CORRELATION_SCHEMA_VERSION = "1.0"
@@ -70,7 +71,7 @@ class CorrelationWorkspace:
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        enable_wal(conn)
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA trusted_schema=OFF")
         conn.execute("PRAGMA busy_timeout=5000")
@@ -78,24 +79,7 @@ class CorrelationWorkspace:
 
     def _init(self) -> None:
         with self.connect() as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS correlation_links (
-                    id TEXT PRIMARY KEY,
-                    source_session_id TEXT NOT NULL,
-                    related_session_id TEXT NOT NULL,
-                    schema_version TEXT NOT NULL,
-                    method TEXT NOT NULL,
-                    score REAL NOT NULL,
-                    strength TEXT NOT NULL,
-                    evidence_basis TEXT NOT NULL,
-                    first_seen TEXT,
-                    last_seen TEXT,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(source_session_id, related_session_id, method)
-                );
-                CREATE INDEX IF NOT EXISTS idx_correlation_links_source
-                ON correlation_links(source_session_id, score DESC, last_seen DESC);
-            """)
+            apply_migrations(conn)
 
     @staticmethod
     def _link_id(source_session_id: str, related_session_id: str, method: str) -> str:

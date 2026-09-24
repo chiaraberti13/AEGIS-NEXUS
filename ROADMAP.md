@@ -129,10 +129,10 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** close integrity, trust and maintainability gaps that later cycles depend on (new columns, new sensors, per-analyst workflow) before the data model grows further.
 
-**Why first:** Cycle C adds schema fields, Cycle D adds sensors and Cycle G needs analyst identity. Today tables are created with `CREATE TABLE IF NOT EXISTS` only, signed sensor requests can be replayed inside the clock-skew window, and all analysts share one operator key.
+**Why first:** new schema fields, new sensors and Cycle G analyst identity all build on this cycle. Schema changes now go through versioned migrations (`src/aegis_nexus/migrations.py`); signed sensor requests are deduplicated only by event ID (there is no per-request nonce), and all analysts share one operator key.
 
 ### Schema & data lifecycle
-- [ ] Add versioned, forward-only SQLite schema migrations (`PRAGMA user_version`)
+- [x] Add versioned, forward-only SQLite schema migrations (`PRAGMA user_version`)
 - [ ] Take an automatic online backup before applying migrations
 - [ ] Add migration tests from every previously released schema version
 - [ ] Add a versioned synthetic attack-replay corpus (SSH/Web/FTP/Telnet/Suricata fixtures) for regression tests in later cycles
@@ -167,33 +167,34 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** add network-level context while keeping collection bounded and privacy-aware.
 
-**Depends on:** Cycle P schema migrations and replay corpus.
+**Note:** the original Cycle C scope is complete. The additional items below extend it and depend on Cycle P (migrations, replay corpus).
 
-- [ ] Define network-evidence schema and provenance
-- [ ] Capture connection duration
-- [ ] Capture bytes in/out where sensors can observe them
-- [ ] Capture packet/connection counters where available
-- [ ] Capture relevant TCP metadata without claiming unsupported OS attribution
-- [ ] Improve HTTP header and User-Agent evidence
+- [x] Define network-evidence schema and provenance
+- [x] Capture connection duration
+- [x] Capture bytes in/out where sensors can observe them
+- [x] Capture packet/connection counters where available
+- [x] Capture relevant TCP metadata without claiming unsupported OS attribution
+- [x] Improve HTTP header and User-Agent evidence
 - [ ] Capture SSH client version string and KEX/cipher offer lists
 - [ ] Add HASSH-style SSH client fingerprints (fingerprint = tooling hint, never identity)
 - [ ] Add HTTP client fingerprints (e.g. JA4H) after licence review
-- [ ] Add optional TLS metadata/fingerprints where technically available (JA3/JA4; review JA4+ licence terms before adoption)
-- [ ] Add DNS indicator evidence where available
-- [ ] Design optional passive fingerprint provider interface
+- [x] Add optional TLS metadata/fingerprints where technically available
+- [ ] Add sensor-native JA4 TLS fingerprints (Suricata JA3/JA3S/JA4 passthrough already exists; review JA4+ licence terms before adoption)
+- [x] Add DNS indicator evidence where available
+- [x] Design optional passive fingerprint provider interface
 - [ ] Evaluate optional Zeek log ingestion (`conn`, `http`, `ssh`, `dns`) with the same provenance model as Suricata _(evaluate)_
-- [ ] Add optional bounded PCAP capture mode
+- [x] Add optional bounded PCAP capture mode
 - [ ] Run PCAP capture in a dedicated capture container (`CAP_NET_RAW` only, never inside decoys)
 - [ ] Restrict capture with BPF filters to decoy ports/interfaces
 - [ ] Use ring-buffer capture so disk usage has a hard upper bound
-- [ ] Add PCAP size limits
-- [ ] Add PCAP retention limits
-- [ ] Hash retained PCAP evidence with SHA-256
-- [ ] Associate PCAP evidence with session IDs
+- [x] Add PCAP size limits
+- [x] Add PCAP retention limits
+- [x] Hash retained PCAP evidence with SHA-256
+- [x] Associate PCAP evidence with session IDs
 - [ ] Serve PCAP only as authenticated, audited attachment downloads (never parsed or rendered in the browser)
-- [ ] Add Network Evidence investigation panel
-- [ ] Add network-evidence security/privacy documentation
-- [ ] Add bounded-capture and hostile-input tests
+- [x] Add Network Evidence investigation panel
+- [x] Add network-evidence security/privacy documentation
+- [x] Add bounded-capture and hostile-input tests
 
 **Done when:** network evidence enriches investigations without creating unlimited packet retention or unsupported attribution.
 
@@ -210,8 +211,11 @@ These are deliberate design boundaries, not missing features:
 - [x] Move existing FTP/Telnet sensors to plugin architecture
 - [x] Add declarative sensor configuration
 - [x] Add sensor capability metadata
+- [ ] Add sensor heartbeat so silent-but-healthy sensors are distinguishable from dead sensors
+- [ ] Add configurable decoy personas (banners, hostnames, fake filesystem) per deployment
+- [ ] Remove static default fingerprints and test decoys against common honeypot-detection checks
 - [x] Add SMTP decoy
-- [x] Add Redis decoy
+- [ ] Add Redis decoy
 - [ ] Add MySQL decoy
 - [ ] Add SMB decoy
 - [ ] Evaluate PostgreSQL decoy
@@ -458,9 +462,9 @@ These requirements apply to **every** roadmap cycle.
 
 ## Current implementation priority
 
-1. **Cycle P — Platform Readiness & Integrity Hardening** (gate for C/D/G)
-2. **Cycle C — Network Evidence & Visibility**
-3. **Cycle D — Sensor Platform & Honeypot Expansion**
+1. **Cycle P — Platform Readiness & Integrity Hardening** (gate for new schema fields, new sensors and Cycle G)
+2. **Cycle D — Sensor Platform & Honeypot Expansion** (remaining items)
+3. **Cycle C — Network Evidence & Visibility** (extension items)
 4. **Cycle E — Threat Intelligence & CTI**
 5. **Cycle F — Behavioral Analytics**
 6. **Cycle K — Detection Engineering & SIEM Interoperability**
@@ -495,9 +499,9 @@ These requirements apply to **every** roadmap cycle.
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
-| P — Platform Readiness & Integrity Hardening | ⬜ Planned |
-| C — Network Evidence & Visibility | ⬜ Planned |
-| D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
+| P — Platform Readiness & Integrity Hardening | 🟨 In progress |
+| C — Network Evidence & Visibility | 🟨 Core completed · extensions planned |
+| D — Sensor Platform & Honeypot Expansion | 🟨 In progress |
 | E — Threat Intelligence & CTI | ⬜ Planned |
 | F — Behavioral Analytics | ⬜ Planned |
 | K — Detection Engineering & SIEM Interoperability | ⬜ Planned |

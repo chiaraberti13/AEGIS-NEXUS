@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .migrations import apply_migrations, enable_wal
+
 
 ALERT_STATUSES = {"new", "acknowledged", "investigating", "closed"}
 
@@ -20,7 +22,7 @@ class AlertStore:
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        enable_wal(conn)
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA trusted_schema=OFF")
         conn.execute("PRAGMA busy_timeout=5000")
@@ -32,49 +34,7 @@ class AlertStore:
 
     def _init(self) -> None:
         with self.connect() as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS alerts (
-                    id TEXT PRIMARY KEY,
-                    schema_version TEXT NOT NULL,
-                    rule_id TEXT NOT NULL,
-                    rule_version TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    description TEXT NOT NULL DEFAULT '',
-                    severity TEXT NOT NULL,
-                    confidence INTEGER NOT NULL,
-                    source_ip TEXT,
-                    session_id TEXT,
-                    status TEXT NOT NULL DEFAULT 'new',
-                    first_seen TEXT NOT NULL,
-                    last_seen TEXT NOT NULL,
-                    occurrence_count INTEGER NOT NULL DEFAULT 1,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS alert_evidence (
-                    alert_id TEXT NOT NULL,
-                    evidence_type TEXT NOT NULL,
-                    evidence_id TEXT NOT NULL,
-                    added_at TEXT NOT NULL,
-                    PRIMARY KEY(alert_id,evidence_type,evidence_id),
-                    FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS alert_tags (
-                    alert_id TEXT NOT NULL,
-                    tag TEXT NOT NULL,
-                    PRIMARY KEY(alert_id,tag),
-                    FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS alert_notes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    alert_id TEXT NOT NULL,
-                    body TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS idx_alerts_queue ON alerts(status,severity,last_seen DESC);
-                CREATE INDEX IF NOT EXISTS idx_alerts_rule_source ON alerts(rule_id,source_ip,status,last_seen DESC);
-            """)
+            apply_migrations(conn)
 
     def record(self, finding: dict[str, Any], event_timestamp: str) -> dict[str, Any]:
         now = self._now()
