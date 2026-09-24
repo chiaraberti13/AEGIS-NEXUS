@@ -110,15 +110,15 @@ def _fake_command(command: str) -> str:
     if clean in {"exit", "logout"}:
         return "__EXIT__"
     if clean == "pwd":
-        return f"/home/{PERSONA.username}\\n"
+        return f"/home/{PERSONA.username}\n"
     if clean in {"whoami", "id -un"}:
-        return f"{PERSONA.username}\\n"
+        return f"{PERSONA.username}\n"
     if clean == "id":
-        return f"uid=1001({PERSONA.username}) gid=1001({PERSONA.username}) groups=1001({PERSONA.username}),27(sudo)\\n"
+        return f"uid=1001({PERSONA.username}) gid=1001({PERSONA.username}) groups=1001({PERSONA.username}),27(sudo)\n"
     if clean in {"ls", "ls -la", "ls -l"}:
-        return f"drwxr-xr-x 2 {PERSONA.username} {PERSONA.username} 4096 Sep 22 10:14 .\\ndrwxr-xr-x 4 root root 4096 Sep 20 08:02 ..\\n-rw-r--r-- 1 {PERSONA.username} {PERSONA.username} 48 Sep 21 17:44 readme.txt\\n"
+        return f"drwxr-xr-x 2 {PERSONA.username} {PERSONA.username} 4096 Sep 22 10:14 .\ndrwxr-xr-x 4 root root 4096 Sep 20 08:02 ..\n-rw-r--r-- 1 {PERSONA.username} {PERSONA.username} 48 Sep 21 17:44 readme.txt\n"
     if clean == "uname -a":
-        return f"Linux {PERSONA.hostname} 5.15.0-119-generic #129-{PERSONA.os_name} SMP x86_64 GNU/Linux\\n"
+        return f"Linux {PERSONA.hostname} 5.15.0-119-generic #129-{PERSONA.os_name} SMP x86_64 GNU/Linux\n"
     if clean.startswith("cat "):
         path = clean[4:].strip()
         normalized = f"/home/{PERSONA.username}/readme.txt" if path in {"readme.txt", "./readme.txt"} else path
@@ -182,7 +182,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
             if channel is None:
                 return
             channel.settimeout(30)
-            channel.send(f"{PERSONA.os_name} {PERSONA.os_version}\\r\\n\\r\\n{PERSONA.prompt()}")
+            channel.send(f"{PERSONA.os_name} {PERSONA.os_version}\\r\n\\r\n{PERSONA.prompt()}")
             while transport.is_active():
                 command, audit = _read_command(channel)
                 if command is None:
