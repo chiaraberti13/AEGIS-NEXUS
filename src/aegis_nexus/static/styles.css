@@ -183,9 +183,14 @@ pre{
 .session-event-top{display:flex;gap:10px;align-items:center}
 .session-event-top time{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:#6d8798}
 .session-event-top strong{font-size:11px}
+.graph-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+.graph-controls select{border:1px solid var(--line);border-radius:7px;background:#09141d;color:var(--text);padding:8px 10px}
+.graph-toggle{display:flex;gap:7px;align-items:center;color:#91a7b6;font-size:11px;border:1px solid var(--line);border-radius:7px;padding:8px 10px;background:#09141d}
 .graph-layout{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px}
 .relation-graph{width:100%;height:620px;background:#09131b;border:1px solid #172734;border-radius:7px}
 .relation-edge{stroke:#274252;stroke-width:1;opacity:.72}
+.relation-edge.provenance-enrichment{stroke-dasharray:5 4;opacity:.48}
+.relation-edge.provenance-derived{stroke-width:1.6;opacity:.82}
 .relation-node{cursor:pointer}
 .relation-node circle{fill:#4f7f87;stroke:#a9d3d6;stroke-width:1.2}
 .relation-node text{fill:#8fa5b3;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:none}
