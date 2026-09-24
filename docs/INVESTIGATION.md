@@ -49,6 +49,8 @@ The workspace is bounded by the selected time window and `ANALYTICS_MAX_EVENTS`.
 
 The graph can contain event, session, IP, ASN, country, service, protocol, port, honeypot, username, safe credential-secret fingerprint, command, payload, IDS, IOC, external Threat Intelligence, MITRE and CVE nodes. Every node carries provenance (`observed`, `enrichment` or `derived`) and may expose bounded evidence metadata in the inspector. Nodes exist only when the underlying data exists. MITRE and CVE nodes therefore appear only when the stored record contains rationale and evidence.
 
+Graph controls can restrict the visible node type, traversal depth and evidence scope. Evidence-only mode removes enrichment nodes while preserving observed telemetry and deterministic derived evidence. Edge provenance follows the target evidence class and is rendered separately from node provenance. These controls change presentation only; they do not create new relationships.
+
 ### Historical navigation
 
 The investigation feed uses cursor pagination ordered by event timestamp plus event ID. The cursor freezes the initial time-window boundary and is bound to the active search and exact filters, preventing accidental reuse after the analyst changes scope. New telemetry arriving while older pages are being loaded does not shift already-issued cursors or create offset-style duplicates.
@@ -121,6 +123,8 @@ Lo workspace è limitato dalla finestra temporale selezionata e da `ANALYTICS_MA
 ### Grafo delle relazioni
 
 Il grafo può contenere nodi evento, sessione, IP, ASN, paese, servizio, protocollo, porta, honeypot, username, fingerprint sicuro del segreto credential, comando, payload, IDS, IOC, Threat Intelligence esterna, MITRE e CVE. Ogni nodo espone la provenienza (`observed`, `enrichment` o `derived`) e può mostrare metadata di evidenza limitati nell'inspector. I nodi esistono solo se esistono i dati corrispondenti. MITRE e CVE compaiono quindi soltanto quando il record contiene razionale ed evidenza.
+
+I controlli del grafo possono limitare il tipo di nodo visibile, la profondità di attraversamento e lo scope di evidenza. La modalità evidence-only rimuove i nodi di enrichment mantenendo telemetria osservata ed evidenza derivata deterministica. La provenance degli edge segue la classe di evidenza del nodo destinazione ed è resa separatamente dalla provenance dei nodi. Questi controlli modificano soltanto la visualizzazione e non creano nuove relazioni.
 
 ### Navigazione storica
 
