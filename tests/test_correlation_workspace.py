@@ -1,3 +1,4 @@
+from aegis_nexus.app import create_app
 from aegis_nexus.correlation_workspace import CORRELATION_SCHEMA_VERSION, CorrelationWorkspace
 from aegis_nexus.model import normalize_event
 from aegis_nexus.store import Store
@@ -166,3 +167,49 @@ def test_weak_port_and_service_overlap_is_filtered_by_default(tmp_path):
 
     result = CorrelationWorkspace(path).analyze(target["session_id"], hours=24)
     assert all(item["session_id"] != unrelated["session_id"] for item in result["items"])
+
+
+def test_correlation_api_is_operator_protected_and_returns_evidence_basis(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "sensor-secret",
+        "OPERATOR_API_KEY": "operator-secret",
+    })
+    client = app.test_client()
+
+    def ingest(honeypot, source_ip, port):
+        return client.post(
+            "/api/v1/events",
+            headers={"X-Aegis-Key": "sensor-secret"},
+            json={
+                "honeypot": honeypot,
+                "event_type": "credential",
+                "observed": {
+                    "source_ip": source_ip,
+                    "service": "ssh",
+                    "protocol": "tcp",
+                    "destination_port": port,
+                    "credential": {"username": "admin", "password": "fixture-secret"},
+                },
+            },
+        )
+
+    first = ingest("ssh-1", "203.0.113.80", 22)
+    second = ingest("ssh-2", "203.0.113.81", 2222)
+    assert first.status_code == 201
+    assert second.status_code == 201
+    session_id = first.get_json()["session_id"]
+
+    assert client.get(f"/api/v1/correlations?session_id={session_id}").status_code == 401
+    operator = {"X-Aegis-Operator-Key": "operator-secret"}
+    response = client.get(
+        f"/api/v1/correlations?session_id={session_id}&hours=24",
+        headers=operator,
+    )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["items"]
+    assert body["items"][0]["evidence_basis"]
+    assert body["items"][0]["attribution"] is False
+    assert body["analysis"]["attribution_inferred"] is False
