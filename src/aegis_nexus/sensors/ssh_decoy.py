@@ -53,9 +53,10 @@ FAKE_FILES = {
 
 
 class AegisSSHServer(paramiko.ServerInterface):
-    def __init__(self, client: SensorClient, source_ip: str, sensor_session_id: str):
+    def __init__(self, client: SensorClient, source_ip: str, source_port: int, sensor_session_id: str):
         self.client = client
         self.source_ip = source_ip
+        self.source_port = source_port
         self.sensor_session_id = sensor_session_id
         self.username = ""
 
@@ -75,7 +76,7 @@ class AegisSSHServer(paramiko.ServerInterface):
             fingerprint_original=True,
         )
         observed = {
-            **_base_observed(self.source_ip, self.sensor_session_id),
+            **_base_observed(self.source_ip, self.sensor_session_id, self.source_port),
             "credential": {"username": self.username, "password": captured_password},
         }
         attach_capture_metadata(observed, audit)
@@ -166,7 +167,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
         transport = paramiko.Transport(self.request)
         transport.local_version = "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10"
         transport.add_server_key(HOST_KEY)
-        server = AegisSSHServer(self.sensor, source_ip, sensor_session_id)
+        server = AegisSSHServer(self.sensor, source_ip, source_port, sensor_session_id)
         try:
             transport.start_server(server=server)
             channel = transport.accept(10)
