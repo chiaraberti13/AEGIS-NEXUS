@@ -418,6 +418,82 @@ class Store:
     ) -> list[dict[str, Any]]:
         return self.page_events(limit=limit, q=q, filters=filters, hours=hours)["items"]
 
+    def detection_context(
+        self,
+        event: dict[str, Any],
+        *,
+        lookback_hours: int = 24,
+        source_limit: int = 1000,
+        credential_limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """Return bounded historical evidence for deterministic detection rules.
+
+        The window is anchored to the event timestamp rather than wall-clock time so
+        historical imports are evaluated consistently. Credential reuse is matched
+        only by stored SHA-256 fingerprints; raw secrets are never queried or returned.
+        """
+        source_ip = str(event.get("source_ip") or (event.get("observed") or {}).get("source_ip") or "")
+        anchor_raw = str(event.get("timestamp") or "")
+        try:
+            anchor = datetime.fromisoformat(anchor_raw.replace("Z", "+00:00"))
+        except ValueError:
+            return [event]
+        if anchor.tzinfo is None:
+            anchor = anchor.replace(tzinfo=timezone.utc)
+        anchor = anchor.astimezone(timezone.utc)
+        bounded_hours = max(1, min(int(lookback_hours), 168))
+        since = (anchor - timedelta(hours=bounded_hours)).isoformat()
+        until = anchor.isoformat()
+        items: list[dict[str, Any]] = []
+
+        with self.connect() as conn:
+            if source_ip:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM events
+                    WHERE source_ip=? AND timestamp>=? AND timestamp<=?
+                    ORDER BY timestamp DESC,id DESC LIMIT ?
+                    """,
+                    (source_ip[:128], since, until, max(1, min(int(source_limit), 2000))),
+                ).fetchall()
+                items.extend(self._decode(row) for row in rows)
+
+            observed = event.get("observed") if isinstance(event.get("observed"), dict) else {}
+            credential = observed.get("credential") if isinstance(observed.get("credential"), dict) else {}
+            fingerprint = ""
+            if credential.get("password_complete") is False:
+                fingerprint = str(credential.get("sensor_reported_password_sha256") or "")
+            else:
+                fingerprint = str(credential.get("password_sha256") or "")
+            if fingerprint:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM events
+                    WHERE timestamp>=? AND timestamp<=?
+                      AND COALESCE(
+                        CASE
+                          WHEN json_extract(observed,'$.credential.password_complete')=0
+                          THEN json_extract(observed,'$.credential.sensor_reported_password_sha256')
+                          ELSE json_extract(observed,'$.credential.password_sha256')
+                        END,
+                        ''
+                      )=?
+                    ORDER BY timestamp DESC,id DESC LIMIT ?
+                    """,
+                    (since, until, fingerprint[:128], max(1, min(int(credential_limit), 1000))),
+                ).fetchall()
+                items.extend(self._decode(row) for row in rows)
+
+        by_id: dict[str, dict[str, Any]] = {}
+        for item in items:
+            event_id = str(item.get("id") or "")
+            if event_id:
+                by_id[event_id] = item
+        current_id = str(event.get("id") or "")
+        if current_id:
+            by_id[current_id] = event
+        return list(by_id.values())
+
     def page_sessions(
         self,
         limit: int = 100,
@@ -741,6 +817,19 @@ class Store:
             if session:
                 item["available"] = True
                 item["summary"] = dict(session)
+        elif evidence_type == "alert":
+            alert = conn.execute(
+                """
+                SELECT id,rule_id,rule_version,title,severity,confidence,source_ip,session_id,
+                       status,first_seen,last_seen,occurrence_count
+                FROM alerts WHERE id=?
+                """,
+                (evidence_id,),
+            ).fetchone()
+            if alert:
+                item["available"] = True
+                item["summary"] = dict(alert)
+                item["summary"]["classification_provenance"] = "detection_rule"
         return item
 
     def get_case(self, case_id: str) -> dict[str, Any] | None:
@@ -825,8 +914,12 @@ class Store:
                 raise ValueError("case_evidence_limit")
             if evidence_type == "event":
                 available = conn.execute("SELECT 1 FROM events WHERE id=?", (evidence_id,)).fetchone()
-            else:
+            elif evidence_type == "session":
                 available = conn.execute("SELECT 1 FROM sessions WHERE id=?", (evidence_id,)).fetchone()
+            elif evidence_type == "alert":
+                available = conn.execute("SELECT 1 FROM alerts WHERE id=?", (evidence_id,)).fetchone()
+            else:
+                available = None
             if not available:
                 raise ValueError("evidence_not_found")
             now = self._case_now()
@@ -1758,7 +1851,12 @@ class Store:
             "analysis": graph_analysis,
             "nodes": list(nodes.values()),
             "edges": [
-                {"source": source, "target": target, "relation": relation}
+                {
+                    "source": source,
+                    "target": target,
+                    "relation": relation,
+                    "provenance": (nodes.get(target) or {}).get("provenance", "observed"),
+                }
                 for source, target, relation in sorted(edges)
             ],
             "provenance": {

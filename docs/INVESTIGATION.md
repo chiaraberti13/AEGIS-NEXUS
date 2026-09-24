@@ -4,7 +4,7 @@
 
 AEGIS-NEXUS is evidence-first. The operator workflow is:
 
-`Dashboard → event → IP → session → timeline → credentials/commands/payloads → external enrichment → MITRE/CVE/IOC → relationships → case → report → Study Mode`
+`Dashboard → Alerts / IOC → event → IP → session → timeline → evidence pivots → relationships → case → report → Study Mode`
 
 ### Dashboard
 
@@ -27,6 +27,8 @@ The IP profile summarizes first/last observation, services, ports, sessions, ASN
 
 Session correlation prefers an explicit per-connection sensor ID when a decoy provides one, or a Suricata `flow_id` combined with `flow.start` when available. Only when neither is present does AEGIS fall back to source IP, honeypot, service, protocol, destination port and an inactivity window. The UI exposes the method used. Correlation groups telemetry; it never proves common human identity.
 
+Cross-session correlation is a separate deterministic investigation layer. It can compare retained sessions through exact source IP, username, safe credential-secret fingerprint, command/payload SHA-256, derived IOC (including URL/domain artifacts), Suricata signature, ASN, service and destination port. Every result stores the method, score, strength and concrete event-level evidence basis in `correlation_links`. The score expresses evidence overlap only; it is never an identity, actor or attribution probability.
+
 ### Threat Intelligence
 
 AEGIS does not invent reputation, malware family, actor or campaign information. The external-context panel keeps provider and timestamp visible and distinguishes contextual enrichment such as GeoIP/ASN from true Threat Intelligence records originating from `enrichment.threat_context`. Empty data produces an empty panel rather than an inferred classification.
@@ -37,9 +39,19 @@ Local threat context exact matches, when configured, appear as external enrichme
 
 Commands and payloads are scanned statically for exact URLs, domains, IP literals and MD5/SHA-1/SHA-256-shaped values. Extracted items are deterministic derived data with an evidence path. They are useful for cross-session correlation and search, but their presence alone is not a maliciousness or compromise verdict.
 
+### IOC Workspace
+
+The IOC Workspace aggregates only deterministic artifacts already present in `derived.ioc`. Each indicator receives a stable content-derived ID and exposes type/value, first seen, last seen, occurrence count, source IPs, sessions, honeypots, services and source event references. Detail pivots also expose related alert and case IDs when those relationships exist.
+
+The workspace is bounded by the selected time window and `ANALYTICS_MAX_EVENTS`. A truncation flag is returned when the event analysis cap is reached. Search and type filters can be exported as formula-safe CSV without exposing credential secrets. IOC are derived artifacts: they are not reputation, Threat Intelligence, compromise verdicts or attribution.
+
 ### Relationship graph
 
 The graph can contain event, session, IP, ASN, country, service, protocol, port, honeypot, username, safe credential-secret fingerprint, command, payload, IDS, IOC, external Threat Intelligence, MITRE and CVE nodes. Every node carries provenance (`observed`, `enrichment` or `derived`) and may expose bounded evidence metadata in the inspector. Nodes exist only when the underlying data exists. MITRE and CVE nodes therefore appear only when the stored record contains rationale and evidence.
+
+Graph controls can restrict the visible node type, traversal depth and evidence scope. Evidence-only mode removes enrichment nodes while preserving observed telemetry and deterministic derived evidence. Edge provenance follows the target evidence class and is rendered separately from node provenance. These controls change presentation only; they do not create new relationships.
+
+The analyst can explicitly expand the graph with the strongest cross-session correlations returned by the correlation engine. Expanded session nodes retain score, method and event-level evidence basis in the inspector. Find Path performs a breadth-first search only across currently visible edges and highlights the resulting evidence path; if the current filters remove connectivity, AEGIS reports no path instead of synthesizing one.
 
 ### Historical navigation
 
@@ -53,7 +65,7 @@ A single correlated session can be attacker-amplified. `AEGIS_SESSION_MAX_EVENTS
 
 ### Case management
 
-Cases let an operator preserve the investigation context without duplicating hostile telemetry. Status, severity, summary, tags and notes are analyst-owned metadata. Event/session evidence is linked by identifier and can later become unavailable when normal telemetry retention removes its source. This is shown explicitly rather than interpreted as absence of activity. See [Case management](CASE_MANAGEMENT.md).
+Cases let an operator preserve the investigation context without duplicating hostile telemetry. Status, severity, summary, tags and notes are analyst-owned metadata. Event/session/alert evidence is linked by identifier and can later become unavailable when normal telemetry retention removes its source. This is shown explicitly rather than interpreted as absence of activity. See [Case management](CASE_MANAGEMENT.md).
 
 ### Reporting
 
@@ -69,7 +81,7 @@ Event Study Mode explains why the selected evidence matters, what a SOC analyst 
 
 AEGIS-NEXUS segue un approccio evidence-first. Il flusso operativo è:
 
-`Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → enrichment esterno → MITRE/CVE/IOC → relazioni → caso → report → Study Mode`
+`Dashboard → Alert / IOC → evento → IP → sessione → timeline → pivot di evidenza → relazioni → caso → report → Study Mode`
 
 ### Dashboard
 
@@ -92,6 +104,8 @@ Il profilo IP riassume prima/ultima osservazione, servizi, porte, sessioni, cont
 
 La correlazione preferisce un ID esplicito per connessione quando fornito dal decoy, oppure il `flow_id` Suricata combinato con `flow.start` quando disponibile. Solo in assenza di entrambi AEGIS usa il fallback con IP sorgente, honeypot, servizio, protocollo, porta destinazione e finestra di inattività. L'interfaccia mostra il metodo utilizzato. La correlazione raggruppa telemetria e non dimostra un'identità umana comune.
 
+La correlazione tra sessioni è un livello investigativo deterministico separato. Può confrontare le sessioni conservate tramite IP sorgente esatto, username, fingerprint sicuro del segreto credential, SHA-256 di comandi/payload, IOC derivati (inclusi artefatti URL/dominio), signature Suricata, ASN, servizio e porta destinazione. Ogni risultato memorizza metodo, score, forza e basis di evidenza a livello evento in `correlation_links`. Lo score descrive esclusivamente sovrapposizione di evidenze e non è mai una probabilità di identità, actor o attribuzione.
+
 ### Threat Intelligence
 
 AEGIS non inventa reputazione, malware family, actor o campagne. Il pannello di contesto esterno mantiene sempre visibili provider e timestamp e distingue enrichment contestuale come GeoIP/ASN dalla vera Threat Intelligence proveniente da `enrichment.threat_context`. In assenza di dati il pannello resta vuoto invece di produrre classificazioni inferite.
@@ -102,9 +116,19 @@ I match esatti del threat context locale, quando configurati, compaiono come enr
 
 Comandi e payload vengono analizzati staticamente per URL, domini, IP letterali e valori con forma MD5/SHA-1/SHA-256. Gli elementi estratti sono dati derivati deterministici con percorso di evidenza. Sono utili per correlazione tra sessioni e ricerca, ma la loro presenza non costituisce da sola un verdetto di malevolenza o compromissione.
 
+### IOC Workspace
+
+L'IOC Workspace aggrega esclusivamente artefatti deterministici già presenti in `derived.ioc`. Ogni indicatore riceve un ID stabile derivato dal contenuto ed espone tipo/valore, prima e ultima osservazione, occorrenze, IP sorgente, sessioni, honeypot, servizi e riferimenti agli eventi sorgente. Il dettaglio mostra anche gli ID di alert e casi correlati quando tali relazioni esistono.
+
+Lo workspace è limitato dalla finestra temporale selezionata e da `ANALYTICS_MAX_EVENTS`; quando viene raggiunto il limite viene restituito un flag di troncamento. Ricerca e filtro per tipo possono essere esportati in CSV con neutralizzazione delle formule e senza esporre segreti credential. Gli IOC sono artefatti derivati: non sono reputazione, Threat Intelligence, verdetti di compromissione o attribuzione.
+
 ### Grafo delle relazioni
 
 Il grafo può contenere nodi evento, sessione, IP, ASN, paese, servizio, protocollo, porta, honeypot, username, fingerprint sicuro del segreto credential, comando, payload, IDS, IOC, Threat Intelligence esterna, MITRE e CVE. Ogni nodo espone la provenienza (`observed`, `enrichment` o `derived`) e può mostrare metadata di evidenza limitati nell'inspector. I nodi esistono solo se esistono i dati corrispondenti. MITRE e CVE compaiono quindi soltanto quando il record contiene razionale ed evidenza.
+
+I controlli del grafo possono limitare il tipo di nodo visibile, la profondità di attraversamento e lo scope di evidenza. La modalità evidence-only rimuove i nodi di enrichment mantenendo telemetria osservata ed evidenza derivata deterministica. La provenance degli edge segue la classe di evidenza del nodo destinazione ed è resa separatamente dalla provenance dei nodi. Questi controlli modificano soltanto la visualizzazione e non creano nuove relazioni.
+
+L'analista può espandere esplicitamente il grafo con le correlazioni tra sessioni più forti restituite dal correlation engine. I nodi sessione aggiunti mantengono score, metodo e basis di evidenza a livello evento nell'inspector. Find Path esegue una ricerca breadth-first esclusivamente sugli edge visibili nello scope corrente ed evidenzia il percorso risultante; se i filtri eliminano la connettività AEGIS segnala l'assenza del percorso invece di sintetizzarne uno.
 
 ### Navigazione storica
 
@@ -118,7 +142,7 @@ Una singola sessione correlata può essere amplificata dall'attaccante. `AEGIS_S
 
 ### Gestione casi
 
-I casi permettono di conservare il contesto investigativo senza duplicare la telemetria ostile. Stato, severità, sintesi, tag e note sono metadati dell'analista. Eventi e sessioni vengono collegati per identificativo e possono diventare non disponibili quando la normale retention elimina la sorgente. Questa condizione viene mostrata esplicitamente e non interpretata come assenza di attività. Consulta [Gestione casi](CASE_MANAGEMENT.md).
+I casi permettono di conservare il contesto investigativo senza duplicare la telemetria ostile. Stato, severità, sintesi, tag e note sono metadati dell'analista. Eventi, sessioni e alert vengono collegati per identificativo e possono diventare non disponibili quando la normale retention elimina la sorgente. Questa condizione viene mostrata esplicitamente e non interpretata come assenza di attività. Consulta [Gestione casi](CASE_MANAGEMENT.md).
 
 ### Reporting
 

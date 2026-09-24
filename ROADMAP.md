@@ -55,20 +55,20 @@ This document is the project's implementation checklist. Items are checked only 
 - [x] Implement alert lifecycle: New → Acknowledged → Investigating → Closed
 - [x] Add analyst notes and tags to alerts
 - [x] Add Alerts API
-- [ ] Add SOC Alert Queue
-- [ ] Add Alert Detail investigation view
-- [ ] Link alerts to events, sessions, IOC and cases
-- [ ] Implement `multiple_auth_failures`
-- [ ] Implement `credential_reuse`
-- [ ] Implement `credential_bruteforce`
-- [ ] Implement `web_scanning`
-- [ ] Implement `path_traversal_sequence`
-- [ ] Implement `recon_burst`
+- [x] Add SOC Alert Queue
+- [x] Add Alert Detail investigation view
+- [x] Link alerts to events, sessions, IOC and cases
+- [x] Implement `multiple_auth_failures`
+- [x] Implement `credential_reuse`
+- [x] Implement `credential_bruteforce`
+- [x] Implement `web_scanning`
+- [x] Implement `path_traversal_sequence`
+- [x] Implement `recon_burst`
 - [x] Implement `command_staging_detected`
 - [x] Implement `download_attempt`
-- [ ] Implement `rapid_port_sequence`
+- [x] Implement `rapid_port_sequence`
 - [x] Implement `suricata_high_severity`
-- [ ] Add detection-rule tests and false-positive regression fixtures
+- [x] Add detection-rule tests and false-positive regression fixtures
 - [x] Document detection semantics and limitations in IT/EN
 
 **Done when:** every alert can be traced back to concrete stored evidence and the UI explains why the detection fired.
@@ -79,25 +79,25 @@ This document is the project's implementation checklist. Items are checked only 
 
 **Goal:** make relationships between telemetry directly useful during investigations.
 
-- [ ] Extend correlation across IP, session, username and credential fingerprint
-- [ ] Correlate commands, payload hashes, URLs, domains and other IOC
-- [ ] Correlate ports, services, ASN and Suricata alerts
-- [ ] Introduce explainable correlation scoring
-- [ ] Store correlation method, score and evidence basis
-- [ ] Prevent correlation score from being presented as attribution
-- [ ] Add IOC Workspace
-- [ ] Add IOC first-seen / last-seen / occurrence statistics
-- [ ] Link IOC to sessions, source IPs, sensors, alerts and cases
-- [ ] Add IOC search/filter/export
-- [ ] Upgrade Relationship Graph with node-type filters
-- [ ] Add on-demand graph expansion
-- [ ] Add graph depth controls
-- [ ] Add evidence-only graph mode
-- [ ] Add provenance cues to graph nodes/edges
-- [ ] Add graph side inspector
-- [ ] Add evidence-path highlighting
-- [ ] Add Find Path between two investigation entities
-- [ ] Add graph/correlation regression tests
+- [x] Extend correlation across IP, session, username and credential fingerprint
+- [x] Correlate commands, payload hashes, URLs, domains and other IOC
+- [x] Correlate ports, services, ASN and Suricata alerts
+- [x] Introduce explainable correlation scoring
+- [x] Store correlation method, score and evidence basis
+- [x] Prevent correlation score from being presented as attribution
+- [x] Add IOC Workspace
+- [x] Add IOC first-seen / last-seen / occurrence statistics
+- [x] Link IOC to sessions, source IPs, sensors, alerts and cases
+- [x] Add IOC search/filter/export
+- [x] Upgrade Relationship Graph with node-type filters
+- [x] Add on-demand graph expansion
+- [x] Add graph depth controls
+- [x] Add evidence-only graph mode
+- [x] Add provenance cues to graph nodes/edges
+- [x] Add graph side inspector
+- [x] Add evidence-path highlighting
+- [x] Add Find Path between two investigation entities
+- [x] Add graph/correlation regression tests
 
 **Done when:** an analyst can move from an alert or IOC to all supporting evidence and understand exactly why each relationship exists.
 
@@ -333,16 +333,14 @@ These requirements apply to **every** roadmap cycle.
 
 ## Current implementation priority
 
-1. **Cycle A — SOC Detection & Alerting**
-2. **Cycle B — Correlation & Investigation 2.0**
-3. **Cycle C — Network Evidence & Visibility**
-4. **Cycle D — Sensor Platform & Honeypot Expansion**
-5. **Cycle E — Threat Intelligence & CTI**
-6. **Cycle F — Behavioral Analytics**
-7. **Cycle G — Cases, Reporting & SOC Workflow**
-8. **Cycle H — Platform Health & Storage**
-9. **Cycle I — Backend Architecture & Maintainability**
-10. **Cycle J — Study Mode 2.0**
+1. **Cycle C — Network Evidence & Visibility**
+2. **Cycle D — Sensor Platform & Honeypot Expansion**
+3. **Cycle E — Threat Intelligence & CTI**
+4. **Cycle F — Behavioral Analytics**
+5. **Cycle G — Cases, Reporting & SOC Workflow**
+6. **Cycle H — Platform Health & Storage**
+7. **Cycle I — Backend Architecture & Maintainability**
+8. **Cycle J — Study Mode 2.0**
 
 ---
 
@@ -351,8 +349,8 @@ These requirements apply to **every** roadmap cycle.
 | Cycle | Status |
 |---|---|
 | Foundation | ✅ Completed |
-| A — SOC Detection & Alerting | 🟨 In progress |
-| B — Correlation & Investigation 2.0 | ⬜ Planned |
+| A — SOC Detection & Alerting | ✅ Completed |
+| B — Correlation & Investigation 2.0 | ✅ Completed |
 | C — Network Evidence & Visibility | ⬜ Planned |
 | D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
 | E — Threat Intelligence & CTI | ⬜ Planned |

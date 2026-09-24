@@ -37,6 +37,25 @@ def test_ingestion_creates_evidence_backed_alert_and_alert_api_supports_lifecycl
     assert alert["confidence"] == 90
     assert alert["status"] == "new"
     assert alert["evidence"][0]["id"] == event_id
+    assert alert["related_session_ids"]
+    assert any(item["type"] in {"url", "domain"} for item in alert["related_iocs"])
+    assert all(item["provenance"] == "derived" for item in alert["related_iocs"])
+
+    case = client.post(
+        "/api/v1/cases",
+        json={"title": "Alert investigation", "severity": "medium", "tags": ["alert"]},
+    )
+    assert case.status_code == 201
+    case_id = case.get_json()["id"]
+    linked = client.post(
+        f"/api/v1/cases/{case_id}/evidence",
+        json={"type": "alert", "id": alert["id"]},
+    )
+    assert linked.status_code == 200
+    alert_evidence = next(item for item in linked.get_json()["evidence"] if item["evidence_type"] == "alert")
+    assert alert_evidence["available"] is True
+    assert alert_evidence["summary"]["rule_id"] == "download_attempt"
+    assert alert_evidence["summary"]["classification_provenance"] == "detection_rule"
 
     patched = client.patch(
         f"/api/v1/alerts/{alert['id']}",
@@ -92,3 +111,33 @@ def test_alert_api_rejects_invalid_status_and_sensor_network_access(tmp_path):
 
     missing = client.patch("/api/v1/alerts/not-found", json={"status": "bogus"})
     assert missing.status_code == 422
+
+
+def test_temporal_detection_creates_aggregated_alert_from_historical_evidence(tmp_path):
+    client = _app(tmp_path).test_client()
+    event_ids = []
+    for minute in range(5):
+        response = client.post(
+            "/api/v1/events",
+            headers={"X-Aegis-Key": "secret"},
+            json={
+                "timestamp": f"2020-01-01T10:0{minute}:00Z",
+                "honeypot": "ssh-1",
+                "event_type": "credential",
+                "observed": {
+                    "source_ip": "203.0.113.88",
+                    "service": "ssh",
+                    "protocol": "tcp",
+                    "destination_port": 22,
+                    "credential": {"username": "root", "password": f"fixture-{minute}"},
+                },
+            },
+        )
+        assert response.status_code == 201
+        event_ids.append(response.get_json()["id"])
+
+    queue = client.get("/api/v1/alerts").get_json()["items"]
+    alert = next(item for item in queue if item["rule_id"] == "multiple_auth_failures")
+    assert alert["status"] == "new"
+    assert {item["id"] for item in alert["evidence"]} == set(event_ids)
+    assert alert["confidence"] == 95

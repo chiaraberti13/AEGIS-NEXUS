@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from aegis_nexus.app import create_app
 
 
@@ -67,17 +69,18 @@ def test_event_cursor_is_bound_to_search_filter_and_window_scope(tmp_path):
         "INGEST_API_KEY": "secret",
     })
     client = app.test_client()
+    anchor = datetime.now(timezone.utc)
     assert _ingest(
         client,
         "10000000-0000-4000-8000-000000000001",
-        "2026-09-22T20:00:00Z",
+        (anchor - timedelta(hours=1)).isoformat(),
         service="ssh",
         token="a",
     ).status_code == 201
     assert _ingest(
         client,
         "10000000-0000-4000-8000-000000000002",
-        "2026-09-22T19:00:00Z",
+        (anchor - timedelta(hours=2)).isoformat(),
         service="ssh",
         token="b",
     ).status_code == 201

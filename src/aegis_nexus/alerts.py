@@ -145,6 +145,48 @@ class AlertStore:
             ).fetchall()
         ]
         item["classification_provenance"] = "detection_rule"
+        item["related_iocs"] = []
+        item["related_session_ids"] = [item["session_id"]] if item.get("session_id") else []
+        events_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='events'"
+        ).fetchone()
+        if events_table:
+            event_ids = [entry["id"] for entry in item["evidence"] if entry.get("type") == "event"][:128]
+            if event_ids:
+                placeholders = ",".join("?" for _ in event_ids)
+                rows = conn.execute(
+                    f"SELECT id,session_id,derived FROM events WHERE id IN ({placeholders})",
+                    event_ids,
+                ).fetchall()
+                seen_iocs: set[tuple[str, str]] = set()
+                sessions = set(item["related_session_ids"])
+                for event_row in rows:
+                    if event_row["session_id"]:
+                        sessions.add(str(event_row["session_id"]))
+                    try:
+                        derived = json.loads(event_row["derived"]) if event_row["derived"] else {}
+                    except (TypeError, json.JSONDecodeError):
+                        derived = {}
+                    for ioc in derived.get("ioc", []) if isinstance(derived, dict) else []:
+                        if not isinstance(ioc, dict):
+                            continue
+                        ioc_type = str(ioc.get("type") or "")[:64]
+                        value = str(ioc.get("value") or "")[:512]
+                        key = (ioc_type, value)
+                        if not ioc_type or not value or key in seen_iocs:
+                            continue
+                        seen_iocs.add(key)
+                        item["related_iocs"].append({
+                            "type": ioc_type,
+                            "value": value,
+                            "evidence_event_id": event_row["id"],
+                            "provenance": "derived",
+                        })
+                        if len(item["related_iocs"]) >= 128:
+                            break
+                    if len(item["related_iocs"]) >= 128:
+                        break
+                item["related_session_ids"] = sorted(sessions)
         return item
 
     def get(self, alert_id: str) -> dict[str, Any] | None:

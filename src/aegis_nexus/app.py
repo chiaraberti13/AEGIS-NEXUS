@@ -15,9 +15,11 @@ from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .alerts import AlertStore
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
+from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
+from .ioc import IOCWorkspace
 from .model import EventValidationError, normalize_event
 from .pagination import CursorError
 from .reporting import case_markdown, session_markdown
@@ -149,6 +151,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         case_retention_days=int(app.config.get("CASE_RETENTION_DAYS", 0)),
     )
     alert_store = AlertStore(app.config["DATABASE_PATH"])
+    ioc_workspace = IOCWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
+    correlation_workspace = CorrelationWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
     detection_engine = DetectionEngine()
     limiter = SlidingWindowLimiter()
     enricher = app.config.get("ENRICHER")
@@ -168,6 +172,8 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     app.extensions["aegis_store"] = store
     app.extensions["aegis_alert_store"] = alert_store
+    app.extensions["aegis_ioc_workspace"] = ioc_workspace
+    app.extensions["aegis_correlation_workspace"] = correlation_workspace
     app.extensions["aegis_detection_engine"] = detection_engine
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
@@ -367,7 +373,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
-            for finding in detection_engine.evaluate(stored):
+            for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
                 alert_store.record(finding, stored["timestamp"])
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
@@ -406,7 +412,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
-            for finding in detection_engine.evaluate(stored):
+            for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
                 alert_store.record(finding, stored["timestamp"])
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
@@ -562,6 +568,58 @@ def create_app(test_config: dict | None = None) -> Flask:
         except ValueError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         return (jsonify(item), 201) if item else (jsonify({"error": "not_found"}), 404)
+
+    @app.get("/api/v1/iocs")
+    def iocs():
+        return jsonify(ioc_workspace.list(
+            limit=request.args.get("limit", 200, type=int),
+            q=request.args.get("q", type=str),
+            ioc_type=request.args.get("type", type=str),
+            hours=request.args.get("hours", 720, type=int),
+        ))
+
+    @app.get("/api/v1/iocs/export.csv")
+    def export_iocs_csv():
+        data = ioc_workspace.list(
+            limit=500,
+            q=request.args.get("q", type=str),
+            ioc_type=request.args.get("type", type=str),
+            hours=request.args.get("hours", 720, type=int),
+        )
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "id", "type", "value", "first_seen", "last_seen", "occurrences",
+            "source_ips", "session_ids", "honeypots", "services", "provenance", "classification",
+        ])
+        for item in data["items"]:
+            writer.writerow([
+                _csv_safe(item.get("id")),
+                _csv_safe(item.get("type")),
+                _csv_safe(item.get("value")),
+                _csv_safe(item.get("first_seen")),
+                _csv_safe(item.get("last_seen")),
+                item.get("occurrences", 0),
+                _csv_safe(";".join(item.get("source_ips") or [])),
+                _csv_safe(";".join(item.get("session_ids") or [])),
+                _csv_safe(";".join(item.get("honeypots") or [])),
+                _csv_safe(";".join(item.get("services") or [])),
+                _csv_safe(item.get("provenance")),
+                _csv_safe(item.get("classification")),
+            ])
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="aegis-iocs.csv"'},
+        )
+
+    @app.get("/api/v1/iocs/<item_id>")
+    def ioc_detail(item_id: str):
+        item = ioc_workspace.get(
+            item_id[:128],
+            hours=request.args.get("hours", 720, type=int),
+        )
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
     @app.get("/api/v1/cases")
     def cases():
@@ -778,6 +836,19 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/v1/relations")
     def relations():
         return jsonify(store.relations(request.args.get("session_id", "")[:128]))
+
+    @app.get("/api/v1/correlations")
+    def correlations():
+        session_id = request.args.get("session_id", "")[:128]
+        if not session_id:
+            return jsonify({"error": "session_id_required"}), 422
+        item = correlation_workspace.analyze(
+            session_id,
+            hours=request.args.get("hours", 720, type=int),
+            limit=request.args.get("limit", 50, type=int),
+            min_score=request.args.get("min_score", 0.50, type=float),
+        )
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
     @app.get("/api/v1/study/<event_id>")
     def study(event_id: str):

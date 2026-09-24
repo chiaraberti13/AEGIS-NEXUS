@@ -19,6 +19,11 @@
     selectedCase: null,
     alerts: [],
     selectedAlert: null,
+    iocs: [],
+    selectedIoc: null,
+    relationGraph: null,
+    relationPathNodes: [],
+    relationPathEdges: [],
     caseSeed: [],
     filters: {},
     mapBox: [0, 0, 800, 390],
@@ -104,6 +109,10 @@
     renderEnrichmentStatus();
     renderOperationsStatus();
     renderEventPagination();
+    if (state.relationGraph) {
+      populateGraphKindFilter(state.relationGraph.nodes || []);
+      renderRelations(state.relationGraph);
+    }
   }
 
   function renderOperationsStatus() {
@@ -756,7 +765,7 @@
     const session = nodes.find((node) => node.kind === "session");
     if (session) positions.set(session.id, {x: 500, y: 310});
     const events = nodes.filter((node) => node.kind === "event");
-    const others = nodes.filter((node) => node.kind !== "event" && node.kind !== "session");
+    const others = nodes.filter((node) => node.kind !== "event" && (!session || node.id !== session.id));
     events.forEach((node, index) => {
       const angle = (Math.PI * 2 * index / Math.max(events.length, 1)) - Math.PI / 2;
       positions.set(node.id, {x: 500 + Math.cos(angle) * 150, y: 310 + Math.sin(angle) * 150});
@@ -784,21 +793,167 @@
     });
   }
 
-  async function relations(sessionId) {
+  function graphEdgeKey(edge) {
+    const endpoints = [String(edge.source), String(edge.target)].sort();
+    return endpoints.join("|") + "|" + String(edge.relation || "");
+  }
+
+  function populateGraphPathSelectors(nodes) {
+    const options = (nodes || []).map((node) => ({
+      value: node.id,
+      label: graphKindLabel(node.kind) + " · " + String(node.label).slice(0, 72),
+    }));
+    [["graph-path-from", "relations.pathFrom"], ["graph-path-to", "relations.pathTo"]].forEach(([id, placeholder]) => {
+      const select = $(id);
+      const previous = select.value;
+      select.replaceChildren();
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = t(placeholder);
+      select.append(empty);
+      options.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        select.append(option);
+      });
+      if (options.some((item) => item.value === previous)) select.value = previous;
+    });
+  }
+
+  function clearGraphPath() {
+    state.relationPathNodes = [];
+    state.relationPathEdges = [];
+  }
+
+  function findGraphPath() {
+    if (!state.relationGraph) return;
+    const scoped = graphScope(state.relationGraph);
+    const source = $("graph-path-from").value;
+    const target = $("graph-path-to").value;
+    if (!source || !target) return;
+
+    const warning = $("relation-warning");
+    const adjacency = new Map(scoped.nodes.map((node) => [node.id, []]));
+    scoped.edges.forEach((edge) => {
+      const key = graphEdgeKey(edge);
+      adjacency.get(edge.source)?.push({next: edge.target, key});
+      adjacency.get(edge.target)?.push({next: edge.source, key});
+    });
+
+    const parent = new Map([[source, null]]);
+    const queue = [source];
+    while (queue.length && !parent.has(target)) {
+      const current = queue.shift();
+      (adjacency.get(current) || []).forEach((step) => {
+        if (parent.has(step.next)) return;
+        parent.set(step.next, {node: current, edge: step.key});
+        queue.push(step.next);
+      });
+    }
+
+    if (!parent.has(target)) {
+      clearGraphPath();
+      warning.hidden = false;
+      warning.textContent = t("relations.noPath");
+      return;
+    }
+
+    const nodes = [target];
+    const edges = [];
+    let current = target;
+    while (current !== source) {
+      const step = parent.get(current);
+      if (!step) break;
+      edges.push(step.edge);
+      current = step.node;
+      nodes.push(current);
+    }
+    state.relationPathNodes = nodes;
+    state.relationPathEdges = edges;
+    renderRelations(state.relationGraph);
+  }
+
+  function populateGraphKindFilter(nodes) {
+    const select = $("graph-kind-filter");
+    const previous = select.value;
+    const kinds = [...new Set((nodes || []).map((node) => node.kind))].sort();
+    select.replaceChildren();
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = t("relations.allKinds");
+    select.append(all);
+    kinds.forEach((kind) => {
+      const option = document.createElement("option");
+      option.value = kind;
+      option.textContent = graphKindLabel(kind);
+      select.append(option);
+    });
+    if (kinds.includes(previous)) select.value = previous;
+  }
+
+  function graphScope(graph) {
+    let nodes = [...(graph?.nodes || [])];
+    let edges = [...(graph?.edges || [])];
+
+    if ($("graph-evidence-only")?.checked) {
+      const allowed = new Set(nodes.filter((node) => node.provenance !== "enrichment").map((node) => node.id));
+      nodes = nodes.filter((node) => allowed.has(node.id));
+      edges = edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
+    }
+
+    const depthValue = $("graph-depth")?.value || "all";
+    if (depthValue !== "all") {
+      const maxDepth = Number(depthValue);
+      const root = nodes.find((node) => node.kind === "session");
+      if (root && Number.isFinite(maxDepth)) {
+        const adjacency = new Map(nodes.map((node) => [node.id, new Set()]));
+        edges.forEach((edge) => {
+          adjacency.get(edge.source)?.add(edge.target);
+          adjacency.get(edge.target)?.add(edge.source);
+        });
+        const distance = new Map([[root.id, 0]]);
+        const queue = [root.id];
+        while (queue.length) {
+          const current = queue.shift();
+          const currentDepth = distance.get(current) || 0;
+          if (currentDepth >= maxDepth) continue;
+          (adjacency.get(current) || []).forEach((next) => {
+            if (distance.has(next)) return;
+            distance.set(next, currentDepth + 1);
+            queue.push(next);
+          });
+        }
+        const allowed = new Set([...distance.entries()].filter(([, value]) => value <= maxDepth).map(([id]) => id));
+        nodes = nodes.filter((node) => allowed.has(node.id));
+        edges = edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
+      }
+    }
+
+    const kind = $("graph-kind-filter")?.value || "";
+    if (kind) {
+      const allowed = new Set(
+        nodes
+          .filter((node) => node.kind === kind || node.kind === "event" || node.kind === "session")
+          .map((node) => node.id)
+      );
+      nodes = nodes.filter((node) => allowed.has(node.id));
+      edges = edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
+    }
+    return {nodes, edges};
+  }
+
+  function renderRelations(graph) {
     const svg = $("relation-graph");
     svg.replaceChildren();
     const warning = $("relation-warning");
     warning.hidden = true;
     warning.textContent = "";
-    if (!sessionId) {
-      $("relation-count").textContent = "0";
-      graphLegend([]);
-      return;
-    }
-    const graph = await safeGet("/api/v1/relations?session_id=" + encodeURIComponent(sessionId));
-    const nodes = graph?.nodes || [];
+
+    const scoped = graphScope(graph);
+    const nodes = scoped.nodes;
     const allowedIds = new Set(nodes.map((node) => node.id));
-    const edges = (graph?.edges || []).filter((edge) => allowedIds.has(edge.source) && allowedIds.has(edge.target));
+    const edges = scoped.edges.filter((edge) => allowedIds.has(edge.source) && allowedIds.has(edge.target));
     const graphAnalysis = graph?.analysis || {};
     if (graphAnalysis.graph_truncated) {
       warning.hidden = false;
@@ -808,17 +963,22 @@
     }
     $("relation-count").textContent = String(nodes.length);
     graphLegend(nodes);
+    populateGraphPathSelectors(nodes);
     if (!nodes.length) return;
     const positions = graphPosition(nodes);
+    const highlightedNodes = new Set(state.relationPathNodes || []);
+    const highlightedEdges = new Set(state.relationPathEdges || []);
 
     edges.forEach((edge) => {
       const source = positions.get(edge.source), target = positions.get(edge.target);
       if (!source || !target) return;
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       [["x1", source.x], ["y1", source.y], ["x2", target.x], ["y2", target.y]].forEach(([key, value]) => line.setAttribute(key, String(value)));
-      line.setAttribute("class", "relation-edge");
+      const provenance = edge.provenance || "observed";
+      const highlighted = highlightedEdges.has(graphEdgeKey(edge)) ? " path-highlight" : "";
+      line.setAttribute("class", "relation-edge provenance-" + provenance + highlighted);
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = graphRelationLabel(edge.relation);
+      title.textContent = graphRelationLabel(edge.relation) + " · " + t("provenance." + provenance);
       line.append(title);
       svg.append(line);
     });
@@ -827,7 +987,8 @@
       const position = positions.get(node.id);
       if (!position) return;
       const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      group.setAttribute("class", "relation-node kind-" + node.kind + " provenance-" + (node.provenance || "observed"));
+      const highlighted = highlightedNodes.has(node.id) ? " path-highlight" : "";
+      group.setAttribute("class", "relation-node kind-" + node.kind + " provenance-" + (node.provenance || "observed") + highlighted);
       group.setAttribute("tabindex", "0");
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", String(position.x));
@@ -853,6 +1014,78 @@
       group.append(circle, label);
       svg.append(group);
     });
+  }
+
+  async function expandGraphCorrelations() {
+    const graph = state.relationGraph;
+    if (!graph) return;
+    const root = (graph.nodes || []).find((node) => node.kind === "session" && !node.metadata?.cross_session_correlation);
+    if (!root) return;
+    const params = new URLSearchParams({
+      session_id: String(root.label),
+      hours: String($("window").value),
+      limit: "20",
+      min_score: "0.5",
+    });
+    const data = await safeGet("/api/v1/correlations?" + params.toString());
+    if (!data) return;
+
+    const nodes = [...(graph.nodes || [])];
+    const edges = [...(graph.edges || [])];
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    const edgeIds = new Set(edges.map((edge) => [edge.source, edge.target, edge.relation].join("|")));
+    (data.items || []).forEach((item) => {
+      const nodeId = "related-session:" + String(item.session_id);
+      if (!nodeIds.has(nodeId)) {
+        nodes.push({
+          id: nodeId,
+          kind: "session",
+          label: String(item.session_id),
+          provenance: "derived",
+          metadata: {
+            cross_session_correlation: {
+              method: item.method,
+              score: item.score,
+              strength: item.strength,
+              evidence_basis: item.evidence_basis,
+              attribution: false,
+            },
+          },
+        });
+        nodeIds.add(nodeId);
+      }
+      const edgeKey = [root.id, nodeId, "cross_session_correlation"].join("|");
+      if (!edgeIds.has(edgeKey)) {
+        edges.push({
+          source: root.id,
+          target: nodeId,
+          relation: "cross_session_correlation",
+          provenance: "derived",
+        });
+        edgeIds.add(edgeKey);
+      }
+    });
+    state.relationGraph = {...graph, nodes, edges};
+    clearGraphPath();
+    populateGraphKindFilter(nodes);
+    renderRelations(state.relationGraph);
+  }
+
+  async function relations(sessionId) {
+    const svg = $("relation-graph");
+    svg.replaceChildren();
+    if (!sessionId) {
+      state.relationGraph = null;
+      $("relation-count").textContent = "0";
+      graphLegend([]);
+      return;
+    }
+    const graph = await safeGet("/api/v1/relations?session_id=" + encodeURIComponent(sessionId));
+    if (!graph) return;
+    state.relationGraph = graph;
+    clearGraphPath();
+    populateGraphKindFilter(graph.nodes || []);
+    renderRelations(graph);
   }
 
   async function selectEvent(event, switchView) {
@@ -1102,6 +1335,132 @@
     if (item) renderCaseDetail(item);
   }
 
+  function renderIocList() {
+    const root = $("ioc-list");
+    if (!root) return;
+    root.replaceChildren();
+    $("ioc-count").textContent = String(state.iocs.length);
+    if (!state.iocs.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("iocs.empty");
+      root.append(empty);
+      return;
+    }
+    state.iocs.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "alert-list-item" + (state.selectedIoc?.id === item.id ? " selected" : "");
+      const head = document.createElement("div");
+      head.className = "alert-list-head";
+      const value = document.createElement("strong");
+      value.textContent = item.value;
+      const kind = document.createElement("span");
+      kind.className = "badge";
+      kind.textContent = item.type;
+      head.append(value, kind);
+      const meta = document.createElement("span");
+      meta.className = "alert-list-meta";
+      meta.textContent = t("iocs.occurrences") + ": " + String(item.occurrences || 0)
+        + " · " + t("iocs.sources") + ": " + String((item.source_ips || []).length);
+      const time = document.createElement("span");
+      time.className = "alert-list-meta";
+      time.textContent = formatDate(item.last_seen);
+      button.append(head, meta, time);
+      button.addEventListener("click", () => selectIoc(item.id));
+      root.append(button);
+    });
+  }
+
+  function renderIocEvents(items) {
+    const root = $("ioc-events");
+    root.replaceChildren();
+    $("ioc-event-count").textContent = String(items?.length || 0);
+    (items || []).forEach((eventId) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "alert-evidence-item";
+      button.textContent = "event · " + eventId;
+      button.addEventListener("click", async () => {
+        const event = await safeGet("/api/v1/events/" + encodeURIComponent(eventId));
+        if (!event) return;
+        showView("investigate");
+        await selectEvent(event, true);
+      });
+      root.append(button);
+    });
+  }
+
+  function renderIocDetail(item) {
+    state.selectedIoc = item;
+    $("ioc-empty").hidden = true;
+    $("ioc-detail-content").hidden = false;
+    $("ioc-value").textContent = item.value || "—";
+    $("ioc-id").textContent = item.id || "—";
+    $("ioc-type").textContent = item.type || "—";
+    $("ioc-first-seen").textContent = formatDate(item.first_seen);
+    $("ioc-last-seen").textContent = formatDate(item.last_seen);
+    $("ioc-occurrences").textContent = String(item.occurrences || 0);
+    $("ioc-source-count").textContent = String((item.source_ips || []).length);
+    $("ioc-pivots").textContent = pretty({
+      source_ips: item.source_ips || [],
+      session_ids: item.session_ids || [],
+      honeypots: item.honeypots || [],
+      services: item.services || [],
+      alert_ids: item.alert_ids || [],
+      case_ids: item.case_ids || [],
+    });
+    renderIocEvents(item.event_ids || []);
+    renderIocList();
+  }
+
+  async function selectIoc(itemId) {
+    const item = await safeGet(
+      "/api/v1/iocs/" + encodeURIComponent(itemId) + "?hours=" + encodeURIComponent($("window").value)
+    );
+    if (item) renderIocDetail(item);
+  }
+
+  async function loadIocs() {
+    const params = new URLSearchParams();
+    params.set("hours", $("window").value);
+    params.set("limit", "300");
+    const q = $("ioc-search")?.value.trim() || "";
+    const type = $("ioc-type-filter")?.value || "";
+    if (q) params.set("q", q);
+    if (type) params.set("type", type);
+    const data = await safeGet("/api/v1/iocs?" + params.toString());
+    if (!data) return;
+    state.iocs = data.items || [];
+    renderIocList();
+  }
+
+  async function exportIocs() {
+    const params = new URLSearchParams();
+    params.set("hours", $("window").value);
+    const q = $("ioc-search")?.value.trim() || "";
+    const type = $("ioc-type-filter")?.value || "";
+    if (q) params.set("q", q);
+    if (type) params.set("type", type);
+    const response = await fetch("/api/v1/iocs/export.csv?" + params.toString(), {
+      headers: apiHeaders({Accept: "text/csv"}),
+    });
+    if (response.status === 401) {
+      showOperatorGate(true);
+      return;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "aegis-iocs.csv";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function renderAlertList() {
     const root = $("alert-list");
     if (!root) return;
@@ -1168,6 +1527,30 @@
     });
   }
 
+  function renderAlertIocs(items) {
+    const root = $("alert-iocs");
+    if (!root) return;
+    root.replaceChildren();
+    if (!items?.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("alerts.noIocs");
+      root.append(empty);
+      return;
+    }
+    items.forEach((item) => {
+      const card = document.createElement("div");
+      card.className = "alert-evidence-item";
+      const label = document.createElement("strong");
+      label.textContent = String(item.type || "ioc") + " · " + String(item.value || "—");
+      const meta = document.createElement("span");
+      meta.className = "alert-list-meta";
+      meta.textContent = t("alerts.iocEvidence") + ": " + String(item.evidence_event_id || "—");
+      card.append(label, meta);
+      root.append(card);
+    });
+  }
+
   function renderAlertNotes(items) {
     const root = $("alert-notes");
     root.replaceChildren();
@@ -1206,6 +1589,7 @@
     $("alert-status").value = item.status || "new";
     $("alert-tags").value = (item.tags || []).join(", ");
     renderAlertEvidence(item.evidence || []);
+    renderAlertIocs(item.related_iocs || []);
     renderAlertNotes(item.notes || []);
     renderAlertList();
   }
@@ -1262,6 +1646,32 @@
     } catch (error) {
       console.error("AEGIS alert note failed", error);
     }
+  }
+
+  function seedCaseFromAlert() {
+    if (!state.selectedAlert) return;
+    const seen = new Set();
+    const seed = [];
+    const add = (type, id) => {
+      if (!id) return;
+      const key = type + ":" + id;
+      if (seen.has(key)) return;
+      seen.add(key);
+      seed.push({type, id});
+    };
+    add("alert", state.selectedAlert.id);
+    (state.selectedAlert.evidence || []).forEach((item) => {
+      if (item.type === "event") add("event", item.id);
+    });
+    (state.selectedAlert.related_session_ids || []).forEach((id) => add("session", id));
+    showView("cases");
+    resetCaseEditor(seed);
+    $("case-title").value = t("alerts.caseTitle")
+      .replace("{rule}", state.selectedAlert.rule_id || t("common.unknown"))
+      .replace("{ip}", state.selectedAlert.source_ip || t("common.unknown"));
+    $("case-severity").value = state.selectedAlert.severity || "medium";
+    $("case-tags").value = "alert, " + String(state.selectedAlert.rule_id || "detection");
+    loadCases();
   }
 
   async function loadCases() {
@@ -1517,6 +1927,7 @@
       showView(button.dataset.viewTarget);
       if (button.dataset.viewTarget === "cases") loadCases();
       if (button.dataset.viewTarget === "alerts") loadAlerts();
+      if (button.dataset.viewTarget === "iocs") loadIocs();
     });
   });
 
@@ -1570,6 +1981,8 @@
     i18n();
     renderCaseList();
     renderAlertList();
+    renderIocList();
+    if (state.selectedIoc) renderIocDetail(state.selectedIoc);
     if (state.selectedAlert) renderAlertDetail(state.selectedAlert);
     if (state.selectedCase) renderCaseDetail(state.selectedCase);
     if (state.selected) await selectEvent(state.selected, false);
@@ -1578,6 +1991,7 @@
   $("window").addEventListener("change", async () => {
     await loadFilterOptions();
     refresh();
+    if (document.querySelector('[data-view="iocs"]')?.classList.contains("active")) loadIocs();
   });
 
   let searchTimer;
@@ -1586,10 +2000,32 @@
     searchTimer = setTimeout(refresh, 250);
   });
 
+  $("graph-kind-filter").addEventListener("change", () => {
+    clearGraphPath();
+    if (state.relationGraph) renderRelations(state.relationGraph);
+  });
+  $("graph-depth").addEventListener("change", () => {
+    clearGraphPath();
+    if (state.relationGraph) renderRelations(state.relationGraph);
+  });
+  $("graph-evidence-only").addEventListener("change", () => {
+    clearGraphPath();
+    if (state.relationGraph) renderRelations(state.relationGraph);
+  });
+  $("graph-expand").addEventListener("click", () => expandGraphCorrelations().catch((error) => console.error("Graph expansion failed", error)));
+  $("graph-find-path").addEventListener("click", findGraphPath);
+  $("ioc-type-filter").addEventListener("change", loadIocs);
+  $("ioc-export").addEventListener("click", () => exportIocs().catch((error) => console.error("IOC export failed", error)));
+  let iocSearchTimer;
+  $("ioc-search").addEventListener("input", () => {
+    clearTimeout(iocSearchTimer);
+    iocSearchTimer = setTimeout(loadIocs, 250);
+  });
   $("event-load-older").addEventListener("click", loadOlderEvents);
   $("alert-status-filter").addEventListener("change", loadAlerts);
   $("alert-severity-filter").addEventListener("change", loadAlerts);
   $("alert-save").addEventListener("click", saveAlert);
+  $("case-from-alert").addEventListener("click", seedCaseFromAlert);
   $("alert-note-form").addEventListener("submit", addAlertNote);
   $("case-from-event").addEventListener("click", seedCaseFromSelected);
   $("case-new").addEventListener("click", () => resetCaseEditor([]));
