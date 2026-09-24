@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from html import escape
 import re
 
 from flask import Flask, jsonify, request
@@ -9,11 +10,13 @@ from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
 from .registry import register_sensor
+from .persona import load_persona
 from ..network_evidence import make_network_evidence
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("AEGIS_WEB_MAX_BODY", "16384"))
 sensor = SensorClient(os.getenv("AEGIS_HONEYPOT_ID", "web-decoy-01"))
+PERSONA = load_persona()
 
 SQLI = re.compile(r"(?:\bunion\b.+\bselect\b|\bor\b\s+['\"]?\d+['\"]?\s*=|--|/\*)", re.I)
 TRAVERSAL = re.compile(r"(?:\.\.[/\\]|%2e%2e(?:%2f|%5c))", re.I)
@@ -131,8 +134,8 @@ def index():
     audit: dict = {}
     observed = attach_capture_metadata(_base_observed(audit), audit)
     sensor.emit("web.request", observed)
-    return """<!doctype html><html><head><meta charset="utf-8"><title>Meridian Portal</title></head>
-<body><h1>Meridian Logistics — Staff Portal</h1><form method="post" action="/login">
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>{escape(PERSONA.web_title)}</title></head>
+<body><h1>{escape(PERSONA.web_heading)}</h1><form method="post" action="/login">
 <label>User <input name="username" maxlength="128"></label><label>Password <input type="password" name="password" maxlength="256"></label>
 <button type="submit">Sign in</button></form></body></html>"""
 
