@@ -15,7 +15,7 @@
 
 > Una piattaforma bilingue evidence-first per honeypot e analisi SOC, pensata per monitoraggio degli attacchi, investigazione, threat research e apprendimento della cybersecurity.
 
-<p align="center"><a href="ROADMAP.md">Roadmap</a> · <a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Provenienza dati</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="docs/INVESTIGATION.md">Investigazione</a> · <a href="docs/OPERATIONS.md">Operazioni</a> · <a href="LICENSE">Licenza</a></p>
+<p align="center"><a href="ROADMAP.md">Roadmap</a> · <a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Provenienza dati</a> · <a href="docs/NETWORK_EVIDENCE.md">Evidenza di rete</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="docs/INVESTIGATION.md">Investigazione</a> · <a href="docs/OPERATIONS.md">Operazioni</a> · <a href="LICENSE">Licenza</a></p>
 
 > [!IMPORTANT]
 > Esponi sensori honeypot soltanto su infrastrutture di tua proprietà o per le quali possiedi un’autorizzazione esplicita. Prima di esporre i decoy a Internet consulta la documentazione su sicurezza, privacy e isolamento.
@@ -41,6 +41,8 @@ La regola centrale è la provenienza: **dati osservati, enrichment esterni, anal
 - Threat context offline a match esatto da feed JSON locale; gli indicatori raccolti non vengono inviati a servizi di terze parti.
 - Estrazione deterministica di IOC/artefatti da comandi e payload osservati senza etichettare automaticamente i valori come malevoli.
 - Ingestione nativa di eventi Suricata EVE JSON.
+- Evidenza di rete versionata con provenance socket/HTTP/Suricata, durata e contatori flow, metadata HTTP bounded, evidenza TLS/DNS e pannello investigativo dedicato.
+- Evidenza PCAP opzionale operator-only con limiti per file/capacità/retention, verifica d'integrità SHA-256 e associazione esplicita alla sessione; i privilegi elevati di cattura restano disabilitati per default.
 - Interfaccia bilingue IT/EN tramite dizionari i18n centrali.
 - Container hardenizzati: runtime non-root, filesystem read-only, capability rimosse, `no-new-privileges`, limiti di risorse e reti management separate.
 - Binding CIDR management per sensore: le identità dei decoy built-in sono accettate soltanto dalla subnet interna attesa e le trust zone dei sensori non possono raggiungere API operatore/UI.
