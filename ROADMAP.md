@@ -116,11 +116,11 @@ This document is the project's implementation checklist. Items are checked only 
 - [x] Add optional TLS metadata/fingerprints where technically available
 - [x] Add DNS indicator evidence where available
 - [x] Design optional passive fingerprint provider interface
-- [ ] Add optional bounded PCAP capture mode
-- [ ] Add PCAP size limits
-- [ ] Add PCAP retention limits
-- [ ] Hash retained PCAP evidence with SHA-256
-- [ ] Associate PCAP evidence with session IDs
+- [x] Add optional bounded PCAP capture mode
+- [x] Add PCAP size limits
+- [x] Add PCAP retention limits
+- [x] Hash retained PCAP evidence with SHA-256
+- [x] Associate PCAP evidence with session IDs
 - [x] Add Network Evidence investigation panel
 - [x] Add network-evidence security/privacy documentation
 - [x] Add bounded-capture and hostile-input tests
@@ -333,14 +333,13 @@ These requirements apply to **every** roadmap cycle.
 
 ## Current implementation priority
 
-1. **Cycle C — Network Evidence & Visibility**
-2. **Cycle D — Sensor Platform & Honeypot Expansion**
-3. **Cycle E — Threat Intelligence & CTI**
-4. **Cycle F — Behavioral Analytics**
-5. **Cycle G — Cases, Reporting & SOC Workflow**
-6. **Cycle H — Platform Health & Storage**
-7. **Cycle I — Backend Architecture & Maintainability**
-8. **Cycle J — Study Mode 2.0**
+1. **Cycle D — Sensor Platform & Honeypot Expansion**
+2. **Cycle E — Threat Intelligence & CTI**
+3. **Cycle F — Behavioral Analytics**
+4. **Cycle G — Cases, Reporting & SOC Workflow**
+5. **Cycle H — Platform Health & Storage**
+6. **Cycle I — Backend Architecture & Maintainability**
+7. **Cycle J — Study Mode 2.0**
 
 ---
 
@@ -351,7 +350,7 @@ These requirements apply to **every** roadmap cycle.
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
-| C — Network Evidence & Visibility | 🟨 In progress |
+| C — Network Evidence & Visibility | ✅ Completed |
 | D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
 | E — Threat Intelligence & CTI | ⬜ Planned |
 | F — Behavioral Analytics | ⬜ Planned |
