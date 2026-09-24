@@ -763,7 +763,7 @@
     const session = nodes.find((node) => node.kind === "session");
     if (session) positions.set(session.id, {x: 500, y: 310});
     const events = nodes.filter((node) => node.kind === "event");
-    const others = nodes.filter((node) => node.kind !== "event" && node.kind !== "session");
+    const others = nodes.filter((node) => node.kind !== "event" && (!session || node.id !== session.id));
     events.forEach((node, index) => {
       const angle = (Math.PI * 2 * index / Math.max(events.length, 1)) - Math.PI / 2;
       positions.set(node.id, {x: 500 + Math.cos(angle) * 150, y: 310 + Math.sin(angle) * 150});
@@ -926,6 +926,60 @@
       group.append(circle, label);
       svg.append(group);
     });
+  }
+
+  async function expandGraphCorrelations() {
+    const graph = state.relationGraph;
+    if (!graph) return;
+    const root = (graph.nodes || []).find((node) => node.kind === "session" && !node.metadata?.cross_session_correlation);
+    if (!root) return;
+    const params = new URLSearchParams({
+      session_id: String(root.label),
+      hours: String($("window").value),
+      limit: "20",
+      min_score: "0.5",
+    });
+    const data = await safeGet("/api/v1/correlations?" + params.toString());
+    if (!data) return;
+
+    const nodes = [...(graph.nodes || [])];
+    const edges = [...(graph.edges || [])];
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    const edgeIds = new Set(edges.map((edge) => [edge.source, edge.target, edge.relation].join("|")));
+    (data.items || []).forEach((item) => {
+      const nodeId = "related-session:" + String(item.session_id);
+      if (!nodeIds.has(nodeId)) {
+        nodes.push({
+          id: nodeId,
+          kind: "session",
+          label: String(item.session_id),
+          provenance: "derived",
+          metadata: {
+            cross_session_correlation: {
+              method: item.method,
+              score: item.score,
+              strength: item.strength,
+              evidence_basis: item.evidence_basis,
+              attribution: false,
+            },
+          },
+        });
+        nodeIds.add(nodeId);
+      }
+      const edgeKey = [root.id, nodeId, "cross_session_correlation"].join("|");
+      if (!edgeIds.has(edgeKey)) {
+        edges.push({
+          source: root.id,
+          target: nodeId,
+          relation: "cross_session_correlation",
+          provenance: "derived",
+        });
+        edgeIds.add(edgeKey);
+      }
+    });
+    state.relationGraph = {...graph, nodes, edges};
+    populateGraphKindFilter(nodes);
+    renderRelations(state.relationGraph);
   }
 
   async function relations(sessionId) {
@@ -1859,6 +1913,7 @@
   $("graph-kind-filter").addEventListener("change", () => state.relationGraph && renderRelations(state.relationGraph));
   $("graph-depth").addEventListener("change", () => state.relationGraph && renderRelations(state.relationGraph));
   $("graph-evidence-only").addEventListener("change", () => state.relationGraph && renderRelations(state.relationGraph));
+  $("graph-expand").addEventListener("click", () => expandGraphCorrelations().catch((error) => console.error("Graph expansion failed", error)));
   $("ioc-type-filter").addEventListener("change", loadIocs);
   $("ioc-export").addEventListener("click", () => exportIocs().catch((error) => console.error("IOC export failed", error)));
   let iocSearchTimer;
