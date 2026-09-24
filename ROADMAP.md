@@ -107,23 +107,23 @@ This document is the project's implementation checklist. Items are checked only 
 
 **Goal:** add network-level context while keeping collection bounded and privacy-aware.
 
-- [ ] Define network-evidence schema and provenance
-- [ ] Capture connection duration
-- [ ] Capture bytes in/out where sensors can observe them
-- [ ] Capture packet/connection counters where available
-- [ ] Capture relevant TCP metadata without claiming unsupported OS attribution
-- [ ] Improve HTTP header and User-Agent evidence
-- [ ] Add optional TLS metadata/fingerprints where technically available
-- [ ] Add DNS indicator evidence where available
-- [ ] Design optional passive fingerprint provider interface
+- [x] Define network-evidence schema and provenance
+- [x] Capture connection duration
+- [x] Capture bytes in/out where sensors can observe them
+- [x] Capture packet/connection counters where available
+- [x] Capture relevant TCP metadata without claiming unsupported OS attribution
+- [x] Improve HTTP header and User-Agent evidence
+- [x] Add optional TLS metadata/fingerprints where technically available
+- [x] Add DNS indicator evidence where available
+- [x] Design optional passive fingerprint provider interface
 - [ ] Add optional bounded PCAP capture mode
 - [ ] Add PCAP size limits
 - [ ] Add PCAP retention limits
 - [ ] Hash retained PCAP evidence with SHA-256
 - [ ] Associate PCAP evidence with session IDs
-- [ ] Add Network Evidence investigation panel
-- [ ] Add network-evidence security/privacy documentation
-- [ ] Add bounded-capture and hostile-input tests
+- [x] Add Network Evidence investigation panel
+- [x] Add network-evidence security/privacy documentation
+- [x] Add bounded-capture and hostile-input tests
 
 **Done when:** network evidence enriches investigations without creating unlimited packet retention or unsupported attribution.
 
@@ -351,7 +351,7 @@ These requirements apply to **every** roadmap cycle.
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
-| C — Network Evidence & Visibility | ⬜ Planned |
+| C — Network Evidence & Visibility | 🟨 In progress |
 | D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
 | E — Threat Intelligence & CTI | ⬜ Planned |
 | F — Behavioral Analytics | ⬜ Planned |
