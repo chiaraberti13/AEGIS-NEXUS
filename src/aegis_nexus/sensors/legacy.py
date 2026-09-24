@@ -251,10 +251,16 @@ class LegacySensorPlugin:
             threading.Thread(target=ftp.serve_forever, daemon=True),
             threading.Thread(target=telnet.serve_forever, daemon=True),
         ]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
+        heartbeat = FTPHandler.sensor.start_heartbeat()
+        try:
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        finally:
+            heartbeat.stop()
+            ftp.server_close()
+            telnet.server_close()
 
 
 def main():
