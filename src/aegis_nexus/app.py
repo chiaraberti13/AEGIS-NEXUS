@@ -15,6 +15,7 @@ from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .alerts import AlertStore
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
+from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
@@ -151,6 +152,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     )
     alert_store = AlertStore(app.config["DATABASE_PATH"])
     ioc_workspace = IOCWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
+    correlation_workspace = CorrelationWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
     detection_engine = DetectionEngine()
     limiter = SlidingWindowLimiter()
     enricher = app.config.get("ENRICHER")
@@ -171,6 +173,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_store"] = store
     app.extensions["aegis_alert_store"] = alert_store
     app.extensions["aegis_ioc_workspace"] = ioc_workspace
+    app.extensions["aegis_correlation_workspace"] = correlation_workspace
     app.extensions["aegis_detection_engine"] = detection_engine
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
@@ -798,6 +801,19 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/v1/relations")
     def relations():
         return jsonify(store.relations(request.args.get("session_id", "")[:128]))
+
+    @app.get("/api/v1/correlations")
+    def correlations():
+        session_id = request.args.get("session_id", "")[:128]
+        if not session_id:
+            return jsonify({"error": "session_id_required"}), 422
+        item = correlation_workspace.analyze(
+            session_id,
+            hours=request.args.get("hours", 720, type=int),
+            limit=request.args.get("limit", 50, type=int),
+            min_score=request.args.get("min_score", 0.50, type=float),
+        )
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
     @app.get("/api/v1/study/<event_id>")
     def study(event_id: str):
