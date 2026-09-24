@@ -72,6 +72,12 @@ def test_cross_session_correlation_is_explainable_and_not_attribution(tmp_path):
     assert item["attribution"] is False
     assert result["analysis"]["attribution_inferred"] is False
     assert "not attribution probability" in result["analysis"]["score_semantics"]
+    stored = CorrelationWorkspace(path).stored(target["session_id"])
+    assert stored[0]["related_session_id"] == related["session_id"]
+    assert stored[0]["method"] == "evidence_overlap_v1"
+    assert stored[0]["score"] == item["score"]
+    assert stored[0]["evidence_basis"]
+    assert stored[0]["attribution"] is False
 
 
 def test_credential_correlation_uses_fingerprint_without_exposing_secret(tmp_path):
