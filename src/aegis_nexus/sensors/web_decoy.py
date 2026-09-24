@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request
 
 from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
+from ..network_evidence import make_network_evidence
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("AEGIS_WEB_MAX_BODY", "16384"))
@@ -21,12 +22,69 @@ def _remote_ip() -> str:
     return request.remote_addr or "0.0.0.0"
 
 
+def _remote_port() -> int | None:
+    value = request.environ.get("REMOTE_PORT")
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return None
+    return port if 1 <= port <= 65535 else None
+
+
+def _http_evidence(audit: dict | None = None) -> dict:
+    selected_headers = {}
+    for name in (
+        "Host",
+        "Accept",
+        "Accept-Language",
+        "Accept-Encoding",
+        "Content-Type",
+        "Content-Length",
+        "Referer",
+        "User-Agent",
+        "X-Forwarded-For",
+        "X-Real-IP",
+    ):
+        value = request.headers.get(name)
+        if value not in (None, ""):
+            key = name.lower()
+            selected_headers[key] = bounded_text(
+                value,
+                1024,
+                f"observed.network.http.headers.{key}",
+                audit,
+            )
+    http = {
+        "method": request.method,
+        "path": bounded_text(request.path, 512, "observed.network.http.path", audit),
+        "request_version": bounded_text(
+            request.environ.get("SERVER_PROTOCOL") or "",
+            32,
+            "observed.network.http.request_version",
+            audit,
+        ),
+        "user_agent": bounded_text(
+            request.headers.get("User-Agent") or "",
+            1024,
+            "observed.network.http.user_agent",
+            audit,
+        ),
+        "headers": selected_headers,
+    }
+    if request.content_length is not None and request.content_length >= 0:
+        http["content_length"] = int(request.content_length)
+    return http
+
+
 def _base_observed(audit: dict | None = None) -> dict:
-    return {
+    destination_port = int(os.getenv("AEGIS_WEB_PORT", "8080"))
+    source_port = _remote_port()
+    transport = {"protocol": "tcp", "destination_port": destination_port}
+    observed = {
         "source_ip": _remote_ip(),
         "service": "http",
         "protocol": "tcp",
-        "destination_port": int(os.getenv("AEGIS_WEB_PORT", "8080")),
+        "destination_port": destination_port,
         "method": request.method,
         "path": bounded_text(request.path, 512, "observed.path", audit),
         "user_agent": bounded_text(
@@ -36,6 +94,16 @@ def _base_observed(audit: dict | None = None) -> dict:
             audit,
         ),
     }
+    if source_port is not None:
+        observed["source_port"] = source_port
+        transport["source_port"] = source_port
+    observed["network"] = make_network_evidence(
+        "http_request",
+        "application",
+        transport=transport,
+        http=_http_evidence(audit),
+    )
+    return observed
 
 
 @app.after_request
