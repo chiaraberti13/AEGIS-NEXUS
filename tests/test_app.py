@@ -203,6 +203,7 @@ def test_frontend_shell_exposes_soc_workspace(tmp_path):
         'data-view="study"',
         'id="map-zoom-in"',
         'id="event-feed"',
+        'id="network-evidence-list"',
         'id="ti-list"',
         'id="relation-graph"',
         'id="graph-kind-filter"',
