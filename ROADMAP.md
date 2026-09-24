@@ -140,7 +140,7 @@ This document is the project's implementation checklist. Items are checked only 
 - [x] Move existing FTP/Telnet sensors to plugin architecture
 - [x] Add declarative sensor configuration
 - [x] Add sensor capability metadata
-- [ ] Add SMTP decoy
+- [x] Add SMTP decoy
 - [ ] Add Redis decoy
 - [ ] Add MySQL decoy
 - [ ] Add SMB decoy
