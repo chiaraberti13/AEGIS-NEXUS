@@ -16,6 +16,7 @@ from aegis_nexus.sensors.mysql_decoy import (
     mysql_packet,
 )
 from aegis_nexus.sensors.redis_decoy import RedisHandler, RedisSensorPlugin
+from aegis_nexus.sensors.persona import DecoyPersona, load_persona
 from aegis_nexus.sensors.registry import SensorRegistry
 from aegis_nexus.sensors.server import BoundedThreadingTCPServer
 from aegis_nexus.sensors.smtp_decoy import SMTPHandler, SMTPSensorPlugin
@@ -261,3 +262,44 @@ def test_mysql_decoy_rejects_oversized_login_packet_before_body(monkeypatch):
     assert rejected["sensor_capture"]["rejected"] is True
     assert rejected["sensor_capture"]["reason"] == "packet_too_large"
     assert rejected["sensor_capture"]["packet_limit"] == MYSQL_MAX_PACKET
+
+
+def test_decoy_persona_is_configurable_and_bounds_fake_files(monkeypatch):
+    monkeypatch.setenv(
+        "AEGIS_DECOY_PERSONA_JSON",
+        '{"name":"branch-office","hostname":"filesrv-02","username":"svcops",'
+        '"web_title":"Operations","smtp_hostname":"mail02","redis_version":"7.0.15",'
+        '"mysql_version":"8.0.34","fake_files":{"/etc/hostname":"filesrv-02\\n",'
+        '"/home/svcops/note.txt":"internal maintenance note","../escape":"blocked"}}',
+    )
+    persona = load_persona()
+
+    assert persona.name == "branch-office"
+    assert persona.hostname == "filesrv-02"
+    assert persona.username == "svcops"
+    assert persona.prompt() == "svcops@filesrv-02:~$ "
+    assert persona.smtp_hostname == "mail02"
+    assert persona.redis_version == "7.0.15"
+    assert persona.mysql_version == "8.0.34"
+    assert persona.fake_files["/etc/hostname"] == "filesrv-02\n"
+    assert "../escape" not in persona.fake_files
+
+
+def test_decoy_persona_strips_protocol_line_break_injection(monkeypatch):
+    monkeypatch.setenv(
+        "AEGIS_DECOY_PERSONA_JSON",
+        '{"smtp_hostname":"mail.example\\r\\n250-INJECTED","hostname":"edge\\nroot"}',
+    )
+    persona = load_persona()
+    assert "\r" not in persona.smtp_hostname
+    assert "\n" not in persona.smtp_hostname
+    assert "\n" not in persona.hostname
+
+
+def test_default_persona_preserves_safe_non_executing_identity(monkeypatch):
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_JSON", raising=False)
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_FILE", raising=False)
+    persona = load_persona()
+    assert isinstance(persona, DecoyPersona)
+    assert persona.hostname
+    assert all(path.startswith("/") for path in persona.fake_files)
