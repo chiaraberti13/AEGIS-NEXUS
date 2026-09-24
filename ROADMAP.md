@@ -89,14 +89,14 @@ This document is the project's implementation checklist. Items are checked only 
 - [x] Add IOC first-seen / last-seen / occurrence statistics
 - [x] Link IOC to sessions, source IPs, sensors, alerts and cases
 - [x] Add IOC search/filter/export
-- [ ] Upgrade Relationship Graph with node-type filters
-- [ ] Add on-demand graph expansion
-- [ ] Add graph depth controls
-- [ ] Add evidence-only graph mode
-- [ ] Add provenance cues to graph nodes/edges
+- [x] Upgrade Relationship Graph with node-type filters
+- [x] Add on-demand graph expansion
+- [x] Add graph depth controls
+- [x] Add evidence-only graph mode
+- [x] Add provenance cues to graph nodes/edges
 - [x] Add graph side inspector
-- [ ] Add evidence-path highlighting
-- [ ] Add Find Path between two investigation entities
+- [x] Add evidence-path highlighting
+- [x] Add Find Path between two investigation entities
 - [x] Add graph/correlation regression tests
 
 **Done when:** an analyst can move from an alert or IOC to all supporting evidence and understand exactly why each relationship exists.
@@ -333,16 +333,14 @@ These requirements apply to **every** roadmap cycle.
 
 ## Current implementation priority
 
-1. **Cycle A — SOC Detection & Alerting**
-2. **Cycle B — Correlation & Investigation 2.0**
-3. **Cycle C — Network Evidence & Visibility**
-4. **Cycle D — Sensor Platform & Honeypot Expansion**
-5. **Cycle E — Threat Intelligence & CTI**
-6. **Cycle F — Behavioral Analytics**
-7. **Cycle G — Cases, Reporting & SOC Workflow**
-8. **Cycle H — Platform Health & Storage**
-9. **Cycle I — Backend Architecture & Maintainability**
-10. **Cycle J — Study Mode 2.0**
+1. **Cycle C — Network Evidence & Visibility**
+2. **Cycle D — Sensor Platform & Honeypot Expansion**
+3. **Cycle E — Threat Intelligence & CTI**
+4. **Cycle F — Behavioral Analytics**
+5. **Cycle G — Cases, Reporting & SOC Workflow**
+6. **Cycle H — Platform Health & Storage**
+7. **Cycle I — Backend Architecture & Maintainability**
+8. **Cycle J — Study Mode 2.0**
 
 ---
 
@@ -352,7 +350,7 @@ These requirements apply to **every** roadmap cycle.
 |---|---|
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
-| B — Correlation & Investigation 2.0 | 🟨 In progress |
+| B — Correlation & Investigation 2.0 | ✅ Completed |
 | C — Network Evidence & Visibility | ⬜ Planned |
 | D — Sensor Platform & Honeypot Expansion | ⬜ Planned |
 | E — Threat Intelligence & CTI | ⬜ Planned |
