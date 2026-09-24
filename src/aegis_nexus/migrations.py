@@ -259,10 +259,27 @@ def _baseline(conn: sqlite3.Connection) -> None:
     _execute_statements(conn, _PCAP_TABLES)
 
 
+def _sensor_heartbeats(conn: sqlite3.Connection) -> None:
+    _execute_statements(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS sensor_heartbeats (
+            sensor_id TEXT PRIMARY KEY,
+            sensor_timestamp TEXT,
+            collector_received_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'healthy'
+        );
+        CREATE INDEX IF NOT EXISTS idx_sensor_heartbeats_received
+        ON sensor_heartbeats(collector_received_at DESC)
+        """,
+    )
+
+
 # Append new migrations at the end with the next integer version. Never edit or
 # reorder a migration that has been released: deployed databases already recorded it.
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline_unversioned_schema", _baseline),
+    Migration(2, "sensor_heartbeats", _sensor_heartbeats),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
