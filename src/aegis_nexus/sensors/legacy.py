@@ -17,6 +17,7 @@ from .persona import load_persona
 
 MAX_LINE = 512
 TIMEOUT = 15.0
+PERSONA = load_persona()
 
 
 def _readline_with_status(stream: BinaryIO) -> tuple[str, dict | None]:
