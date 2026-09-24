@@ -6,6 +6,15 @@ import pytest
 from aegis_nexus.sensors.base import SensorCapabilities, SensorConfig
 from aegis_nexus.sensors.catalog import load_builtin_sensors
 from aegis_nexus.sensors.legacy import LegacySensorPlugin
+from aegis_nexus.sensors.mysql_decoy import (
+    CLIENT_PLUGIN_AUTH,
+    CLIENT_PROTOCOL_41,
+    CLIENT_SECURE_CONNECTION,
+    MAX_PACKET as MYSQL_MAX_PACKET,
+    MySQLHandler,
+    MySQLSensorPlugin,
+    mysql_packet,
+)
 from aegis_nexus.sensors.redis_decoy import RedisHandler, RedisSensorPlugin
 from aegis_nexus.sensors.registry import SensorRegistry
 from aegis_nexus.sensors.server import BoundedThreadingTCPServer
@@ -17,12 +26,13 @@ from aegis_nexus.sensors.web_decoy import WebSensorPlugin
 def test_builtin_sensor_catalog_exposes_safe_capability_metadata():
     registry = load_builtin_sensors(SensorRegistry())
     registry.register(SMTPSensorPlugin)
-    assert registry.names() == ("legacy", "redis", "smtp", "ssh", "web")
+    assert registry.names() == ("legacy", "mysql", "redis", "smtp", "ssh", "web")
     descriptions = {item["name"]: item["capabilities"] for item in registry.describe()}
     assert descriptions["ssh"]["captures_commands"] is True
     assert descriptions["web"]["captures_payloads"] is True
     assert descriptions["legacy"]["captures_credentials"] is True
     assert descriptions["redis"]["captures_payloads"] is True
+    assert descriptions["mysql"]["captures_credentials"] is True
     assert all(item["executes_attacker_input"] is False for item in descriptions.values())
 
 
@@ -61,11 +71,13 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     monkeypatch.setenv("AEGIS_FTP_PORT", "2100")
     monkeypatch.setenv("AEGIS_TELNET_PORT", "2300")
     monkeypatch.setenv("AEGIS_REDIS_PORT", "6380")
+    monkeypatch.setenv("AEGIS_MYSQL_PORT", "3307")
 
     ssh = SSHSensorPlugin.config_from_env()
     web = WebSensorPlugin.config_from_env()
     legacy = LegacySensorPlugin.config_from_env()
     redis = RedisSensorPlugin.config_from_env()
+    mysql = MySQLSensorPlugin.config_from_env()
 
     assert ssh.sensor_id == "fixture-sensor"
     assert ssh.port("ssh") == 2200
@@ -74,6 +86,7 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     assert legacy.port("ftp") == 2100
     assert legacy.port("telnet") == 2300
     assert redis.port("redis") == 6380
+    assert mysql.port("mysql") == 3307
 
 
 def test_sensor_config_rejects_invalid_listener_port():
@@ -178,3 +191,73 @@ def test_redis_rejects_oversized_bulk_input(monkeypatch):
     rejected = next(args[1] for args, _kwargs in captured if args[0] == "sensor.input_rejected")
     assert rejected["sensor_capture"]["rejected"] is True
     assert rejected["sensor_capture"]["reason"] == "bulk_too_large"
+
+
+def _mysql_exchange(monkeypatch, login_packet: bytes):
+    captured = []
+    monkeypatch.setattr(
+        MySQLHandler.sensor,
+        "emit",
+        lambda *args, **kwargs: captured.append((args, kwargs)) or True,
+    )
+    server = BoundedThreadingTCPServer(("127.0.0.1", 0), MySQLHandler, max_connections=2)
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            handshake = client.recv(4096)
+            client.sendall(login_packet)
+            response = client.recv(4096)
+        thread.join(timeout=2)
+    finally:
+        server.server_close()
+    return handshake, response, captured
+
+
+def _mysql_login(username: bytes, auth_response: bytes) -> bytes:
+    flags = CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH
+    payload = (
+        flags.to_bytes(4, "little")
+        + (16 * 1024 * 1024).to_bytes(4, "little")
+        + b"\x2d"
+        + (b"\x00" * 23)
+        + username
+        + b"\x00"
+        + bytes([len(auth_response)])
+        + auth_response
+        + b"caching_sha2_password\x00"
+    )
+    return mysql_packet(payload, 1)
+
+
+def test_mysql_decoy_emits_handshake_and_hashes_auth_response(monkeypatch):
+    auth_response = b"0123456789abcdefghij"
+    handshake, response, captured = _mysql_exchange(
+        monkeypatch,
+        _mysql_login(b"root", auth_response),
+    )
+
+    assert handshake[4] == 10
+    assert b"8.0.36-aegis" in handshake
+    assert response[4] == 0xFF
+
+    credential = next(args[1] for args, _kwargs in captured if args[0] == "credential")
+    assert credential["credential"]["username"] == "root"
+    assert credential["mysql"]["auth_plugin"] == "caching_sha2_password"
+    assert credential["mysql"]["auth_response_length"] == len(auth_response)
+    assert len(credential["mysql"]["auth_response_sha256"]) == 64
+    assert credential["mysql"]["auth_response_stored"] is False
+    assert auth_response.decode() not in str(credential)
+    assert MySQLSensorPlugin.capabilities.executes_attacker_input is False
+
+
+def test_mysql_decoy_rejects_oversized_login_packet_before_body(monkeypatch):
+    oversized_header = (MYSQL_MAX_PACKET + 1).to_bytes(3, "little") + b"\x01"
+    handshake, response, captured = _mysql_exchange(monkeypatch, oversized_header)
+
+    assert handshake[4] == 10
+    assert response[4] == 0xFF
+    rejected = next(args[1] for args, _kwargs in captured if args[0] == "sensor.input_rejected")
+    assert rejected["sensor_capture"]["rejected"] is True
+    assert rejected["sensor_capture"]["reason"] == "packet_too_large"
+    assert rejected["sensor_capture"]["packet_limit"] == MYSQL_MAX_PACKET
