@@ -1137,10 +1137,41 @@ class Store:
             "min_free_bytes": threshold,
         }
 
+    def record_sensor_heartbeat(
+        self,
+        sensor_id: str,
+        sensor_timestamp: str | None = None,
+        collector_received_at: str | None = None,
+    ) -> dict[str, Any]:
+        bounded_sensor_id = str(sensor_id)[:96]
+        if not bounded_sensor_id:
+            raise ValueError("sensor_id is required")
+        received_at = collector_received_at or datetime.now(timezone.utc).isoformat()
+        bounded_timestamp = str(sensor_timestamp)[:64] if sensor_timestamp else None
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO sensor_heartbeats(sensor_id,sensor_timestamp,collector_received_at,status)
+                VALUES(?,?,?,'healthy')
+                ON CONFLICT(sensor_id) DO UPDATE SET
+                    sensor_timestamp=excluded.sensor_timestamp,
+                    collector_received_at=excluded.collector_received_at,
+                    status='healthy'
+                """,
+                (bounded_sensor_id, bounded_timestamp, received_at),
+            )
+        return {
+            "sensor_id": bounded_sensor_id,
+            "sensor_timestamp": bounded_timestamp,
+            "collector_received_at": received_at,
+            "status": "healthy",
+        }
+
     def sensor_telemetry_observation(
         self,
         configured_sensor_ids: list[str] | tuple[str, ...] | set[str] | None = None,
         recent_hours: int = 24,
+        heartbeat_stale_seconds: int = 180,
     ) -> dict[str, Any]:
         bounded_hours = max(1, min(int(recent_hours), 720))
         since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
@@ -1168,9 +1199,48 @@ class Store:
                 "latest_event_timestamp": row["latest_event_timestamp"],
                 "total_events": int(row["total_events"] or 0),
                 "recent_events": int(row["recent_events"] or 0),
+                "last_heartbeat_at": None,
+                "sensor_heartbeat_timestamp": None,
+                "heartbeat_state": "never",
             }
             for row in rows
         }
+        with self.connect() as conn:
+            heartbeat_rows = conn.execute(
+                """
+                SELECT sensor_id,sensor_timestamp,collector_received_at,status
+                FROM sensor_heartbeats
+                ORDER BY sensor_id COLLATE NOCASE
+                """
+            ).fetchall()
+        now = datetime.now(timezone.utc)
+        stale_after = max(30, min(int(heartbeat_stale_seconds), 86400))
+        for row in heartbeat_rows:
+            sensor_id = str(row["sensor_id"])
+            item = observed.setdefault(
+                sensor_id,
+                {
+                    "sensor_id": sensor_id,
+                    "configured": False,
+                    "last_received_at": None,
+                    "latest_event_timestamp": None,
+                    "total_events": 0,
+                    "recent_events": 0,
+                    "last_heartbeat_at": None,
+                    "sensor_heartbeat_timestamp": None,
+                    "heartbeat_state": "never",
+                },
+            )
+            received = str(row["collector_received_at"])
+            try:
+                received_dt = datetime.fromisoformat(received.replace("Z", "+00:00"))
+                age_seconds = max(0, int((now - received_dt.astimezone(timezone.utc)).total_seconds()))
+            except (TypeError, ValueError):
+                age_seconds = stale_after + 1
+            item["last_heartbeat_at"] = received
+            item["sensor_heartbeat_timestamp"] = row["sensor_timestamp"]
+            item["heartbeat_age_seconds"] = age_seconds
+            item["heartbeat_state"] = "healthy" if age_seconds <= stale_after else "stale"
         configured = {
             str(sensor_id)[:96]
             for sensor_id in (configured_sensor_ids or [])
@@ -1186,6 +1256,9 @@ class Store:
                     "latest_event_timestamp": None,
                     "total_events": 0,
                     "recent_events": 0,
+                    "last_heartbeat_at": None,
+                    "sensor_heartbeat_timestamp": None,
+                    "heartbeat_state": "never",
                 },
             )
             item["configured"] = True
@@ -1197,10 +1270,15 @@ class Store:
             "configured_with_recent_telemetry": sum(
                 1 for item in items if item["configured"] and item["recent_events"] > 0
             ),
+            "configured_with_healthy_heartbeat": sum(
+                1 for item in items if item["configured"] and item["heartbeat_state"] == "healthy"
+            ),
+            "heartbeat_stale_seconds": stale_after,
             "observed_sensor_ids": len(items),
             "items": items,
             "interpretation": (
-                "Telemetry timestamps indicate collector receipt, not proof that a sensor is online or offline."
+                "Heartbeat state uses collector receipt time. 'healthy' confirms recent authenticated "
+                "sensor contact; 'stale' means contact is overdue and does not by itself identify the cause."
             ),
         }
 
