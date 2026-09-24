@@ -4,7 +4,7 @@ import hashlib
 import json
 import sqlite3
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +65,7 @@ class CorrelationWorkspace:
         self.path = path
         self.max_events = max(100, min(int(max_events), 100_000))
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._init()
 
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=5)
@@ -74,6 +75,81 @@ class CorrelationWorkspace:
         conn.execute("PRAGMA trusted_schema=OFF")
         conn.execute("PRAGMA busy_timeout=5000")
         return conn
+
+    def _init(self) -> None:
+        with self.connect() as conn:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS correlation_links (
+                    id TEXT PRIMARY KEY,
+                    source_session_id TEXT NOT NULL,
+                    related_session_id TEXT NOT NULL,
+                    schema_version TEXT NOT NULL,
+                    method TEXT NOT NULL,
+                    score REAL NOT NULL,
+                    strength TEXT NOT NULL,
+                    evidence_basis TEXT NOT NULL,
+                    first_seen TEXT,
+                    last_seen TEXT,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(source_session_id, related_session_id, method)
+                );
+                CREATE INDEX IF NOT EXISTS idx_correlation_links_source
+                ON correlation_links(source_session_id, score DESC, last_seen DESC);
+            """)
+
+    @staticmethod
+    def _link_id(source_session_id: str, related_session_id: str, method: str) -> str:
+        material = f"{source_session_id}\0{related_session_id}\0{method}".encode("utf-8", "replace")
+        return "corr_" + hashlib.sha256(material).hexdigest()[:24]
+
+    def _persist(self, source_session_id: str, items: list[dict[str, Any]]) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as conn:
+            conn.execute("DELETE FROM correlation_links WHERE source_session_id=?", (source_session_id,))
+            for item in items[:200]:
+                conn.execute(
+                    """
+                    INSERT INTO correlation_links(
+                        id,source_session_id,related_session_id,schema_version,method,score,strength,
+                        evidence_basis,first_seen,last_seen,updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        self._link_id(source_session_id, item["session_id"], item["method"]),
+                        source_session_id,
+                        item["session_id"],
+                        CORRELATION_SCHEMA_VERSION,
+                        item["method"],
+                        float(item["score"]),
+                        item["strength"],
+                        json.dumps(item["evidence_basis"], ensure_ascii=False, sort_keys=True),
+                        item.get("first_seen"),
+                        item.get("last_seen"),
+                        now,
+                    ),
+                )
+
+    def stored(self, session_id: str, limit: int = 200) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM correlation_links
+                WHERE source_session_id=?
+                ORDER BY score DESC,last_seen DESC,id DESC
+                LIMIT ?
+                """,
+                (str(session_id)[:128], max(1, min(int(limit), 200))),
+            ).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["evidence_basis"] = json.loads(item["evidence_basis"])
+            except (TypeError, json.JSONDecodeError):
+                item["evidence_basis"] = []
+            item["attribution"] = False
+            result.append(item)
+        return result
 
     @staticmethod
     def _add(
@@ -240,10 +316,12 @@ class CorrelationWorkspace:
             })
 
         correlations.sort(key=lambda item: (item["score"], item["last_seen"], item["session_id"]), reverse=True)
+        selected = correlations[:bounded_limit]
+        self._persist(clean_session_id, selected)
         return {
             "schema_version": CORRELATION_SCHEMA_VERSION,
             "session_id": clean_session_id,
-            "items": correlations[:bounded_limit],
+            "items": selected,
             "analysis": {
                 "method": "evidence_overlap_v1",
                 "window_hours": bounded_hours,
@@ -252,5 +330,10 @@ class CorrelationWorkspace:
                 "min_score": bounded_min_score,
                 "score_semantics": "deterministic evidence-overlap strength, not attribution probability",
                 "attribution_inferred": False,
+                "persistence": {
+                    "table": "correlation_links",
+                    "rows": len(selected),
+                    "fields": ["method", "score", "strength", "evidence_basis"],
+                },
             },
         }
