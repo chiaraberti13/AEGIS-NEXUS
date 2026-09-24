@@ -47,7 +47,7 @@ def _http_evidence(audit: dict | None = None) -> dict:
     ):
         value = request.headers.get(name)
         if value not in (None, ""):
-            key = name.lower()
+            key = name.lower().replace("-", "_")
             selected_headers[key] = bounded_text(
                 value,
                 1024,
