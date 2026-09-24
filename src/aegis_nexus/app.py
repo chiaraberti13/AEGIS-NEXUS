@@ -21,6 +21,7 @@ from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .ioc import IOCWorkspace
 from .model import EventValidationError, normalize_event
+from .pcap import DisabledPcapCaptureProvider, PcapEvidenceStore, PcapValidationError
 from .pagination import CursorError
 from .reporting import case_markdown, session_markdown
 from .security import SlidingWindowLimiter, verify_signed_payload
@@ -109,8 +110,11 @@ def _pagination_scope(resource: str, *, q: str | None = None, filters: dict[str,
 
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
+    event_max_bytes = int(os.getenv("AEGIS_MAX_EVENT_BYTES", "65536"))
+    pcap_max_bytes = int(os.getenv("AEGIS_PCAP_MAX_BYTES", "1048576"))
     app.config.update(
-        MAX_CONTENT_LENGTH=int(os.getenv("AEGIS_MAX_EVENT_BYTES", "65536")),
+        MAX_CONTENT_LENGTH=max(event_max_bytes, pcap_max_bytes + 131072),
+        EVENT_MAX_BYTES=event_max_bytes,
         DATABASE_PATH=os.getenv("AEGIS_DATABASE_PATH", "./data/aegis.db"),
         INGEST_API_KEY=os.getenv("AEGIS_INGEST_API_KEY", ""),
         SENSOR_KEYS=_load_sensor_keys(os.getenv("AEGIS_SENSOR_KEYS", "")),
@@ -136,9 +140,19 @@ def create_app(test_config: dict | None = None) -> Flask:
         THREAT_CONTEXT_MAX_INDICATORS=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_INDICATORS", "100000")),
         THREAT_CONTEXT_MAX_MATCHES=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_MATCHES", "32")),
         MAX_FUTURE_EVENT_SKEW_SECONDS=int(os.getenv("AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS", "300")),
+        PCAP_ENABLED=os.getenv("AEGIS_PCAP_ENABLED", "false").lower() in {"1", "true", "yes"},
+        PCAP_DIR=os.getenv("AEGIS_PCAP_DIR", "/data/pcap"),
+        PCAP_MAX_BYTES=pcap_max_bytes,
+        PCAP_RETENTION_DAYS=int(os.getenv("AEGIS_PCAP_RETENTION_DAYS", "7")),
+        PCAP_MAX_FILES=int(os.getenv("AEGIS_PCAP_MAX_FILES", "1000")),
     )
     if test_config:
         app.config.update(test_config)
+    app.config["MAX_CONTENT_LENGTH"] = max(
+        int(app.config.get("MAX_CONTENT_LENGTH", 0)),
+        int(app.config.get("EVENT_MAX_BYTES", 65536)),
+        int(app.config.get("PCAP_MAX_BYTES", 1048576)) + 131072,
+    )
 
     store = Store(
         app.config["DATABASE_PATH"],
@@ -154,6 +168,15 @@ def create_app(test_config: dict | None = None) -> Flask:
     ioc_workspace = IOCWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
     correlation_workspace = CorrelationWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
     detection_engine = DetectionEngine()
+    pcap_store = PcapEvidenceStore(
+        app.config["DATABASE_PATH"],
+        str(app.config.get("PCAP_DIR") or "/data/pcap"),
+        enabled=bool(app.config.get("PCAP_ENABLED")),
+        max_bytes=int(app.config.get("PCAP_MAX_BYTES", 1048576)),
+        retention_days=int(app.config.get("PCAP_RETENTION_DAYS", 7)),
+        max_files=int(app.config.get("PCAP_MAX_FILES", 1000)),
+    )
+    pcap_capture_provider = app.config.get("PCAP_CAPTURE_PROVIDER") or DisabledPcapCaptureProvider()
     limiter = SlidingWindowLimiter()
     enricher = app.config.get("ENRICHER")
     if enricher is None:
@@ -175,6 +198,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_ioc_workspace"] = ioc_workspace
     app.extensions["aegis_correlation_workspace"] = correlation_workspace
     app.extensions["aegis_detection_engine"] = detection_engine
+    app.extensions["aegis_pcap_store"] = pcap_store
+    app.extensions["aegis_pcap_capture_provider"] = pcap_capture_provider
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
     app.extensions["aegis_threat_context"] = threat_context
@@ -352,6 +377,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "content_type_must_be_json"}), 415
         try:
             raw_body = request.get_data(cache=True)
+            if len(raw_body) > int(app.config.get("EVENT_MAX_BYTES", 65536)):
+                return jsonify({"error": "payload_too_large"}), 413
             payload = request.get_json()
             sensor_id = str(payload.get("honeypot") or "")[:96] if isinstance(payload, dict) else ""
             if not sensor_authorized(sensor_id, raw_body):
@@ -393,6 +420,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         sensor_id = (request.headers.get("X-Aegis-Sensor") or "suricata-01")[:96]
         try:
             raw_body = request.get_data(cache=True)
+            if len(raw_body) > int(app.config.get("EVENT_MAX_BYTES", 65536)):
+                return jsonify({"error": "payload_too_large"}), 413
             if not sensor_authorized(sensor_id, raw_body):
                 return jsonify({"error": "unauthorized"}), 401
             if not limiter.allow(
@@ -424,6 +453,69 @@ def create_app(test_config: dict | None = None) -> Flask:
             app.logger.exception("suricata ingestion failed")
             return jsonify({"error": "ingestion_failed"}), 500
         return jsonify({"id": stored["id"], "session_id": stored["session_id"]}), 201
+
+    @app.get("/api/v1/pcap")
+    def list_pcap_evidence():
+        session_id = request.args.get("session_id", "")[:128]
+        if not session_id:
+            return jsonify({"error": "session_id_required"}), 422
+        return jsonify({
+            "enabled": bool(app.config.get("PCAP_ENABLED")),
+            "max_bytes": pcap_store.max_bytes,
+            "retention_days": pcap_store.retention_days,
+            "items": pcap_store.list(session_id, request.args.get("limit", 100, type=int)),
+        })
+
+    @app.post("/api/v1/pcap")
+    def upload_pcap_evidence():
+        if not app.config.get("PCAP_ENABLED"):
+            return jsonify({"error": "pcap_disabled"}), 409
+        session_id = (request.form.get("session_id") or "")[:128]
+        upload = request.files.get("pcap")
+        if not session_id or upload is None:
+            return jsonify({"error": "session_id_and_pcap_required"}), 422
+        data = upload.stream.read(pcap_store.max_bytes + 1)
+        try:
+            metadata = pcap_store.save(session_id, data, capture_provider="operator_upload")
+        except PcapValidationError as exc:
+            return jsonify({"error": "pcap_validation_error", "detail": str(exc)}), 422
+        return jsonify(metadata), 201
+
+    @app.post("/api/v1/pcap/capture")
+    def capture_pcap_evidence():
+        if not app.config.get("PCAP_ENABLED"):
+            return jsonify({"error": "pcap_disabled"}), 409
+        payload = request.get_json(silent=True) or {}
+        session_id = str(payload.get("session_id") or "")[:128]
+        if not session_id:
+            return jsonify({"error": "session_id_required"}), 422
+        try:
+            data = pcap_capture_provider.capture(session_id, pcap_store.max_bytes)
+            metadata = pcap_store.save(
+                session_id,
+                data,
+                capture_provider=str(getattr(pcap_capture_provider, "name", "custom"))[:128],
+            )
+        except PcapValidationError as exc:
+            return jsonify({"error": "pcap_capture_unavailable", "detail": str(exc)}), 409
+        return jsonify(metadata), 201
+
+    @app.get("/api/v1/pcap/<evidence_id>/download")
+    def download_pcap_evidence(evidence_id: str):
+        try:
+            metadata, data = pcap_store.read_verified(evidence_id)
+        except PcapValidationError as exc:
+            status = 404 if "not found" in str(exc) else 409
+            return jsonify({"error": "pcap_unavailable", "detail": str(exc)}), status
+        extension = "pcapng" if metadata.get("format") == "pcapng" else "pcap"
+        return Response(
+            data,
+            mimetype="application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{metadata["id"]}.{extension}"',
+                "X-Aegis-SHA256": str(metadata["sha256"]),
+            },
+        )
 
     @app.get("/api/v1/events")
     def events():
