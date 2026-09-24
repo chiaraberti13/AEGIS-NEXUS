@@ -5,8 +5,10 @@ import re
 
 from flask import Flask, jsonify, request
 
+from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
+from .registry import register_sensor
 from ..network_evidence import make_network_evidence
 
 app = Flask(__name__)
@@ -196,3 +198,44 @@ def viewer():
         severity = "high"
     sensor.emit("web.payload", observed, severity, derived)
     return jsonify({"document": "Document not available", "reference": document[:128]})
+
+
+@register_sensor
+class WebSensorPlugin:
+    name = "web"
+    capabilities = SensorCapabilities(
+        protocols=("http", "tcp"),
+        event_types=("web.request", "web.payload", "credential"),
+        interaction_mode="emulated",
+        network_evidence=("transport", "http"),
+        captures_credentials=True,
+        captures_payloads=True,
+        executes_attacker_input=False,
+    )
+
+    @classmethod
+    def config_from_env(cls) -> SensorConfig:
+        return SensorConfig(
+            sensor_id=os.getenv("AEGIS_HONEYPOT_ID", "web-decoy-01")[:96],
+            enabled=os.getenv("AEGIS_WEB_ENABLED", "true").lower() in {"1", "true", "yes"},
+            bind_host=os.getenv("AEGIS_WEB_BIND", "0.0.0.0"),
+            ports={"http": int(os.getenv("AEGIS_WEB_PORT", "8080"))},
+            options={
+                "max_body": max(1024, min(int(os.getenv("AEGIS_WEB_MAX_BODY", "16384")), 1048576)),
+            },
+        )
+
+    @classmethod
+    def run(cls, config: SensorConfig) -> None:
+        if not config.enabled:
+            return
+        app.config["MAX_CONTENT_LENGTH"] = int(config.options.get("max_body", 16384))
+        app.run(host=config.bind_host, port=config.port("http"), threaded=True)
+
+
+def main():
+    WebSensorPlugin.run(WebSensorPlugin.config_from_env())
+
+
+if __name__ == "__main__":
+    main()
