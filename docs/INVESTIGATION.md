@@ -51,6 +51,8 @@ The graph can contain event, session, IP, ASN, country, service, protocol, port,
 
 Graph controls can restrict the visible node type, traversal depth and evidence scope. Evidence-only mode removes enrichment nodes while preserving observed telemetry and deterministic derived evidence. Edge provenance follows the target evidence class and is rendered separately from node provenance. These controls change presentation only; they do not create new relationships.
 
+The analyst can explicitly expand the graph with the strongest cross-session correlations returned by the correlation engine. Expanded session nodes retain score, method and event-level evidence basis in the inspector. Find Path performs a breadth-first search only across currently visible edges and highlights the resulting evidence path; if the current filters remove connectivity, AEGIS reports no path instead of synthesizing one.
+
 ### Historical navigation
 
 The investigation feed uses cursor pagination ordered by event timestamp plus event ID. The cursor freezes the initial time-window boundary and is bound to the active search and exact filters, preventing accidental reuse after the analyst changes scope. New telemetry arriving while older pages are being loaded does not shift already-issued cursors or create offset-style duplicates.
@@ -125,6 +127,8 @@ Lo workspace è limitato dalla finestra temporale selezionata e da `ANALYTICS_MA
 Il grafo può contenere nodi evento, sessione, IP, ASN, paese, servizio, protocollo, porta, honeypot, username, fingerprint sicuro del segreto credential, comando, payload, IDS, IOC, Threat Intelligence esterna, MITRE e CVE. Ogni nodo espone la provenienza (`observed`, `enrichment` o `derived`) e può mostrare metadata di evidenza limitati nell'inspector. I nodi esistono solo se esistono i dati corrispondenti. MITRE e CVE compaiono quindi soltanto quando il record contiene razionale ed evidenza.
 
 I controlli del grafo possono limitare il tipo di nodo visibile, la profondità di attraversamento e lo scope di evidenza. La modalità evidence-only rimuove i nodi di enrichment mantenendo telemetria osservata ed evidenza derivata deterministica. La provenance degli edge segue la classe di evidenza del nodo destinazione ed è resa separatamente dalla provenance dei nodi. Questi controlli modificano soltanto la visualizzazione e non creano nuove relazioni.
+
+L'analista può espandere esplicitamente il grafo con le correlazioni tra sessioni più forti restituite dal correlation engine. I nodi sessione aggiunti mantengono score, metodo e basis di evidenza a livello evento nell'inspector. Find Path esegue una ricerca breadth-first esclusivamente sugli edge visibili nello scope corrente ed evidenzia il percorso risultante; se i filtri eliminano la connettività AEGIS segnala l'assenza del percorso invece di sintetizzarne uno.
 
 ### Navigazione storica
 
