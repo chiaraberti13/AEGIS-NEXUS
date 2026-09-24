@@ -216,7 +216,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Remove static default fingerprints and test decoys against common honeypot-detection checks
 - [x] Add SMTP decoy
 - [x] Add Redis decoy
-- [ ] Add MySQL decoy
+- [x] Add MySQL decoy
 - [ ] Add SMB decoy
 - [ ] Evaluate PostgreSQL decoy
 - [ ] Evaluate RDP handshake decoy
