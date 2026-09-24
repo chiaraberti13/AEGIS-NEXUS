@@ -7,10 +7,12 @@ import time
 import uuid
 from typing import BinaryIO
 
+from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
 from ..network_evidence import make_network_evidence
 from .server import BoundedThreadingTCPServer
+from .registry import register_sensor
 
 MAX_LINE = 512
 TIMEOUT = 15.0
@@ -200,23 +202,63 @@ class TelnetHandler(BaseHandler):
         self.wfile.write(b"Login incorrect\r\n")
 
 
+@register_sensor
+class LegacySensorPlugin:
+    name = "legacy"
+    capabilities = SensorCapabilities(
+        protocols=("ftp", "telnet", "tcp"),
+        event_types=("connection", "connection.closed", "credential", "legacy.command", "sensor.input_rejected"),
+        interaction_mode="emulated",
+        network_evidence=("transport", "connection"),
+        captures_credentials=True,
+        captures_commands=True,
+        executes_attacker_input=False,
+    )
+
+    @classmethod
+    def config_from_env(cls) -> SensorConfig:
+        return SensorConfig(
+            sensor_id=os.getenv("AEGIS_HONEYPOT_ID", "legacy-decoy-01")[:96],
+            enabled=os.getenv("AEGIS_LEGACY_ENABLED", "true").lower() in {"1", "true", "yes"},
+            bind_host=os.getenv("AEGIS_LEGACY_BIND", "0.0.0.0"),
+            ports={
+                "ftp": int(os.getenv("AEGIS_FTP_PORT", "2121")),
+                "telnet": int(os.getenv("AEGIS_TELNET_PORT", "2323")),
+            },
+            options={
+                "max_connections": max(1, min(int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32")), 256)),
+            },
+        )
+
+    @classmethod
+    def run(cls, config: SensorConfig) -> None:
+        if not config.enabled:
+            return
+        max_connections = int(config.options.get("max_connections", 32))
+        FTPHandler.sensor = SensorClient(config.sensor_id)
+        TelnetHandler.sensor = FTPHandler.sensor
+        ftp = BoundedThreadingTCPServer(
+            (config.bind_host, config.port("ftp")),
+            FTPHandler,
+            max_connections=max_connections,
+        )
+        telnet = BoundedThreadingTCPServer(
+            (config.bind_host, config.port("telnet")),
+            TelnetHandler,
+            max_connections=max_connections,
+        )
+        threads = [
+            threading.Thread(target=ftp.serve_forever, daemon=True),
+            threading.Thread(target=telnet.serve_forever, daemon=True),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+
 def main():
-    host = "0.0.0.0"
-    ftp_port = int(os.getenv("AEGIS_FTP_PORT", "2121"))
-    telnet_port = int(os.getenv("AEGIS_TELNET_PORT", "2323"))
-    max_connections = int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32"))
-    FTPHandler.sensor = SensorClient(os.getenv("AEGIS_HONEYPOT_ID", "legacy-01"))
-    TelnetHandler.sensor = FTPHandler.sensor
-    ftp = BoundedThreadingTCPServer((host, ftp_port), FTPHandler, max_connections=max_connections)
-    telnet = BoundedThreadingTCPServer((host, telnet_port), TelnetHandler, max_connections=max_connections)
-    threads = [
-        threading.Thread(target=ftp.serve_forever, daemon=True),
-        threading.Thread(target=telnet.serve_forever, daemon=True),
-    ]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    LegacySensorPlugin.run(LegacySensorPlugin.config_from_env())
 
 
 if __name__ == "__main__":
