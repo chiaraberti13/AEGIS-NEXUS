@@ -56,7 +56,7 @@ def test_suricata_alert_ingestion_preserves_evidence_without_inventing_mappings(
             "proto":"TCP",
             "app_proto":"ssh",
             "flow_id": 987654,
-            "flow": {"start": "2026-09-22T17:59:58Z"},
+            "flow": {"start": "2026-09-22T17:59:58Z", "end": "2026-09-22T18:00:00Z", "bytes_toserver": 120, "bytes_toclient": 340, "pkts_toserver": 3, "pkts_toclient": 4},
             "alert":{"signature":"Example IDS signature","signature_id":1001,"severity":1,"category":"Attempted Admin"},
         },
     )
@@ -67,7 +67,67 @@ def test_suricata_alert_ingestion_preserves_evidence_without_inventing_mappings(
     assert event["observed"]["alert"]["signature"] == "Example IDS signature"
     assert event["observed"]["flow_id"] == 987654
     assert event["observed"]["flow_start"] == "2026-09-22T17:59:58Z"
+    network = event["observed"]["network"]
+    assert network["source"] == "suricata_eve"
+    assert network["capture_layer"] == "ids_flow"
+    assert network["connection"]["duration_ms"] == 2000
+    assert network["connection"]["bytes_to_server"] == 120
+    assert network["connection"]["bytes_to_client"] == 340
+    assert network["connection"]["packets_to_server"] == 3
+    assert network["connection"]["packets_to_client"] == 4
     assert event["derived"] == {}
+
+
+def test_suricata_tls_and_dns_evidence_remains_observed_and_exact(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE_PATH": str(tmp_path / "aegis.db"), "INGEST_API_KEY": "secret"})
+    client = app.test_client()
+
+    dns_response = client.post(
+        "/api/v1/integrations/suricata/eve",
+        headers={"X-Aegis-Key":"secret","X-Aegis-Sensor":"suricata-01"},
+        json={
+            "timestamp":"2026-09-22T18:01:00Z",
+            "event_type":"dns",
+            "src_ip":"203.0.113.8",
+            "src_port":53000,
+            "dest_ip":"192.0.2.53",
+            "dest_port":53,
+            "proto":"UDP",
+            "dns":{"type":"query","id":42,"rrname":"probe.example.invalid","rrtype":"A"},
+        },
+    )
+    assert dns_response.status_code == 201
+    dns_event = client.get(f"/api/v1/events/{dns_response.get_json()['id']}").get_json()
+    assert dns_event["observed"]["network"]["dns"]["rrname"] == "probe.example.invalid"
+    assert dns_event["derived"]["ioc"] == [{
+        "type": "domain",
+        "value": "probe.example.invalid",
+        "classification": "observed_artifact",
+        "evidence": ["observed.network.dns"],
+    }]
+
+    tls_response = client.post(
+        "/api/v1/integrations/suricata/eve",
+        headers={"X-Aegis-Key":"secret","X-Aegis-Sensor":"suricata-01"},
+        json={
+            "timestamp":"2026-09-22T18:02:00Z",
+            "event_type":"tls",
+            "src_ip":"203.0.113.8",
+            "src_port":54444,
+            "dest_ip":"192.0.2.10",
+            "dest_port":443,
+            "proto":"TCP",
+            "tls":{"sni":"portal.example.invalid","version":"TLS 1.3","fingerprint":"fixture-fingerprint"},
+            "ja3":{"hash":"0123456789abcdef0123456789abcdef","string":"fixture-ja3"},
+        },
+    )
+    assert tls_response.status_code == 201
+    tls_event = client.get(f"/api/v1/events/{tls_response.get_json()['id']}").get_json()
+    tls = tls_event["observed"]["network"]["tls"]
+    assert tls["sni"] == "portal.example.invalid"
+    assert tls["version"] == "TLS 1.3"
+    assert tls["ja3"]["hash"] == "0123456789abcdef0123456789abcdef"
+    assert tls_event["derived"] == {}
 
 
 def test_filters_ti_session_study_and_csv_report(tmp_path):
