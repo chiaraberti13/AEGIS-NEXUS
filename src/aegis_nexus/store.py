@@ -1851,7 +1851,12 @@ class Store:
             "analysis": graph_analysis,
             "nodes": list(nodes.values()),
             "edges": [
-                {"source": source, "target": target, "relation": relation}
+                {
+                    "source": source,
+                    "target": target,
+                    "relation": relation,
+                    "provenance": (nodes.get(target) or {}).get("provenance", "observed"),
+                }
                 for source, target, relation in sorted(edges)
             ],
             "provenance": {
