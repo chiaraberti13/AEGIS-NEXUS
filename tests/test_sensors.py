@@ -45,6 +45,9 @@ def test_ssh_telemetry_uses_configured_listener_port(monkeypatch):
     assert observed["destination_port"] == 2222
     assert observed["service"] == "ssh"
     assert observed["protocol"] == "tcp"
+    assert observed["network"]["schema_version"] == "1.0"
+    assert observed["network"]["source"] == "sensor_socket"
+    assert observed["network"]["transport"]["destination_port"] == 2222
 
 
 class _FakeChannel:
@@ -104,3 +107,52 @@ def test_web_decoy_captures_unknown_paths_for_scan_detection(monkeypatch):
     assert args[0] == "web.request"
     assert args[1]["path"] == "/wp-admin/probe-fixture"
     assert args[2] == "low"
+
+
+def test_ssh_network_evidence_includes_peer_port_and_duration(monkeypatch):
+    monkeypatch.setenv("AEGIS_SSH_PORT", "2222")
+    observed = _base_observed("203.0.113.51", "session-2", 50123, duration_ms=1750)
+    network = observed["network"]
+    assert observed["source_port"] == 50123
+    assert network["transport"]["source_port"] == 50123
+    assert network["transport"]["destination_port"] == 2222
+    assert network["connection"]["duration_ms"] == 1750
+
+
+def test_web_decoy_captures_bounded_http_headers_as_network_evidence(monkeypatch):
+    captured = []
+    monkeypatch.setattr(web_decoy.sensor, "emit", lambda *args, **kwargs: captured.append((args, kwargs)) or True)
+    client = web_decoy.app.test_client()
+    response = client.get(
+        "/",
+        headers={
+            "User-Agent": "fixture-agent/1.0",
+            "Accept-Language": "it-IT,it;q=0.9",
+            "X-Forwarded-For": "198.51.100.10",
+            "Authorization": "Bearer must-not-be-captured",
+        },
+        environ_base={"REMOTE_PORT": "50124"},
+    )
+    assert response.status_code == 200
+    observed = captured[-1][0][1]
+    network = observed["network"]
+    assert network["source"] == "http_request"
+    assert network["capture_layer"] == "application"
+    assert network["transport"]["source_port"] == 50124
+    assert network["http"]["user_agent"] == "fixture-agent/1.0"
+    assert network["http"]["headers"]["accept_language"] == "it-IT,it;q=0.9"
+    assert network["http"]["headers"]["x_forwarded_for"] == "198.51.100.10"
+    assert "authorization" not in network["http"]["headers"]
+    assert observed["source_ip"] != "198.51.100.10"
+
+
+def test_web_network_header_truncation_is_disclosed(monkeypatch):
+    captured = []
+    monkeypatch.setattr(web_decoy.sensor, "emit", lambda *args, **kwargs: captured.append((args, kwargs)) or True)
+    client = web_decoy.app.test_client()
+    response = client.get("/", headers={"Accept-Language": "A" * 2000})
+    assert response.status_code == 200
+    observed = captured[-1][0][1]
+    assert len(observed["network"]["http"]["headers"]["accept_language"]) == 1024
+    entries = observed["sensor_capture"]["truncated_fields"]
+    assert any(item["path"] == "observed.network.http.headers.accept_language" for item in entries)
