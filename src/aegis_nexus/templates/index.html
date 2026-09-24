@@ -458,6 +458,16 @@
           <span id="relation-count" class="badge">0</span>
         </div>
         <p id="relation-warning" class="analytics-warning" hidden></p>
+        <div class="graph-controls">
+          <select id="graph-kind-filter" aria-label="Node type"><option value="" data-i18n="relations.allKinds"></option></select>
+          <select id="graph-depth" aria-label="Graph depth">
+            <option value="all" data-i18n="relations.depthAll"></option>
+            <option value="1" data-i18n="relations.depth1"></option>
+            <option value="2" data-i18n="relations.depth2"></option>
+            <option value="3" data-i18n="relations.depth3"></option>
+          </select>
+          <label class="graph-toggle"><input id="graph-evidence-only" type="checkbox"> <span data-i18n="relations.evidenceOnly"></span></label>
+        </div>
         <div class="graph-layout">
           <svg id="relation-graph" viewBox="0 0 1000 620" class="relation-graph" role="img"></svg>
           <aside class="graph-inspector">
