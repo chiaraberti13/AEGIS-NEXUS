@@ -107,6 +107,10 @@
     renderEnrichmentStatus();
     renderOperationsStatus();
     renderEventPagination();
+    if (state.relationGraph) {
+      populateGraphKindFilter(state.relationGraph.nodes || []);
+      renderRelations(state.relationGraph);
+    }
   }
 
   function renderOperationsStatus() {
