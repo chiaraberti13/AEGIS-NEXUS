@@ -610,6 +610,47 @@
     }
   }
 
+  function renderNetworkEvidence(bundle) {
+    const root = $("network-evidence-list");
+    root.replaceChildren();
+    const items = (bundle?.events || [])
+      .filter((event) => event?.observed?.network && typeof event.observed.network === "object")
+      .slice(-20)
+      .reverse();
+    if (!items.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("empty.noData");
+      root.append(empty);
+      return;
+    }
+    items.forEach((event) => {
+      const network = event.observed.network;
+      const card = document.createElement("article");
+      card.className = "network-evidence-item";
+      const head = document.createElement("div");
+      head.className = "network-evidence-head";
+      const title = document.createElement("strong");
+      title.textContent = event.event_type || t("common.event");
+      const badge = document.createElement("span");
+      badge.className = "provenance observed";
+      badge.textContent = t("provenance.observed");
+      head.append(title, badge);
+      const meta = document.createElement("div");
+      meta.className = "network-evidence-meta";
+      meta.textContent = [
+        formatDate(event.timestamp),
+        t("network.source") + ": " + (network.source || "—"),
+        t("network.layer") + ": " + (network.capture_layer || "—"),
+        t("network.schema") + ": " + (network.schema_version || "—"),
+      ].join(" · ");
+      const pre = document.createElement("pre");
+      pre.textContent = pretty(network);
+      card.append(head, meta, pre);
+      root.append(card);
+    });
+  }
+
   function renderThreatIntelligence(data) {
     const root = $("ti-list");
     root.replaceChildren();
@@ -1125,6 +1166,7 @@
     renderSessionStudy(sessionStudy);
     renderIp(profile);
     renderSession(session);
+    renderNetworkEvidence(session);
     renderThreatIntelligence(ti);
     renderSessionTimeline(session);
     await relations(sessionId);
