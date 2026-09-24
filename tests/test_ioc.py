@@ -104,3 +104,55 @@ def test_ioc_workspace_api_is_operator_protected_and_searchable(tmp_path):
     detail = client.get(f"/api/v1/iocs/{item['id']}", headers=operator)
     assert detail.status_code == 200
     assert created.get_json()["id"] in detail.get_json()["event_ids"]
+
+
+def test_ioc_csv_export_is_filterable_and_formula_safe(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "sensor-secret",
+        "OPERATOR_API_KEY": "operator-secret",
+    })
+    store = app.extensions["aegis_store"]
+    store.ingest(normalize_event({
+        "honeypot": "web-1",
+        "event_type": "web.payload",
+        "observed": {
+            "source_ip": "203.0.113.99",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+        "derived": {
+            "ioc": [{
+                "type": "domain",
+                "value": '=HYPERLINK("https://example.invalid","x")',
+                "evidence": ["fixture"],
+            }],
+        },
+    }))
+    store.ingest(normalize_event({
+        "honeypot": "web-2",
+        "event_type": "web.payload",
+        "observed": {
+            "source_ip": "203.0.113.100",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+        "derived": {
+            "ioc": [{"type": "url", "value": "https://other.invalid/a", "evidence": ["fixture"]}],
+        },
+    }))
+
+    client = app.test_client()
+    assert client.get("/api/v1/iocs/export.csv").status_code == 401
+    response = client.get(
+        "/api/v1/iocs/export.csv?type=domain",
+        headers={"X-Aegis-Operator-Key": "operator-secret"},
+    )
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    body = response.get_data(as_text=True)
+    assert "'=HYPERLINK" in body
+    assert "https://other.invalid/a" not in body
