@@ -175,12 +175,16 @@ class SMTPSensorPlugin:
         if not config.enabled:
             return
         SMTPHandler.sensor = SensorClient(config.sensor_id)
-        with BoundedThreadingTCPServer(
-            (config.bind_host, config.port("smtp")),
-            SMTPHandler,
-            max_connections=int(config.options.get("max_connections", 32)),
-        ) as server:
-            server.serve_forever()
+        heartbeat = SMTPHandler.sensor.start_heartbeat()
+        try:
+            with BoundedThreadingTCPServer(
+                (config.bind_host, config.port("smtp")),
+                SMTPHandler,
+                max_connections=int(config.options.get("max_connections", 32)),
+            ) as server:
+                server.serve_forever()
+        finally:
+            heartbeat.stop()
 
 
 def main():
