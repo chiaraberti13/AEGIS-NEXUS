@@ -18,7 +18,9 @@ MAX_LINE = 1024
 MAX_BULK = 4096
 MAX_ARGS = 16
 MAX_COMMANDS = 64
-PERSONA = load_persona()\n\nTIMEOUT = 20.0
+PERSONA = load_persona()
+
+TIMEOUT = 20.0
 
 
 class RedisProtocolError(ValueError):
