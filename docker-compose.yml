@@ -27,9 +27,9 @@ services:
       AEGIS_DATABASE_PATH: ${AEGIS_DATABASE_PATH:-/data/aegis.db}
       AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:-}
       AEGIS_SENSOR_KEYS: >-
-        {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","smtp-decoy-01":"${AEGIS_SMTP_SENSOR_API_KEY:?set AEGIS_SMTP_SENSOR_API_KEY in .env}","redis-decoy-01":"${AEGIS_REDIS_SENSOR_API_KEY:?set AEGIS_REDIS_SENSOR_API_KEY in .env}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}
+        {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","smtp-decoy-01":"${AEGIS_SMTP_SENSOR_API_KEY:?set AEGIS_SMTP_SENSOR_API_KEY in .env}","redis-decoy-01":"${AEGIS_REDIS_SENSOR_API_KEY:?set AEGIS_REDIS_SENSOR_API_KEY in .env}","mysql-decoy-01":"${AEGIS_MYSQL_SENSOR_API_KEY:?set AEGIS_MYSQL_SENSOR_API_KEY in .env}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}
       AEGIS_SENSOR_SOURCE_CIDRS: >-
-        {"ssh-decoy-01":"${AEGIS_SSH_MGMT_SUBNET:-172.31.101.0/24}","web-decoy-01":"${AEGIS_WEB_MGMT_SUBNET:-172.31.102.0/24}","legacy-decoy-01":"${AEGIS_LEGACY_MGMT_SUBNET:-172.31.103.0/24}","smtp-decoy-01":"${AEGIS_SMTP_MGMT_SUBNET:-172.31.104.0/24}","redis-decoy-01":"${AEGIS_REDIS_MGMT_SUBNET:-172.31.105.0/24}"}
+        {"ssh-decoy-01":"${AEGIS_SSH_MGMT_SUBNET:-172.31.101.0/24}","web-decoy-01":"${AEGIS_WEB_MGMT_SUBNET:-172.31.102.0/24}","legacy-decoy-01":"${AEGIS_LEGACY_MGMT_SUBNET:-172.31.103.0/24}","smtp-decoy-01":"${AEGIS_SMTP_MGMT_SUBNET:-172.31.104.0/24}","redis-decoy-01":"${AEGIS_REDIS_MGMT_SUBNET:-172.31.105.0/24}","mysql-decoy-01":"${AEGIS_MYSQL_MGMT_SUBNET:-172.31.106.0/24}"}
       AEGIS_OPERATOR_API_KEY: ${AEGIS_OPERATOR_API_KEY:?set AEGIS_OPERATOR_API_KEY in .env}
       AEGIS_REQUIRE_SENSOR_SIGNATURE: ${AEGIS_REQUIRE_SENSOR_SIGNATURE:-true}
       AEGIS_SENSOR_SIGNATURE_MAX_SKEW: ${AEGIS_SENSOR_SIGNATURE_MAX_SKEW:-300}
@@ -62,6 +62,7 @@ services:
       - legacy_mgmt
       - smtp_mgmt
       - redis_mgmt
+      - mysql_mgmt
     read_only: true
     tmpfs:
       - /tmp:size=16m,noexec,nosuid,nodev
@@ -189,6 +190,24 @@ services:
       - collector
 
 
+  mysql-decoy:
+    <<: *sensor-hardening
+    build: .
+    command: ["python", "-m", "aegis_nexus.sensors.mysql_decoy"]
+    environment:
+      <<: *sensor-env
+      AEGIS_SENSOR_API_KEY: ${AEGIS_MYSQL_SENSOR_API_KEY:?set AEGIS_MYSQL_SENSOR_API_KEY in .env}
+      AEGIS_HONEYPOT_ID: mysql-decoy-01
+      AEGIS_MYSQL_PORT: "3306"
+    ports:
+      - "${AEGIS_PUBLIC_MYSQL_PORT:-3306}:3306"
+    networks:
+      - mysql_exposure
+      - mysql_mgmt
+    depends_on:
+      - collector
+
+
   backup:
     build: .
     profiles: ["ops"]
@@ -230,6 +249,10 @@ networks:
     ipam:
       config:
         - subnet: "${AEGIS_REDIS_EXPOSURE_SUBNET:-172.30.105.0/24}"
+  mysql_exposure:
+    ipam:
+      config:
+        - subnet: "${AEGIS_MYSQL_EXPOSURE_SUBNET:-172.30.106.0/24}"
   ssh_mgmt:
     internal: true
     ipam:
@@ -255,6 +278,11 @@ networks:
     ipam:
       config:
         - subnet: "${AEGIS_REDIS_MGMT_SUBNET:-172.31.105.0/24}"
+  mysql_mgmt:
+    internal: true
+    ipam:
+      config:
+        - subnet: "${AEGIS_MYSQL_MGMT_SUBNET:-172.31.106.0/24}"
 
 volumes:
   aegis-data:
