@@ -203,18 +203,15 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** make sensors modular and add new emulated attack surfaces safely.
 
-- [ ] Define common Sensor interface
-- [ ] Implement sensor registry
-- [ ] Move existing SSH sensor to plugin architecture
-- [ ] Move existing Web sensor to plugin architecture
-- [ ] Move existing FTP/Telnet sensors to plugin architecture
-- [ ] Add declarative sensor configuration
-- [ ] Add sensor capability metadata
-- [ ] Add sensor heartbeat so silent-but-healthy sensors are distinguishable from dead sensors
-- [ ] Add configurable decoy personas (banners, hostnames, fake filesystem) per deployment
-- [ ] Remove static default fingerprints and test decoys against common honeypot-detection checks
-- [ ] Add SMTP decoy
-- [ ] Add Redis decoy
+- [x] Define common Sensor interface
+- [x] Implement sensor registry
+- [x] Move existing SSH sensor to plugin architecture
+- [x] Move existing Web sensor to plugin architecture
+- [x] Move existing FTP/Telnet sensors to plugin architecture
+- [x] Add declarative sensor configuration
+- [x] Add sensor capability metadata
+- [x] Add SMTP decoy
+- [x] Add Redis decoy
 - [ ] Add MySQL decoy
 - [ ] Add SMB decoy
 - [ ] Evaluate PostgreSQL decoy

@@ -22,7 +22,7 @@ jobs:
       - run: node --check src/aegis_nexus/static/app.js
       - run: node --check src/aegis_nexus/static/i18n.js
       - run: pytest -q
-      - run: AEGIS_SSH_SENSOR_API_KEY=ci-ssh-secret AEGIS_WEB_SENSOR_API_KEY=ci-web-secret AEGIS_LEGACY_SENSOR_API_KEY=ci-legacy-secret AEGIS_SMTP_SENSOR_API_KEY=ci-smtp-secret AEGIS_OPERATOR_API_KEY=ci-operator-secret docker compose config -q
-      - run: AEGIS_SSH_SENSOR_API_KEY=ci-ssh-secret AEGIS_WEB_SENSOR_API_KEY=ci-web-secret AEGIS_LEGACY_SENSOR_API_KEY=ci-legacy-secret AEGIS_SMTP_SENSOR_API_KEY=ci-smtp-secret AEGIS_OPERATOR_API_KEY=ci-operator-secret docker compose -f docker-compose.yml -f docker-compose.geoip.yml config -q
-      - run: AEGIS_SSH_SENSOR_API_KEY=ci-ssh-secret AEGIS_WEB_SENSOR_API_KEY=ci-web-secret AEGIS_LEGACY_SENSOR_API_KEY=ci-legacy-secret AEGIS_SMTP_SENSOR_API_KEY=ci-smtp-secret AEGIS_OPERATOR_API_KEY=ci-operator-secret docker compose -f docker-compose.yml -f docker-compose.threat-context.yml config -q
+      - run: AEGIS_SSH_SENSOR_API_KEY=ci-ssh-secret AEGIS_WEB_SENSOR_API_KEY=ci-web-secret AEGIS_LEGACY_SENSOR_API_KEY=ci-legacy-secret AEGIS_SMTP_SENSOR_API_KEY=ci-smtp-secret AEGIS_REDIS_SENSOR_API_KEY=ci-redis-secret AEGIS_OPERATOR_API_KEY=ci-operator-secret docker compose config -q
+      - run: AEGIS_SSH_SENSOR_API_KEY=ci-ssh-secret AEGIS_WEB_SENSOR_API_KEY=ci-web-secret AEGIS_LEGACY_SENSOR_API_KEY=ci-legacy-secret AEGIS_SMTP_SENSOR_API_KEY=ci-smtp-secret AEGIS_REDIS_SENSOR_API_KEY=ci-redis-secret AEGIS_OPERATOR_API_KEY=ci-operator-secret docker compose -f docker-compose.yml -f docker-compose.geoip.yml config -q
+      - run: AEGIS_SSH_SENSOR_API_KEY=ci-ssh-secret AEGIS_WEB_SENSOR_API_KEY=ci-web-secret AEGIS_LEGACY_SENSOR_API_KEY=ci-legacy-secret AEGIS_SMTP_SENSOR_API_KEY=ci-smtp-secret AEGIS_REDIS_SENSOR_API_KEY=ci-redis-secret AEGIS_OPERATOR_API_KEY=ci-operator-secret docker compose -f docker-compose.yml -f docker-compose.threat-context.yml config -q
       - run: docker build -t aegis-nexus:ci .
