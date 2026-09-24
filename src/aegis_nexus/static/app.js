@@ -1204,6 +1204,32 @@
     renderIocList();
   }
 
+  async function exportIocs() {
+    const params = new URLSearchParams();
+    params.set("hours", $("window").value);
+    const q = $("ioc-search")?.value.trim() || "";
+    const type = $("ioc-type-filter")?.value || "";
+    if (q) params.set("q", q);
+    if (type) params.set("type", type);
+    const response = await fetch("/api/v1/iocs/export.csv?" + params.toString(), {
+      headers: apiHeaders({Accept: "text/csv"}),
+    });
+    if (response.status === 401) {
+      showOperatorGate(true);
+      return;
+    }
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "aegis-iocs.csv";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function renderAlertList() {
     const root = $("alert-list");
     if (!root) return;
@@ -1744,6 +1770,7 @@
   });
 
   $("ioc-type-filter").addEventListener("change", loadIocs);
+  $("ioc-export").addEventListener("click", () => exportIocs().catch((error) => console.error("IOC export failed", error)));
   let iocSearchTimer;
   $("ioc-search").addEventListener("input", () => {
     clearTimeout(iocSearchTimer);
