@@ -141,7 +141,7 @@ This document is the project's implementation checklist. Items are checked only 
 - [x] Add declarative sensor configuration
 - [x] Add sensor capability metadata
 - [x] Add SMTP decoy
-- [ ] Add Redis decoy
+- [x] Add Redis decoy
 - [ ] Add MySQL decoy
 - [ ] Add SMB decoy
 - [ ] Evaluate PostgreSQL decoy
