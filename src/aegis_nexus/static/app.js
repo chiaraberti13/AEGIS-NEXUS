@@ -21,6 +21,7 @@
     selectedAlert: null,
     iocs: [],
     selectedIoc: null,
+    relationGraph: null,
     caseSeed: [],
     filters: {},
     mapBox: [0, 0, 800, 390],
@@ -786,21 +787,86 @@
     });
   }
 
-  async function relations(sessionId) {
+  function populateGraphKindFilter(nodes) {
+    const select = $("graph-kind-filter");
+    const previous = select.value;
+    const kinds = [...new Set((nodes || []).map((node) => node.kind))].sort();
+    select.replaceChildren();
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = t("relations.allKinds");
+    select.append(all);
+    kinds.forEach((kind) => {
+      const option = document.createElement("option");
+      option.value = kind;
+      option.textContent = graphKindLabel(kind);
+      select.append(option);
+    });
+    if (kinds.includes(previous)) select.value = previous;
+  }
+
+  function graphScope(graph) {
+    let nodes = [...(graph?.nodes || [])];
+    let edges = [...(graph?.edges || [])];
+
+    if ($("graph-evidence-only")?.checked) {
+      const allowed = new Set(nodes.filter((node) => node.provenance !== "enrichment").map((node) => node.id));
+      nodes = nodes.filter((node) => allowed.has(node.id));
+      edges = edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
+    }
+
+    const depthValue = $("graph-depth")?.value || "all";
+    if (depthValue !== "all") {
+      const maxDepth = Number(depthValue);
+      const root = nodes.find((node) => node.kind === "session");
+      if (root && Number.isFinite(maxDepth)) {
+        const adjacency = new Map(nodes.map((node) => [node.id, new Set()]));
+        edges.forEach((edge) => {
+          adjacency.get(edge.source)?.add(edge.target);
+          adjacency.get(edge.target)?.add(edge.source);
+        });
+        const distance = new Map([[root.id, 0]]);
+        const queue = [root.id];
+        while (queue.length) {
+          const current = queue.shift();
+          const currentDepth = distance.get(current) || 0;
+          if (currentDepth >= maxDepth) continue;
+          (adjacency.get(current) || []).forEach((next) => {
+            if (distance.has(next)) return;
+            distance.set(next, currentDepth + 1);
+            queue.push(next);
+          });
+        }
+        const allowed = new Set([...distance.entries()].filter(([, value]) => value <= maxDepth).map(([id]) => id));
+        nodes = nodes.filter((node) => allowed.has(node.id));
+        edges = edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
+      }
+    }
+
+    const kind = $("graph-kind-filter")?.value || "";
+    if (kind) {
+      const allowed = new Set(
+        nodes
+          .filter((node) => node.kind === kind || node.kind === "event" || node.kind === "session")
+          .map((node) => node.id)
+      );
+      nodes = nodes.filter((node) => allowed.has(node.id));
+      edges = edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
+    }
+    return {nodes, edges};
+  }
+
+  function renderRelations(graph) {
     const svg = $("relation-graph");
     svg.replaceChildren();
     const warning = $("relation-warning");
     warning.hidden = true;
     warning.textContent = "";
-    if (!sessionId) {
-      $("relation-count").textContent = "0";
-      graphLegend([]);
-      return;
-    }
-    const graph = await safeGet("/api/v1/relations?session_id=" + encodeURIComponent(sessionId));
-    const nodes = graph?.nodes || [];
+
+    const scoped = graphScope(graph);
+    const nodes = scoped.nodes;
     const allowedIds = new Set(nodes.map((node) => node.id));
-    const edges = (graph?.edges || []).filter((edge) => allowedIds.has(edge.source) && allowedIds.has(edge.target));
+    const edges = scoped.edges.filter((edge) => allowedIds.has(edge.source) && allowedIds.has(edge.target));
     const graphAnalysis = graph?.analysis || {};
     if (graphAnalysis.graph_truncated) {
       warning.hidden = false;
@@ -818,9 +884,10 @@
       if (!source || !target) return;
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       [["x1", source.x], ["y1", source.y], ["x2", target.x], ["y2", target.y]].forEach(([key, value]) => line.setAttribute(key, String(value)));
-      line.setAttribute("class", "relation-edge");
+      const provenance = edge.provenance || "observed";
+      line.setAttribute("class", "relation-edge provenance-" + provenance);
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = graphRelationLabel(edge.relation);
+      title.textContent = graphRelationLabel(edge.relation) + " · " + t("provenance." + provenance);
       line.append(title);
       svg.append(line);
     });
@@ -855,6 +922,22 @@
       group.append(circle, label);
       svg.append(group);
     });
+  }
+
+  async function relations(sessionId) {
+    const svg = $("relation-graph");
+    svg.replaceChildren();
+    if (!sessionId) {
+      state.relationGraph = null;
+      $("relation-count").textContent = "0";
+      graphLegend([]);
+      return;
+    }
+    const graph = await safeGet("/api/v1/relations?session_id=" + encodeURIComponent(sessionId));
+    if (!graph) return;
+    state.relationGraph = graph;
+    populateGraphKindFilter(graph.nodes || []);
+    renderRelations(graph);
   }
 
   async function selectEvent(event, switchView) {
@@ -1769,6 +1852,9 @@
     searchTimer = setTimeout(refresh, 250);
   });
 
+  $("graph-kind-filter").addEventListener("change", () => state.relationGraph && renderRelations(state.relationGraph));
+  $("graph-depth").addEventListener("change", () => state.relationGraph && renderRelations(state.relationGraph));
+  $("graph-evidence-only").addEventListener("change", () => state.relationGraph && renderRelations(state.relationGraph));
   $("ioc-type-filter").addEventListener("change", loadIocs);
   $("ioc-export").addEventListener("click", () => exportIocs().catch((error) => console.error("IOC export failed", error)));
   let iocSearchTimer;
