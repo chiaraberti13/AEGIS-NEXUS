@@ -148,6 +148,7 @@ def test_frontend_shell_exposes_soc_workspace(tmp_path):
         'id="graph-kind-filter"',
         'id="graph-depth"',
         'id="graph-evidence-only"',
+        'id="graph-expand"',
         'id="session-study"',
         'id="detail-collector"',
         'id="quality-lossy"',
