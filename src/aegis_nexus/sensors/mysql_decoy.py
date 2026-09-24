@@ -11,6 +11,7 @@ from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
 from .registry import register_sensor
+from .persona import load_persona
 from .server import BoundedThreadingTCPServer
 
 MAX_PACKET = 16384
@@ -21,7 +22,7 @@ CLIENT_PROTOCOL_41 = 0x00000200
 CLIENT_SECURE_CONNECTION = 0x00008000
 CLIENT_PLUGIN_AUTH = 0x00080000
 CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000
-SERVER_CAPABILITIES = CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH
+PERSONA = load_persona()\n\nSERVER_CAPABILITIES = CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION | CLIENT_PLUGIN_AUTH
 
 
 class MySQLProtocolError(ValueError):
@@ -124,7 +125,7 @@ class MySQLHandler(socketserver.StreamRequestHandler):
         upper = (SERVER_CAPABILITIES >> 16) & 0xFFFF
         return (
             b"\x0a"
-            + b"8.0.36-aegis\x00"
+            + (PERSONA.mysql_version + "\\x00").encode("ascii", "replace")
             + (1337).to_bytes(4, "little")
             + self.challenge[:8]
             + b"\x00"
