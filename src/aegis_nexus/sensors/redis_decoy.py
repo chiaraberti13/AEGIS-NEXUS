@@ -11,13 +11,14 @@ from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text
 from .client import SensorClient
 from .registry import register_sensor
+from .persona import load_persona
 from .server import BoundedThreadingTCPServer
 
 MAX_LINE = 1024
 MAX_BULK = 4096
 MAX_ARGS = 16
 MAX_COMMANDS = 64
-TIMEOUT = 20.0
+PERSONA = load_persona()\n\nTIMEOUT = 20.0
 
 
 class RedisProtocolError(ValueError):
@@ -182,7 +183,7 @@ class RedisHandler(socketserver.StreamRequestHandler):
                 value = args[1][:256]
                 self.wfile.write(b"$" + str(len(value)).encode() + b"\r\n" + value + b"\r\n")
             elif command == "INFO":
-                body = b"# Server\r\nredis_version:7.2.0\r\nredis_mode:standalone\r\n"
+                body = f"# Server\\r\\nredis_version:{PERSONA.redis_version}\\r\\nredis_mode:standalone\\r\\n".encode("ascii", "replace")
                 self.wfile.write(b"$" + str(len(body)).encode() + b"\r\n" + body + b"\r\n")
             elif command in {"SET", "SELECT"}:
                 self.wfile.write(b"+OK\r\n")
