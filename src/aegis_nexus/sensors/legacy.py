@@ -120,7 +120,7 @@ class FTPHandler(BaseHandler):
 
     def handle(self):
         self.emit("connection", {"destination_port": self.destination_port})
-        self.wfile.write(f"220 {PERSONA.ftp_banner}\\r\\n".encode("utf-8", "replace"))
+        self.wfile.write(f"220 {PERSONA.ftp_banner}\r\n".encode("utf-8", "replace"))
         username = ""
         username_audit: dict = {}
         for _ in range(6):
@@ -173,7 +173,7 @@ class TelnetHandler(BaseHandler):
 
     def handle(self):
         self.emit("connection", {"destination_port": self.destination_port})
-        self.wfile.write(f"{PERSONA.telnet_banner}\\r\\nlogin: ".encode("utf-8", "replace"))
+        self.wfile.write(f"{PERSONA.telnet_banner}\r\nlogin: ".encode("utf-8", "replace"))
         username_line = self.read_line("observed.credential.username")
         if username_line is None:
             return
