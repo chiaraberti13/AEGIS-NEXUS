@@ -213,7 +213,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add sensor capability metadata
 - [x] Add sensor heartbeat so silent-but-healthy sensors are distinguishable from dead sensors
 - [x] Add configurable decoy personas (banners, hostnames, fake filesystem) per deployment
-- [ ] Remove static default fingerprints and test decoys against common honeypot-detection checks
+- [x] Remove static default fingerprints and test decoys against common honeypot-detection checks
 - [x] Add SMTP decoy
 - [x] Add Redis decoy
 - [x] Add MySQL decoy
