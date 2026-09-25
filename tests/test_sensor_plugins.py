@@ -16,7 +16,7 @@ from aegis_nexus.sensors.mysql_decoy import (
     mysql_packet,
 )
 from aegis_nexus.sensors.redis_decoy import RedisHandler, RedisSensorPlugin
-from aegis_nexus.sensors.persona import DecoyPersona, load_persona
+from aegis_nexus.sensors.persona import DecoyPersona, default_fingerprint_markers, load_persona
 from aegis_nexus.sensors.registry import SensorRegistry
 from aegis_nexus.sensors.server import BoundedThreadingTCPServer
 from aegis_nexus.sensors.smtp_decoy import SMTPHandler, SMTPSensorPlugin
@@ -303,3 +303,49 @@ def test_default_persona_preserves_safe_non_executing_identity(monkeypatch):
     assert isinstance(persona, DecoyPersona)
     assert persona.hostname
     assert all(path.startswith("/") for path in persona.fake_files)
+
+
+
+def test_default_persona_is_stable_per_deployment_seed_and_has_no_honeypot_marker(monkeypatch):
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_JSON", raising=False)
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_FILE", raising=False)
+    monkeypatch.setenv("AEGIS_DECOY_PERSONA_SEED", "deployment-alpha")
+    first = load_persona()
+    again = load_persona()
+
+    assert first == again
+    assert default_fingerprint_markers(first) == ()
+    assert "aegis" not in first.mysql_version.lower()
+    assert first.hostname != "meridian-edge-01"
+
+
+def test_default_persona_changes_identity_across_deployment_seeds(monkeypatch):
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_JSON", raising=False)
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_FILE", raising=False)
+
+    monkeypatch.setenv("AEGIS_DECOY_PERSONA_SEED", "deployment-alpha")
+    first = load_persona()
+    monkeypatch.setenv("AEGIS_DECOY_PERSONA_SEED", "deployment-beta")
+    second = load_persona()
+
+    assert (first.hostname, first.smtp_hostname) != (second.hostname, second.smtp_hostname)
+
+
+@pytest.mark.parametrize("marker", ["aegis", "honeypot", "cowrie", "kippo", "decoy"])
+def test_default_protocol_identity_does_not_advertise_common_decoy_markers(monkeypatch, marker):
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_JSON", raising=False)
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_FILE", raising=False)
+    monkeypatch.setenv("AEGIS_DECOY_PERSONA_SEED", "fingerprint-regression")
+    persona = load_persona()
+    exposed = " ".join([
+        persona.hostname,
+        persona.ssh_version,
+        persona.web_title,
+        persona.web_heading,
+        persona.smtp_hostname,
+        persona.ftp_banner,
+        persona.telnet_banner,
+        persona.redis_version,
+        persona.mysql_version,
+    ]).lower()
+    assert marker not in exposed
