@@ -19,6 +19,16 @@ from aegis_nexus.sensors.redis_decoy import RedisHandler, RedisSensorPlugin
 from aegis_nexus.sensors.persona import DecoyPersona, default_fingerprint_markers, load_persona
 from aegis_nexus.sensors.registry import SensorRegistry
 from aegis_nexus.sensors.server import BoundedThreadingTCPServer
+from aegis_nexus.sensors.smb_decoy import (
+    MAX_FRAME as SMB_MAX_FRAME,
+    SMB2_HEADER_SIZE,
+    SMB2_NEGOTIATE,
+    SMB2_PROTOCOL,
+    SMB2_SESSION_SETUP,
+    SMBHandler,
+    SMBSensorPlugin,
+    netbios_frame,
+)
 from aegis_nexus.sensors.smtp_decoy import SMTPHandler, SMTPSensorPlugin
 from aegis_nexus.sensors.ssh_decoy import SSHSensorPlugin
 from aegis_nexus.sensors.web_decoy import WebSensorPlugin
@@ -27,13 +37,14 @@ from aegis_nexus.sensors.web_decoy import WebSensorPlugin
 def test_builtin_sensor_catalog_exposes_safe_capability_metadata():
     registry = load_builtin_sensors(SensorRegistry())
     registry.register(SMTPSensorPlugin)
-    assert registry.names() == ("legacy", "mysql", "redis", "smtp", "ssh", "web")
+    assert registry.names() == ("legacy", "mysql", "redis", "smb", "smtp", "ssh", "web")
     descriptions = {item["name"]: item["capabilities"] for item in registry.describe()}
     assert descriptions["ssh"]["captures_commands"] is True
     assert descriptions["web"]["captures_payloads"] is True
     assert descriptions["legacy"]["captures_credentials"] is True
     assert descriptions["redis"]["captures_payloads"] is True
     assert descriptions["mysql"]["captures_credentials"] is True
+    assert descriptions["smb"]["captures_credentials"] is True
     assert all(item["executes_attacker_input"] is False for item in descriptions.values())
 
 
@@ -73,12 +84,14 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     monkeypatch.setenv("AEGIS_TELNET_PORT", "2300")
     monkeypatch.setenv("AEGIS_REDIS_PORT", "6380")
     monkeypatch.setenv("AEGIS_MYSQL_PORT", "3307")
+    monkeypatch.setenv("AEGIS_SMB_PORT", "1445")
 
     ssh = SSHSensorPlugin.config_from_env()
     web = WebSensorPlugin.config_from_env()
     legacy = LegacySensorPlugin.config_from_env()
     redis = RedisSensorPlugin.config_from_env()
     mysql = MySQLSensorPlugin.config_from_env()
+    smb = SMBSensorPlugin.config_from_env()
 
     assert ssh.sensor_id == "fixture-sensor"
     assert ssh.port("ssh") == 2200
@@ -88,6 +101,7 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     assert legacy.port("telnet") == 2300
     assert redis.port("redis") == 6380
     assert mysql.port("mysql") == 3307
+    assert smb.port("smb") == 1445
 
 
 def test_sensor_config_rejects_invalid_listener_port():
@@ -350,3 +364,124 @@ def test_default_protocol_identity_does_not_advertise_common_decoy_markers(monke
         persona.mysql_version,
     ]).lower()
     assert marker not in exposed
+
+
+
+def _smb_header(command: int, message_id: int = 1) -> bytes:
+    return (
+        SMB2_PROTOCOL
+        + SMB2_HEADER_SIZE.to_bytes(2, "little")
+        + b"\x00\x00"
+        + b"\x00" * 4
+        + command.to_bytes(2, "little")
+        + b"\x01\x00"
+        + b"\x00" * 4
+        + b"\x00" * 4
+        + message_id.to_bytes(8, "little")
+        + b"\x00" * 4
+        + b"\x00" * 4
+        + b"\x00" * 8
+        + b"\x00" * 16
+    )
+
+
+def _smb_exchange(monkeypatch, frames: list[bytes]):
+    captured = []
+    monkeypatch.setattr(
+        SMBHandler.sensor,
+        "emit",
+        lambda *args, **kwargs: captured.append((args, kwargs)) or True,
+    )
+    server = BoundedThreadingTCPServer(("127.0.0.1", 0), SMBHandler, max_connections=2)
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    responses = []
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            for frame in frames:
+                client.sendall(frame)
+                response_header = client.recv(4)
+                if not response_header:
+                    break
+                length = int.from_bytes(response_header[1:4], "big")
+                responses.append(response_header + client.recv(length))
+        thread.join(timeout=2)
+    finally:
+        server.server_close()
+    return responses, captured
+
+
+def test_smb_decoy_negotiates_smb2_without_real_share_access(monkeypatch):
+    dialects = [0x0202, 0x0210, 0x0302]
+    body = (
+        (36).to_bytes(2, "little")
+        + len(dialects).to_bytes(2, "little")
+        + b"\x01\x00"
+        + b"\x00\x00"
+        + b"\x00" * 4
+        + b"0123456789abcdef"
+        + b"\x00" * 8
+        + b"".join(value.to_bytes(2, "little") for value in dialects)
+    )
+    responses, captured = _smb_exchange(
+        monkeypatch,
+        [netbios_frame(_smb_header(SMB2_NEGOTIATE) + body)],
+    )
+
+    assert responses
+    assert responses[0][4:8] == SMB2_PROTOCOL
+    negotiate = next(args[1] for args, _kwargs in captured if args[0] == "smb.negotiate")
+    assert negotiate["smb"]["selected_dialect"] == "0x0302"
+    assert negotiate["smb"]["client_guid"] == b"0123456789abcdef".hex()
+    assert SMBSensorPlugin.capabilities.executes_attacker_input is False
+
+
+def test_smb_session_setup_hashes_auth_blob_and_denies_authentication(monkeypatch):
+    blob = b"NTLMSSP\x00" + b"attacker-auth-material"
+    security_offset = SMB2_HEADER_SIZE + 24
+    body = (
+        (25).to_bytes(2, "little")
+        + b"\x00"
+        + b"\x01"
+        + b"\x00" * 4
+        + b"\x00" * 4
+        + security_offset.to_bytes(2, "little")
+        + len(blob).to_bytes(2, "little")
+        + b"\x00" * 8
+        + blob
+    )
+    responses, captured = _smb_exchange(
+        monkeypatch,
+        [netbios_frame(_smb_header(SMB2_SESSION_SETUP, 7) + body)],
+    )
+
+    assert responses
+    assert int.from_bytes(responses[0][12:16], "little") == 0xC0000022
+    auth = next(args[1] for args, _kwargs in captured if args[0] == "smb.auth_attempt")
+    assert auth["smb"]["auth_mechanism"] == "ntlmssp"
+    assert auth["smb"]["security_blob_length"] == len(blob)
+    assert len(auth["smb"]["security_blob_sha256"]) == 64
+    assert auth["smb"]["security_blob_stored"] is False
+    assert "attacker-auth-material" not in str(auth)
+
+
+def test_smb_decoy_rejects_oversized_frame_before_body(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        SMBHandler.sensor,
+        "emit",
+        lambda *args, **kwargs: captured.append((args, kwargs)) or True,
+    )
+    server = BoundedThreadingTCPServer(("127.0.0.1", 0), SMBHandler, max_connections=2)
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            client.sendall(b"\x00" + (SMB_MAX_FRAME + 1).to_bytes(3, "big"))
+        thread.join(timeout=2)
+    finally:
+        server.server_close()
+
+    rejected = next(args[1] for args, _kwargs in captured if args[0] == "sensor.input_rejected")
+    assert rejected["sensor_capture"]["reason"] == "frame_too_large"
+    assert rejected["sensor_capture"]["frame_limit"] == SMB_MAX_FRAME
