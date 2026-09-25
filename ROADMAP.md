@@ -217,7 +217,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add SMTP decoy
 - [x] Add Redis decoy
 - [x] Add MySQL decoy
-- [ ] Add SMB decoy
+- [x] Add SMB decoy
 - [ ] Evaluate PostgreSQL decoy
 - [ ] Evaluate RDP handshake decoy
 - [ ] Evaluate VNC decoy
