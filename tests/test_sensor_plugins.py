@@ -239,7 +239,8 @@ def test_mysql_decoy_emits_handshake_and_hashes_auth_response(monkeypatch):
     )
 
     assert handshake[4] == 10
-    assert b"8.0.36-aegis" in handshake
+    assert b"caching_sha2_password" in handshake
+    assert b"aegis" not in handshake.lower()
     assert response[4] == 0xFF
 
     credential = next(args[1] for args, _kwargs in captured if args[0] == "credential")
