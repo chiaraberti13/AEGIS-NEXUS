@@ -636,3 +636,62 @@ def test_global_search_never_uses_retained_cleartext_password_as_searchable_text
         "/api/v1/dashboard?q=retained-but-not-searchable-secret&include_simulation=true"
     ).get_json()
     assert dashboard["totals"]["events"] == 0
+
+
+
+def test_sensor_heartbeat_is_authenticated_and_visible_without_attack_events(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "legacy-secret",
+        "OPERATOR_API_KEY": "operator-secret",
+        "SENSOR_KEYS": {"quiet-sensor-01": "quiet-secret"},
+        "SENSOR_HEARTBEAT_STALE_SECONDS": 180,
+    })
+    client = app.test_client()
+
+    unauthorized = client.post(
+        "/api/v1/sensors/heartbeat",
+        headers={"X-Aegis-Key": "wrong", "X-Aegis-Sensor": "quiet-sensor-01"},
+        json={"sensor_id": "quiet-sensor-01", "timestamp": datetime.now(timezone.utc).isoformat()},
+    )
+    assert unauthorized.status_code == 401
+
+    accepted = client.post(
+        "/api/v1/sensors/heartbeat",
+        headers={"X-Aegis-Key": "quiet-secret", "X-Aegis-Sensor": "quiet-sensor-01"},
+        json={"sensor_id": "quiet-sensor-01", "timestamp": datetime.now(timezone.utc).isoformat()},
+    )
+    assert accepted.status_code == 202
+
+    operations = client.get(
+        "/api/v1/operations/status",
+        headers={"X-Aegis-Operator-Key": "operator-secret"},
+    )
+    assert operations.status_code == 200
+    telemetry = operations.get_json()["telemetry"]
+    quiet = next(item for item in telemetry["items"] if item["sensor_id"] == "quiet-sensor-01")
+    assert quiet["heartbeat_state"] == "healthy"
+    assert quiet["recent_events"] == 0
+    assert quiet["total_events"] == 0
+    assert telemetry["configured_with_healthy_heartbeat"] == 1
+    assert telemetry["configured_with_recent_telemetry"] == 0
+
+
+def test_sensor_heartbeat_identity_header_cannot_spoof_another_sensor(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "SENSOR_KEYS": {
+            "sensor-a": "secret-a",
+            "sensor-b": "secret-b",
+        },
+    })
+    client = app.test_client()
+
+    spoofed = client.post(
+        "/api/v1/sensors/heartbeat",
+        headers={"X-Aegis-Key": "secret-a", "X-Aegis-Sensor": "sensor-a"},
+        json={"sensor_id": "sensor-b", "timestamp": datetime.now(timezone.utc).isoformat()},
+    )
+    assert spoofed.status_code == 401
