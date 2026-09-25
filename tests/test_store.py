@@ -818,3 +818,42 @@ def test_sensor_heartbeat_distinguishes_silent_healthy_stale_and_never(tmp_path)
     assert status["configured_with_healthy_heartbeat"] == 1
     assert status["heartbeat_stale_seconds"] == 180
     assert "collector receipt time" in status["interpretation"]
+
+
+
+def test_sensor_heartbeat_distinguishes_silent_healthy_stale_and_never(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    now = datetime.now(timezone.utc)
+
+    store.record_sensor_heartbeat(
+        "silent-healthy",
+        sensor_timestamp=now.isoformat(),
+        collector_received_at=now.isoformat(),
+    )
+    store.record_sensor_heartbeat(
+        "silent-stale",
+        sensor_timestamp=(now - timedelta(minutes=10)).isoformat(),
+        collector_received_at=(now - timedelta(minutes=10)).isoformat(),
+    )
+
+    status = store.sensor_telemetry_observation(
+        configured_sensor_ids={"silent-healthy", "silent-stale", "never-seen"},
+        recent_hours=24,
+        heartbeat_stale_seconds=180,
+    )
+    items = {item["sensor_id"]: item for item in status["items"]}
+
+    assert items["silent-healthy"]["recent_events"] == 0
+    assert items["silent-healthy"]["heartbeat_state"] == "healthy"
+    assert items["silent-healthy"]["last_heartbeat_at"] is not None
+
+    assert items["silent-stale"]["recent_events"] == 0
+    assert items["silent-stale"]["heartbeat_state"] == "stale"
+    assert items["silent-stale"]["heartbeat_age_seconds"] > 180
+
+    assert items["never-seen"]["recent_events"] == 0
+    assert items["never-seen"]["heartbeat_state"] == "never"
+    assert items["never-seen"]["last_heartbeat_at"] is None
+
+    assert status["configured_with_recent_telemetry"] == 0
+    assert status["configured_with_healthy_heartbeat"] == 1
