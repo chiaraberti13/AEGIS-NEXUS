@@ -9,11 +9,12 @@ def load_builtin_sensors(target: SensorRegistry | None = None) -> SensorRegistry
     from .legacy import LegacySensorPlugin
     from .mysql_decoy import MySQLSensorPlugin
     from .redis_decoy import RedisSensorPlugin
+    from .smb_decoy import SMBSensorPlugin
     from .ssh_decoy import SSHSensorPlugin
     from .smtp_decoy import SMTPSensorPlugin
     from .web_decoy import WebSensorPlugin
 
     selected = target or registry
-    for plugin in (SSHSensorPlugin, WebSensorPlugin, LegacySensorPlugin, SMTPSensorPlugin, RedisSensorPlugin, MySQLSensorPlugin):
+    for plugin in (SSHSensorPlugin, WebSensorPlugin, LegacySensorPlugin, SMTPSensorPlugin, RedisSensorPlugin, MySQLSensorPlugin, SMBSensorPlugin):
         selected.register(plugin)
     return selected
