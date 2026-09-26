@@ -107,9 +107,9 @@ def export_stix_bundle(
     return {"type": "bundle", "id": bundle_id, "objects": objects}
 
 
-_STIX_VALUE = r"((?:\\\\.|[^'])*)"
-_VALUE_PATTERN = re.compile(r"^\\[(ipv4-addr|ipv6-addr|domain-name|url):value = '" + _STIX_VALUE + r"'\\]$")
-_HASH_PATTERN = re.compile(r"^\\[file:hashes\\.'(MD5|SHA-1|SHA-256)' = '" + _STIX_VALUE + r"'\\]$")
+_STIX_VALUE = r"((?:\\.|[^'])*)"
+_VALUE_PATTERN = re.compile(r"^\[(ipv4-addr|ipv6-addr|domain-name|url):value = '" + _STIX_VALUE + r"'\]$")
+_HASH_PATTERN = re.compile(r"^\[file:hashes\.'(MD5|SHA-1|SHA-256)' = '" + _STIX_VALUE + r"'\]$")
 
 
 def _unescape_pattern_value(value: str) -> str:
