@@ -3,6 +3,7 @@ import json
 import pytest
 
 from aegis_nexus.app import create_app
+from aegis_nexus.cti_stix import export_stix_bundle, indicator_pattern
 from aegis_nexus.model import normalize_event
 from aegis_nexus.threat_context import LocalThreatContextEnricher, normalize_indicator
 from aegis_nexus.threat_intelligence import ThreatIntelligenceProvider, validate_provider
@@ -258,3 +259,64 @@ def test_local_feed_drops_invalid_or_reversed_validity_window(tmp_path):
     match = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"][0]
     assert "valid_from" not in match
     assert "valid_until" not in match
+
+
+
+def test_stix_export_maps_supported_indicators_without_inventing_context():
+    bundle = export_stix_bundle(
+        [
+            {"type": "ip", "value": "2001:db8::42", "confidence": 75, "labels": ["scanner"]},
+            {"type": "sha256", "value": "a" * 64},
+        ],
+        source="fixture-feed",
+        generated_at="2026-09-22T20:00:00Z",
+    )
+    assert bundle["type"] == "bundle"
+    assert len(bundle["objects"]) == 2
+    ipv6 = next(item for item in bundle["objects"] if "ipv6-addr" in item["pattern"])
+    assert ipv6["spec_version"] == "2.1"
+    assert ipv6["confidence"] == 75
+    assert ipv6["valid_from"] == "2026-09-22T20:00:00Z"
+    sha = next(item for item in bundle["objects"] if "SHA-256" in item["pattern"])
+    assert "confidence" not in sha
+    serialized = json.dumps(bundle).lower()
+    assert "threat_actor" not in serialized
+    assert "attack-pattern" not in serialized
+    assert "vulnerability" not in serialized
+
+
+def test_stix_pattern_distinguishes_ipv4_and_ipv6():
+    assert indicator_pattern("ip", "198.51.100.7") == "[ipv4-addr:value = '198.51.100.7']"
+    assert indicator_pattern("ip", "2001:db8::7") == "[ipv6-addr:value = '2001:db8::7']"
+
+
+def test_stix_export_endpoint_is_operator_authenticated_attachment(tmp_path):
+    feed = tmp_path / "feed.json"
+    _write_feed(feed, [{
+        "type": "domain",
+        "value": "payload.example.org",
+        "confidence": 80,
+        "valid_from": "2026-09-01T00:00:00Z",
+    }])
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "stix.db"),
+        "THREAT_CONTEXT_FILE": str(feed),
+        "OPERATOR_API_KEY": "operator-secret",
+    })
+    client = app.test_client()
+
+    denied = client.get("/api/v1/threat-context/stix")
+    assert denied.status_code == 401
+
+    response = client.get(
+        "/api/v1/threat-context/stix",
+        headers={"X-Aegis-Operator-Key": "operator-secret"},
+    )
+    assert response.status_code == 200
+    assert response.mimetype == "application/stix+json"
+    assert response.headers["Content-Disposition"].startswith("attachment;")
+    bundle = response.get_json()
+    assert bundle["type"] == "bundle"
+    assert bundle["objects"][0]["pattern"] == "[domain-name:value = 'payload.example.org']"
+    assert bundle["objects"][0]["confidence"] == 80
