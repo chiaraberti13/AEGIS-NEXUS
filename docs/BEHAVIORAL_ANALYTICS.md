@@ -33,6 +33,12 @@ Every finding is classified as \`derived_analytic\`, carries \`attribution: fals
 
 The payload SHA-256 used by analytics is a deterministic fingerprint of the stored observed payload. It is not automatically promoted to Threat Intelligence or reputation.
 
+### Command frequency analytics
+
+When the 30-day baseline is ready, an exact observed command is \`rare_command\` when it occurred at most once in the preceding 30-day history. The finding reports the exact historical occurrence count.
+
+\`command_frequency_spike\` compares the exact command's count in the current 24-hour window with its seven-day daily average. The deterministic threshold is \`max(5, ceil(3 × seven-day daily average))\`. The finding exposes the 24-hour count, seven-day average, threshold, formula and supporting event references. These are frequency measurements only.
+
 ### API drill-down
 
 \`GET /api/v1/analytics/events/<event_id>\` returns the three baseline windows, cold-start/truncation policy, historical scope and findings for that event.
@@ -73,6 +79,12 @@ Quando la baseline 30 giorni è ready, AEGIS può segnalare valori mai osservati
 Ogni finding è classificato \`derived_analytic\`, contiene \`attribution: false\`, identifica l'evento anchor concreto, include valore misurato e numero di campioni della baseline e specifica che novità non significa maliciousness.
 
 Lo SHA-256 del payload usato dalle analytics è un fingerprint deterministico del payload osservato memorizzato. Non viene promosso automaticamente a Threat Intelligence o reputation.
+
+### Analitiche di frequenza dei comandi
+
+Quando la baseline 30 giorni è ready, un comando osservato esatto viene classificato \`rare_command\` se compare al massimo una volta nello storico precedente di 30 giorni. Il finding riporta il numero esatto di occorrenze storiche.
+
+\`command_frequency_spike\` confronta il conteggio del comando esatto nella finestra corrente di 24 ore con la sua media giornaliera sui sette giorni. La soglia deterministica è \`max(5, ceil(3 × media giornaliera 7 giorni))\`. Il finding espone conteggio 24h, media 7 giorni, soglia, formula e riferimenti agli eventi di supporto. Sono esclusivamente misure di frequenza.
 
 ### Drill-down API
 
