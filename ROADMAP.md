@@ -250,9 +250,9 @@ These are deliberate design boundaries, not missing features:
 - [x] Add STIX 2.x export
 - [x] Add STIX 2.x import
 - [x] Evaluate TAXII client support
-- [ ] Add configurable custom-feed adapter
-- [ ] Evaluate MISP export/import _(evaluate)_
-- [ ] Add TLP markings and sharing policy to CTI exports
+- [x] Add configurable custom-feed adapter
+- [x] Evaluate MISP export/import _(evaluate)_
+- [x] Add TLP markings and sharing policy to CTI exports
 - [ ] Strip sensor-internal data (management IPs, sensor secrets, operator notes) from shareable exports
 - [ ] Add indicator aging/decay without deleting historical evidence
 - [ ] Add benign-scanner context lists as enrichment (never as silent suppression)
