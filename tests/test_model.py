@@ -179,3 +179,20 @@ def test_event_normalization_preserves_canonical_ipv6_source_address():
     })
     assert "source_ip" not in event
     assert event["observed"]["source_ip"] == "2001:db8::42"
+
+
+
+def test_event_normalization_collapses_ipv4_mapped_ipv6_to_canonical_ipv4():
+    event = normalize_event({
+        "honeypot": "web-decoy-01",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "::ffff:203.0.113.42",
+            "destination_ip": "::ffff:192.0.2.20",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 8080,
+        },
+    })
+    assert event["observed"]["source_ip"] == "203.0.113.42"
+    assert event["observed"]["destination_ip"] == "192.0.2.20"
