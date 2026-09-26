@@ -3,7 +3,7 @@ import json
 import pytest
 
 from aegis_nexus.app import create_app
-from aegis_nexus.cti_stix import export_stix_bundle, indicator_pattern
+from aegis_nexus.cti_stix import export_stix_bundle, import_stix_bundle, indicator_pattern
 from aegis_nexus.model import normalize_event
 from aegis_nexus.threat_context import LocalThreatContextEnricher, normalize_indicator
 from aegis_nexus.threat_intelligence import ThreatIntelligenceProvider, validate_provider
@@ -320,3 +320,85 @@ def test_stix_export_endpoint_is_operator_authenticated_attachment(tmp_path):
     assert bundle["type"] == "bundle"
     assert bundle["objects"][0]["pattern"] == "[domain-name:value = 'payload.example.org']"
     assert bundle["objects"][0]["confidence"] == 80
+
+
+
+def test_stix_import_accepts_exact_indicators_and_ignores_non_indicator_objects():
+    bundle = {
+        "type": "bundle",
+        "id": "bundle--11111111-1111-4111-8111-111111111111",
+        "objects": [
+            {
+                "type": "indicator",
+                "spec_version": "2.1",
+                "id": "indicator--22222222-2222-4222-8222-222222222222",
+                "pattern_type": "stix",
+                "pattern": "[ipv4-addr:value = '198.51.100.42']",
+                "valid_from": "2026-09-01T00:00:00Z",
+                "confidence": 65,
+            },
+            {
+                "type": "threat-actor",
+                "id": "threat-actor--33333333-3333-4333-8333-333333333333",
+                "name": "must-not-be-imported",
+            },
+            {
+                "type": "indicator",
+                "id": "indicator--44444444-4444-4444-8444-444444444444",
+                "pattern_type": "stix",
+                "pattern": "[process:command_line MATCHES '.*']",
+                "valid_from": "2026-09-01T00:00:00Z",
+            },
+        ],
+    }
+    indicators = import_stix_bundle(bundle)
+    assert indicators == [{
+        "type": "ip",
+        "value": "198.51.100.42",
+        "confidence": 65,
+        "valid_from": "2026-09-01T00:00:00Z",
+    }]
+
+
+def test_local_provider_can_load_stix_bundle_as_exact_match_context(tmp_path):
+    path = tmp_path / "feed.stix.json"
+    path.write_text(json.dumps({
+        "type": "bundle",
+        "id": "bundle--55555555-5555-4555-8555-555555555555",
+        "objects": [{
+            "type": "indicator",
+            "spec_version": "2.1",
+            "id": "indicator--66666666-6666-4666-8666-666666666666",
+            "pattern_type": "stix",
+            "pattern": "[domain-name:value = 'payload.example.org']",
+            "valid_from": "2026-09-01T00:00:00Z",
+            "confidence": 90,
+        }],
+    }), encoding="utf-8")
+    provider = LocalThreatContextEnricher(str(path))
+    assert provider.provider_id == "local-stix"
+    assert provider.status()["ready"] is True
+    assert provider.status()["source"].startswith("stix-bundle:")
+
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "web.payload",
+        "observed": {
+            "source_ip": "203.0.113.5",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+        "derived": {
+            "ioc": [{
+                "type": "domain",
+                "value": "payload.example.org",
+                "classification": "observed_artifact",
+                "evidence": ["observed.payload"],
+            }]
+        },
+    })
+    match = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"][0]
+    assert match["value"] == "payload.example.org"
+    assert match["confidence"] == 90
+    assert "actor" not in match
