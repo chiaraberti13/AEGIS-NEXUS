@@ -695,3 +695,24 @@ def test_sensor_heartbeat_identity_header_cannot_spoof_another_sensor(tmp_path):
         json={"sensor_id": "sensor-b", "timestamp": datetime.now(timezone.utc).isoformat()},
     )
     assert spoofed.status_code == 401
+
+
+
+def test_console_exposes_behavioral_analytics_drilldown_ui(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'id="behavioral-baselines"' in html
+    assert 'id="behavioral-findings"' in html
+    assert 'data-i18n="behavioral.limit"' in html
+
+
+def test_static_app_uses_text_content_for_behavioral_finding_evidence(client):
+    response = client.get("/static/app.js")
+    assert response.status_code == 200
+    script = response.get_data(as_text=True)
+    assert "function renderBehavioralAnalytics(data)" in script
+    assert 'explanation.textContent = String(finding.explanation || "")' in script
+    assert 'baseline.textContent = pretty({' in script
+    assert 'safeGet("/api/v1/analytics/events/"' in script
+    assert "chartDrilldown(behavior, String(item.label))" in script
