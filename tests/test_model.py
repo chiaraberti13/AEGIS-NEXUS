@@ -163,3 +163,19 @@ def test_sensor_truncated_password_keeps_distinct_fingerprint_provenance(monkeyp
     assert credential["password_sha256"] == hashlib.sha256(captured.encode()).hexdigest()
     assert credential["sensor_reported_password_length"] == 5000
     assert credential["sensor_reported_password_sha256"] == original_sha256
+
+
+
+def test_event_normalization_preserves_canonical_ipv6_source_address():
+    event = normalize_event({
+        "honeypot": "ssh-decoy-01",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "2001:0db8:0000:0000:0000:0000:0000:0042",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+        },
+    })
+    assert event["source_ip"] == "2001:db8::42"
+    assert event["observed"]["source_ip"] == "2001:db8::42"
