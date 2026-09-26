@@ -281,3 +281,57 @@ def test_campaign_cluster_is_explicit_hypothesis_from_shared_evidence_never_attr
     assert any(item.startswith("payload_sha256:") for item in finding["measurement"]["shared_evidence"])
     assert len(finding["evidence"]) == 2
     assert "does not establish a common actor" in finding["explanation"]
+
+
+
+def test_every_emitted_analytic_finding_has_baseline_evidence_explanation_and_no_attribution():
+    engine = BehavioralAnalytics(min_samples=20)
+    history = _history()
+
+    related = history[0]
+    related["observed"]["source_ip"] = "203.0.113.210"
+    related["observed"]["credential"]["username"] = "cluster-user"
+    related["observed"]["payload"] = "cluster-payload"
+
+    for index in range(1, 15):
+        item = _event(ANCHOR - timedelta(seconds=index * 10), 1000 + index)
+        item["observed"]["source_ip"] = "198.51.100.210"
+        item["observed"]["destination_port"] = 20 + (index % 7)
+        item["observed"]["service"] = ["ssh", "http", "ftp"][index % 3]
+        history.append(item)
+
+    current = _event(ANCHOR, 2000, novel=True)
+    current["observed"]["source_ip"] = "198.51.100.210"
+    current["observed"]["credential"]["username"] = "cluster-user"
+    current["observed"]["payload"] = "cluster-payload"
+    current["observed"]["command"] = "uname -a"
+    current["observed"]["destination_port"] = 443
+    current["observed"]["service"] = "https"
+
+    result = engine.evaluate(current, history)
+    assert result["findings"]
+    for finding in result["findings"]:
+        assert isinstance(finding["baseline"], dict) and finding["baseline"]
+        assert isinstance(finding["evidence"], list) and finding["evidence"]
+        assert all(ref["type"] == "event" and ref["id"] for ref in finding["evidence"])
+        assert isinstance(finding["explanation"], str) and finding["explanation"].strip()
+        assert finding["attribution"] is False
+        assert finding["classification"] in {"derived_analytic", "hypothesis"}
+
+
+def test_event_analytics_api_cold_start_is_explicit_and_finding_free(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "cold-start-analytics.db"),
+        "ANALYTICS_MIN_SAMPLES": 20,
+    })
+    store = app.extensions["aegis_store"]
+    saved = store.ingest(_event(ANCHOR, 3000, novel=True))
+
+    response = app.test_client().get(f"/api/v1/analytics/events/{saved['id']}")
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["findings"] == []
+    assert body["baseline_windows"]["30d"]["ready"] is False
+    assert body["baseline_windows"]["30d"]["sample_count"] == 0
+    assert body["policy"]["cold_start_suppresses_findings"] is True
