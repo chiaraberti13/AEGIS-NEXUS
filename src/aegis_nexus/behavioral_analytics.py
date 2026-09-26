@@ -40,6 +40,25 @@ def _username(event: dict[str, Any]) -> str | None:
     return value[:160] or None
 
 
+def _source_ip(event: dict[str, Any]) -> str:
+    return str(event.get("source_ip") or _observed(event).get("source_ip") or "").strip()
+
+
+def _destination_port(event: dict[str, Any]) -> int | None:
+    value = event.get("destination_port")
+    if value is None:
+        value = _observed(event).get("destination_port")
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return None
+    return port if 1 <= port <= 65535 else None
+
+
+def _service(event: dict[str, Any]) -> str:
+    return str(event.get("service") or _observed(event).get("service") or "").strip().lower()
+
+
 def _command(event: dict[str, Any]) -> str | None:
     value = _observed(event).get("command")
     if not isinstance(value, str):
@@ -277,6 +296,103 @@ class BehavioralAnalytics:
                         f"The exact command occurred {occurrences_24h} time(s) in 24 hours versus a "
                         f"7-day daily average of {daily_average_7d:.3f}; the deterministic threshold was "
                         f"{spike_threshold}. This is a frequency change, not attribution."
+                    ),
+                })
+
+        source = _source_ip(event)
+        if source:
+            start_5m = anchor - timedelta(minutes=5)
+            source_30d = [item for item in selected_30d if _source_ip(item) == source]
+            source_5m = [
+                item for item in history
+                if _source_ip(item) == source
+                and (ts := _timestamp(item.get("timestamp"))) is not None
+                and start_5m <= ts <= anchor
+            ]
+            five_minute_buckets_30d = 30 * 24 * 12
+
+            if event.get("event_type") == "credential":
+                auth_5m = [item for item in source_5m if item.get("event_type") == "credential"]
+                auth_30d = [item for item in source_30d if item.get("event_type") == "credential"]
+                current_auth_count = len(auth_5m) + 1
+                expected_auth_5m = len(auth_30d) / five_minute_buckets_30d
+                auth_threshold = max(5, int(expected_auth_5m * 5 + 0.999999))
+                if current_auth_count >= auth_threshold:
+                    findings.append({
+                        "schema_version": ANALYTICS_SCHEMA_VERSION,
+                        "analytic_id": "authentication_attempt_burst",
+                        "title": "Authentication-attempt burst",
+                        "category": "rate",
+                        "classification": "derived_analytic",
+                        "attribution": False,
+                        "measurement": {
+                            "source_ip": source,
+                            "credential_events_5m": current_auth_count,
+                            "historical_credential_events_30d": len(auth_30d),
+                            "expected_per_5m_30d": round(expected_auth_5m, 6),
+                            "threshold": auth_threshold,
+                            "formula": "max(5, ceil(5 * thirty_day_expected_per_5m))",
+                        },
+                        "baseline": {
+                            "window": "30d",
+                            "sample_count": long_window["sample_count"],
+                            "minimum_samples": long_window["minimum_samples"],
+                        },
+                        "evidence": (
+                            [{"type": "event", "id": str(event.get("id") or "")[:128]}]
+                            + [
+                                {"type": "event", "id": str(item.get("id") or "")[:128]}
+                                for item in auth_5m[:31] if item.get("id")
+                            ]
+                        ),
+                        "explanation": (
+                            f"{current_auth_count} credential events from the source were observed in five "
+                            f"minutes. The 30-day source baseline contains {len(auth_30d)} credential events, "
+                            f"or {expected_auth_5m:.6f} per five minutes on average; threshold={auth_threshold}. "
+                            "This describes rate only, not actor identity or intent."
+                        ),
+                    })
+
+            current_event_count = len(source_5m) + 1
+            expected_events_5m = len(source_30d) / five_minute_buckets_30d
+            event_threshold = max(15, int(expected_events_5m * 5 + 0.999999))
+            burst_events = [*source_5m, event]
+            ports = {_destination_port(item) for item in burst_events}
+            ports.discard(None)
+            services = {_service(item) for item in burst_events if _service(item)}
+            breadth = len(ports) >= 5 or len(services) >= 3
+            if current_event_count >= event_threshold and breadth:
+                findings.append({
+                    "schema_version": ANALYTICS_SCHEMA_VERSION,
+                    "analytic_id": "event_rate_recon_burst",
+                    "title": "Event-rate / reconnaissance burst",
+                    "category": "rate",
+                    "classification": "derived_analytic",
+                    "attribution": False,
+                    "measurement": {
+                        "source_ip": source,
+                        "events_5m": current_event_count,
+                        "historical_events_30d": len(source_30d),
+                        "expected_per_5m_30d": round(expected_events_5m, 6),
+                        "distinct_ports_5m": len(ports),
+                        "distinct_services_5m": len(services),
+                        "threshold": event_threshold,
+                        "formula": "max(15, ceil(5 * thirty_day_expected_per_5m)) with >=5 ports or >=3 services",
+                    },
+                    "baseline": {
+                        "window": "30d",
+                        "sample_count": long_window["sample_count"],
+                        "minimum_samples": long_window["minimum_samples"],
+                    },
+                    "evidence": [
+                        {"type": "event", "id": str(item.get("id") or "")[:128]}
+                        for item in burst_events[:32] if item.get("id")
+                    ],
+                    "explanation": (
+                        f"{current_event_count} events from the source were observed in five minutes with "
+                        f"{len(ports)} distinct ports and {len(services)} services. The 30-day source baseline "
+                        f"averages {expected_events_5m:.6f} events per five minutes; threshold={event_threshold}. "
+                        "This is an explainable rate/breadth finding, not attribution."
                     ),
                 })
 
