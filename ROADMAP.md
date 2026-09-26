@@ -287,9 +287,9 @@ These are deliberate design boundaries, not missing features:
 - [x] Detect event-rate/recon burst
 - [x] Detect unusual session duration
 - [x] Add explainable campaign clustering from shared evidence (clusters are hypotheses, never attribution)
-- [ ] Expose baseline/evidence behind every analytic finding
-- [ ] Add analytics drill-down from charts
-- [ ] Add analytics regression tests
+- [x] Expose baseline/evidence behind every analytic finding
+- [x] Add analytics drill-down from charts
+- [x] Add analytics regression tests
 
 **Done when:** every anomaly-like finding can be explained from a baseline and concrete measurements.
 
