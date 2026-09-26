@@ -16,6 +16,7 @@ from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 from .alerts import AlertStore
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
 from .cti_stix import export_stix_bundle
+from .custom_feed import load_custom_feed_adapter_config
 from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
 from .derivation import derive_observed_artifacts
@@ -143,6 +144,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         THREAT_CONTEXT_MAX_BYTES=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_BYTES", str(20 * 1024 * 1024))),
         THREAT_CONTEXT_MAX_INDICATORS=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_INDICATORS", "100000")),
         THREAT_CONTEXT_MAX_MATCHES=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_MATCHES", "32")),
+        THREAT_CONTEXT_ADAPTER_JSON=os.getenv("AEGIS_THREAT_CONTEXT_ADAPTER_JSON", ""),
+        THREAT_CONTEXT_ADAPTER_FILE=os.getenv("AEGIS_THREAT_CONTEXT_ADAPTER_FILE", ""),
         MAX_FUTURE_EVENT_SKEW_SECONDS=int(os.getenv("AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS", "300")),
         PCAP_ENABLED=os.getenv("AEGIS_PCAP_ENABLED", "false").lower() in {"1", "true", "yes"},
         PCAP_DIR=os.getenv("AEGIS_PCAP_DIR", "/data/pcap"),
@@ -199,11 +202,16 @@ def create_app(test_config: dict | None = None) -> Flask:
         )
     threat_context = app.config.get("THREAT_CONTEXT")
     if threat_context is None:
+        adapter_config = load_custom_feed_adapter_config(
+            raw_json=str(app.config.get("THREAT_CONTEXT_ADAPTER_JSON") or ""),
+            file_path=str(app.config.get("THREAT_CONTEXT_ADAPTER_FILE") or ""),
+        )
         threat_context = LocalThreatContextEnricher(
             str(app.config.get("THREAT_CONTEXT_FILE") or ""),
             max_bytes=int(app.config.get("THREAT_CONTEXT_MAX_BYTES", 20 * 1024 * 1024)),
             max_indicators=int(app.config.get("THREAT_CONTEXT_MAX_INDICATORS", 100000)),
             max_matches=int(app.config.get("THREAT_CONTEXT_MAX_MATCHES", 32)),
+            adapter_config=adapter_config,
         )
         validate_provider(threat_context)
 
