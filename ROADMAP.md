@@ -255,7 +255,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add TLP markings and sharing policy to CTI exports
 - [x] Strip sensor-internal data (management IPs, sensor secrets, operator notes) from shareable exports
 - [x] Add indicator aging/decay without deleting historical evidence
-- [ ] Add benign-scanner context lists as enrichment (never as silent suppression)
+- [x] Add benign-scanner context lists as enrichment (never as silent suppression)
 - [ ] Keep observed telemetry separate from Threat Intelligence
 - [ ] Prevent TI matches from automatically creating attribution
 - [ ] Prevent TI matches from inventing MITRE/CVE relationships
