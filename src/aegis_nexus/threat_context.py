@@ -116,6 +116,58 @@ def _iso_timestamp(value: Any) -> str | None:
     return parsed.astimezone(timezone.utc).isoformat()
 
 
+def _indicator_aging(
+    item: dict[str, Any],
+    *,
+    now_iso: str,
+    feed_generated_at: str | None,
+    stale_after_days: int,
+    aged_after_days: int,
+) -> dict[str, Any] | None:
+    now = datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
+    candidates = (
+        ("last_seen", _iso_timestamp(item.get("last_seen"))),
+        ("first_seen", _iso_timestamp(item.get("first_seen"))),
+        ("feed_generated_at", _iso_timestamp(feed_generated_at)),
+    )
+    basis = next(((name, value) for name, value in candidates if value), None)
+    if basis is None:
+        return None
+    basis_name, basis_value = basis
+    reference = datetime.fromisoformat(basis_value)
+    age_days = max(0, int((now - reference).total_seconds() // 86400))
+    stale = max(1, int(stale_after_days))
+    aged = max(stale + 1, int(aged_after_days))
+    if age_days < stale:
+        state = "fresh"
+        score = 100
+    elif age_days >= aged:
+        state = "aged"
+        score = 0
+    else:
+        state = "stale"
+        score = max(0, round(100 * (aged - age_days) / (aged - stale)))
+
+    result: dict[str, Any] = {
+        "basis": basis_name,
+        "reference_time": basis_value,
+        "age_days": age_days,
+        "state": state,
+        "freshness_score": score,
+    }
+    valid_from = _iso_timestamp(item.get("valid_from"))
+    valid_until = _iso_timestamp(item.get("valid_until"))
+    if valid_from and now < datetime.fromisoformat(valid_from):
+        result["validity_state"] = "not_yet_valid"
+    elif valid_until and now > datetime.fromisoformat(valid_until):
+        result["validity_state"] = "expired"
+    elif valid_from or valid_until:
+        result["validity_state"] = "active"
+    else:
+        result["validity_state"] = "unspecified"
+    return result
+
+
 def _bounded_metadata(item: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     labels = item.get("labels")
@@ -166,12 +218,16 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
         max_indicators: int = 100_000,
         max_matches: int = 32,
         adapter_config: dict[str, Any] | None = None,
+        stale_after_days: int = 30,
+        aged_after_days: int = 90,
     ):
         self.path = Path(feed_path).expanduser() if feed_path else None
         self.max_bytes = max(1024, min(int(max_bytes), 100 * 1024 * 1024))
         self.max_indicators = max(1, min(int(max_indicators), 500_000))
         self.max_matches = max(1, min(int(max_matches), 128))
         self.adapter = CustomFeedAdapter(adapter_config) if adapter_config is not None else None
+        self.stale_after_days = max(1, min(int(stale_after_days), 3650))
+        self.aged_after_days = max(self.stale_after_days + 1, min(int(aged_after_days), 7300))
         self.source: str | None = None
         self.generated_at: str | None = None
         self.loaded_at: str | None = None
@@ -257,6 +313,7 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
             "ready": self.path is not None and self.error is None and self.loaded_at is not None,
             "feed": self.path.name if self.path else None,
             "custom_adapter": self.adapter is not None,
+            "aging_policy": {"stale_after_days": self.stale_after_days, "aged_after_days": self.aged_after_days},
             "source": self.source,
             "generated_at": self.generated_at,
             "loaded_at": self.loaded_at,
@@ -297,7 +354,17 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
                 if fingerprint in seen:
                     continue
                 seen.add(fingerprint)
-                matches.append({**feed_item, "evidence": evidence})
+                match = {**feed_item, "evidence": evidence}
+                aging = _indicator_aging(
+                    feed_item,
+                    now_iso=_now(),
+                    feed_generated_at=self.generated_at,
+                    stale_after_days=self.stale_after_days,
+                    aged_after_days=self.aged_after_days,
+                )
+                if aging is not None:
+                    match["aging"] = aging
+                matches.append(match)
                 if len(matches) >= self.max_matches:
                     break
             if len(matches) >= self.max_matches:
