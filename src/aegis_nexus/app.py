@@ -16,6 +16,7 @@ from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 from .alerts import AlertStore
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
 from .cti_stix import export_stix_bundle
+from .cti_sharing import sanitize_shareable_indicators
 from .custom_feed import load_custom_feed_adapter_config
 from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
@@ -693,8 +694,18 @@ def create_app(test_config: dict | None = None) -> Flask:
             or "threat-intelligence-provider"
         )[:256]
         try:
-            bundle = export_stix_bundle(
+            sensitive_values = list((app.config.get("SENSOR_KEYS") or {}).values())
+            sensitive_values.extend([
+                str(app.config.get("INGEST_API_KEY") or ""),
+                str(app.config.get("OPERATOR_API_KEY") or ""),
+            ])
+            shareable_indicators = sanitize_shareable_indicators(
                 indicator_reader(),
+                internal_networks=list((app.config.get("SENSOR_SOURCE_CIDRS") or {}).values()),
+                sensitive_values=sensitive_values,
+            )
+            bundle = export_stix_bundle(
+                shareable_indicators,
                 source=source,
                 generated_at=getattr(threat_context, "generated_at", None),
                 tlp=str(app.config.get("CTI_EXPORT_TLP") or "TLP:AMBER+STRICT"),
