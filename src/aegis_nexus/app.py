@@ -22,6 +22,7 @@ from .cti_sharing import sanitize_shareable_indicators
 from .custom_feed import load_custom_feed_adapter_config
 from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
+from .detection_config import DetectionConfig
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .ioc import IOCWorkspace
@@ -156,6 +157,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         BENIGN_SCANNER_MAX_BYTES=int(os.getenv("AEGIS_BENIGN_SCANNER_MAX_BYTES", "1048576")),
         BENIGN_SCANNER_MAX_ENTRIES=int(os.getenv("AEGIS_BENIGN_SCANNER_MAX_ENTRIES", "10000")),
         ANALYTICS_MIN_SAMPLES=int(os.getenv("AEGIS_ANALYTICS_MIN_SAMPLES", "20")),
+        DETECTION_RULES_JSON=os.getenv("AEGIS_DETECTION_RULES_JSON", ""),
         MAX_FUTURE_EVENT_SKEW_SECONDS=int(os.getenv("AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS", "300")),
         PCAP_ENABLED=os.getenv("AEGIS_PCAP_ENABLED", "false").lower() in {"1", "true", "yes"},
         PCAP_DIR=os.getenv("AEGIS_PCAP_DIR", "/data/pcap"),
@@ -188,7 +190,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     alert_store = AlertStore(app.config["DATABASE_PATH"])
     ioc_workspace = IOCWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
     correlation_workspace = CorrelationWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
-    detection_engine = DetectionEngine()
+    detection_config = DetectionConfig.from_json(str(app.config.get("DETECTION_RULES_JSON") or ""))
+    detection_engine = DetectionEngine(config=detection_config)
     pcap_store = PcapEvidenceStore(
         app.config["DATABASE_PATH"],
         str(app.config.get("PCAP_DIR") or "/data/pcap"),
@@ -696,6 +699,10 @@ def create_app(test_config: dict | None = None) -> Flask:
             "configured": True,
             "network_requests": None,
         })
+
+    @app.get("/api/v1/detections/config")
+    def detection_config_status():
+        return jsonify(detection_config.public())
 
     @app.get("/api/v1/analytics/events/<event_id>")
     def event_behavioral_analytics(event_id: str):
