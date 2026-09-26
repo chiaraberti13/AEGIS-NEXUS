@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .honeytokens import honeytoken_descriptor
+from .detection_config import DetectionConfig
 
 
 DETECTION_SCHEMA_VERSION = "1.1"
@@ -222,8 +223,13 @@ BUILTIN_RULES: tuple[DetectionRule, ...] = (
 
 
 class DetectionEngine:
-    def __init__(self, rules: tuple[DetectionRule, ...] = BUILTIN_RULES):
+    def __init__(
+        self,
+        rules: tuple[DetectionRule, ...] = BUILTIN_RULES,
+        config: DetectionConfig | None = None,
+    ):
         self.rules = rules
+        self.config = config or DetectionConfig.defaults()
         self.honeytoken = honeytoken_descriptor()
 
     def evaluate(
@@ -233,10 +239,12 @@ class DetectionEngine:
     ) -> list[dict[str, Any]]:
         history = context or []
         findings: list[dict[str, Any]] = []
-        honeytoken_finding = self._honeytoken_finding(event)
+        honeytoken_finding = self._honeytoken_finding(event) if self.config.enabled("honeytoken_reuse") else None
         if honeytoken_finding:
             findings.append(honeytoken_finding)
         for rule in self.rules:
+            if not self.config.enabled(rule.id):
+                continue
             finding = rule.evaluate(event)
             if finding:
                 findings.append(finding)
@@ -276,12 +284,19 @@ class DetectionEngine:
         if not source:
             return findings
 
-        five_minutes = _window(event, context, 300)
-        ten_minutes = _window(event, context, 600)
-        two_minutes = _window(event, context, 120)
+        auth_window = _window(event, context, self.config.threshold("multiple_auth_failures", "window_seconds"))
+        brute_window = _window(event, context, self.config.threshold("credential_bruteforce", "window_seconds"))
+        web_window = _window(event, context, self.config.threshold("web_scanning", "window_seconds"))
+        traversal_window = _window(event, context, self.config.threshold("path_traversal_sequence", "window_seconds"))
+        rapid_window = _window(event, context, self.config.threshold("rapid_port_sequence", "window_seconds"))
+        recon_window = _window(event, context, self.config.threshold("recon_burst", "window_seconds"))
 
-        auth_events = [item for item in five_minutes if item.get("event_type") == "credential"]
-        if event.get("event_type") == "credential" and len(auth_events) >= 5:
+        auth_events = [item for item in auth_window if item.get("event_type") == "credential"]
+        if (
+            self.config.enabled("multiple_auth_failures")
+            and event.get("event_type") == "credential"
+            and len(auth_events) >= self.config.threshold("multiple_auth_failures", "attempts")
+        ):
             findings.append(_finding(
                 event,
                 rule_id="multiple_auth_failures",
@@ -293,10 +308,15 @@ class DetectionEngine:
                 evidence=auth_events,
             ))
 
-        brute_events = [item for item in ten_minutes if item.get("event_type") == "credential"]
+        brute_events = [item for item in brute_window if item.get("event_type") == "credential"]
         usernames = {str(_credential(item).get("username") or "") for item in brute_events}
         usernames.discard("")
-        if event.get("event_type") == "credential" and len(brute_events) >= 10 and len(usernames) >= 5:
+        if (
+            self.config.enabled("credential_bruteforce")
+            and event.get("event_type") == "credential"
+            and len(brute_events) >= self.config.threshold("credential_bruteforce", "attempts")
+            and len(usernames) >= self.config.threshold("credential_bruteforce", "usernames")
+        ):
             findings.append(_finding(
                 event,
                 rule_id="credential_bruteforce",
@@ -310,10 +330,19 @@ class DetectionEngine:
 
         fingerprint = _credential_fingerprint(event)
         if event.get("event_type") == "credential" and fingerprint:
-            day = _window(event, context, 86400, same_source=False)
-            reused = [item for item in day if _credential_fingerprint(item) == fingerprint]
+            reuse_window = _window(
+                event,
+                context,
+                self.config.threshold("credential_reuse", "window_seconds"),
+                same_source=False,
+            )
+            reused = [item for item in reuse_window if _credential_fingerprint(item) == fingerprint]
             reuse_sources = {_source_ip(item) for item in reused if _source_ip(item)}
-            if len(reused) >= 2 and len(reuse_sources) >= 2:
+            if (
+                self.config.enabled("credential_reuse")
+                and len(reused) >= self.config.threshold("credential_reuse", "events")
+                and len(reuse_sources) >= self.config.threshold("credential_reuse", "sources")
+            ):
                 findings.append(_finding(
                     event,
                     rule_id="credential_reuse",
@@ -326,12 +355,17 @@ class DetectionEngine:
                 ))
 
         web_events = [
-            item for item in five_minutes
+            item for item in web_window
             if item.get("event_type") in {"web.request", "web.payload", "credential"}
             and _service(item) in {"http", "https"}
         ]
         paths = {_path(item) for item in web_events if _path(item)}
-        if event.get("event_type") in {"web.request", "web.payload", "credential"} and _service(event) in {"http", "https"} and len(paths) >= 8:
+        if (
+            self.config.enabled("web_scanning")
+            and event.get("event_type") in {"web.request", "web.payload", "credential"}
+            and _service(event) in {"http", "https"}
+            and len(paths) >= self.config.threshold("web_scanning", "paths")
+        ):
             findings.append(_finding(
                 event,
                 rule_id="web_scanning",
@@ -344,10 +378,14 @@ class DetectionEngine:
             ))
 
         traversal_events = [
-            item for item in five_minutes
+            item for item in traversal_window
             if any(marker in _payload_text(item) for marker in ("../", "..\\", "%2e%2e%2f", "%2e%2e%5c"))
         ]
-        if any(marker in _payload_text(event) for marker in ("../", "..\\", "%2e%2e%2f", "%2e%2e%5c")) and len(traversal_events) >= 3:
+        if (
+            self.config.enabled("path_traversal_sequence")
+            and any(marker in _payload_text(event) for marker in ("../", "..\\", "%2e%2e%2f", "%2e%2e%5c"))
+            and len(traversal_events) >= self.config.threshold("path_traversal_sequence", "events")
+        ):
             findings.append(_finding(
                 event,
                 rule_id="path_traversal_sequence",
@@ -359,9 +397,9 @@ class DetectionEngine:
                 evidence=traversal_events,
             ))
 
-        ports = {_destination_port(item) for item in two_minutes}
+        ports = {_destination_port(item) for item in rapid_window}
         ports.discard(None)
-        if len(ports) >= 5:
+        if self.config.enabled("rapid_port_sequence") and len(ports) >= self.config.threshold("rapid_port_sequence", "ports"):
             findings.append(_finding(
                 event,
                 rule_id="rapid_port_sequence",
@@ -370,13 +408,20 @@ class DetectionEngine:
                 severity="medium",
                 confidence=90,
                 description="Five or more distinct destination ports were observed from the same source within two minutes.",
-                evidence=two_minutes,
+                evidence=rapid_window,
             ))
 
-        services = {_service(item) for item in five_minutes if _service(item)}
-        recon_ports = {_destination_port(item) for item in five_minutes}
+        services = {_service(item) for item in recon_window if _service(item)}
+        recon_ports = {_destination_port(item) for item in recon_window}
         recon_ports.discard(None)
-        if len(five_minutes) >= 15 and (len(services) >= 3 or len(recon_ports) >= 5):
+        if (
+            self.config.enabled("recon_burst")
+            and len(recon_window) >= self.config.threshold("recon_burst", "events")
+            and (
+                len(services) >= self.config.threshold("recon_burst", "services")
+                or len(recon_ports) >= self.config.threshold("recon_burst", "ports")
+            )
+        ):
             findings.append(_finding(
                 event,
                 rule_id="recon_burst",
@@ -385,7 +430,7 @@ class DetectionEngine:
                 severity="medium",
                 confidence=85,
                 description="At least fifteen events with multi-service or multi-port breadth were observed from the same source within five minutes.",
-                evidence=five_minutes,
+                evidence=recon_window,
             ))
 
         return findings
