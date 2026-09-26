@@ -18,6 +18,7 @@ jobs:
       - run: bash -n scripts/egress_guard.sh
       - run: bash scripts/egress_guard.sh validate
       - run: '! AEGIS_SSH_EXPOSURE_SUBNET=999.0.0.0/24 bash scripts/egress_guard.sh validate'
+      - run: '! AEGIS_SSH_EXPOSURE_SUBNET_V6=not-an-ipv6-cidr bash scripts/egress_guard.sh validate'
       - run: make -n install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove
       - run: node --check src/aegis_nexus/static/app.js
       - run: node --check src/aegis_nexus/static/i18n.js
