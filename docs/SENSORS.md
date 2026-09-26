@@ -31,6 +31,10 @@ Default protocol identity is selected from bounded plausible profiles and varied
 
 Personas are presentation only. They do not enable command execution, create real accounts or expose a writable filesystem. Do not place real credentials, secrets or sensitive production content in a persona.
 
+### Generic TCP banner sensor
+
+The `generic-tcp` plugin is a banner-only, opt-in surface for ports that do not justify a protocol-specific emulator. Compose keeps it behind the `generic` profile. Configure a dedicated `AEGIS_GENERIC_SENSOR_API_KEY`, `AEGIS_GENERIC_TCP_BANNER` and public port before enabling it. The banner is bounded and CR/LF/NUL injection is normalized. Client probe content is not stored; telemetry retains only captured length and SHA-256. The sensor has dedicated exposure/management networks and is covered by the host egress guard.
+
 ## Italiano
 
 I decoy built-in di AEGIS implementano l'interfaccia comune in `aegis_nexus.sensors.base` e sono registrabili tramite `SensorRegistry`.
@@ -61,3 +65,7 @@ I decoy built-in caricano una persona bounded controllata dall'operatore tramite
 L'identità di protocollo predefinita viene scelta tra profili plausibili e bounded e variata tramite `AEGIS_DECOY_PERSONA_SEED` (o un fallback locale al processo), così deployment differenti non espongono tutti lo stesso fingerprint statico. I test di regressione rifiutano marker evidenti di prodotti decoy come `aegis`, `honeypot`, `cowrie` e `kippo` nell'identità predefinita. Questo riduce il fingerprinting banale; non implica che un decoy sia indistinguibile da un servizio di produzione.
 
 Le persona modificano soltanto la presentazione. Non abilitano esecuzione di comandi, non creano account reali e non espongono un filesystem scrivibile. Non inserire credenziali reali, secret o contenuti sensibili di produzione.
+
+### Sensore banner TCP generico
+
+Il plugin `generic-tcp` è una superficie banner-only e opt-in per porte che non richiedono un emulatore di protocollo specifico. Compose lo mantiene dietro il profilo `generic`. Prima di abilitarlo configura `AEGIS_GENERIC_SENSOR_API_KEY`, `AEGIS_GENERIC_TCP_BANNER` e la porta pubblica dedicata. Il banner è bounded e normalizza injection CR/LF/NUL. Il contenuto del probe client non viene conservato: la telemetria mantiene soltanto lunghezza catturata e SHA-256. Il sensore usa reti exposure/management dedicate ed è incluso nell'egress guard host.
