@@ -342,3 +342,44 @@ def test_heartbeat_sensor_identity_must_match_signed_header(tmp_path):
     body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
     response = client.post("/api/v1/sensors/heartbeat", data=body, headers=headers)
     assert response.status_code == 401
+
+
+
+def test_sensor_identity_binding_supports_ipv6_management_cidr(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "ipv6.db"),
+        "SENSOR_KEYS": {"ssh-decoy-01": "ssh-secret"},
+        "SENSOR_SOURCE_CIDRS": {"ssh-decoy-01": "fd31:101::/64"},
+    })
+    client = app.test_client()
+    payload = {
+        "id": str(uuid.uuid4()),
+        "honeypot": "ssh-decoy-01",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "2001:db8::150",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 2222,
+        },
+    }
+
+    body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
+    allowed = client.post(
+        "/api/v1/events",
+        data=body,
+        headers=headers,
+        environ_overrides={"REMOTE_ADDR": "fd31:101::22"},
+    )
+    assert allowed.status_code == 201
+
+    payload["id"] = str(uuid.uuid4())
+    body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
+    denied = client.post(
+        "/api/v1/events",
+        data=body,
+        headers=headers,
+        environ_overrides={"REMOTE_ADDR": "fd31:102::22"},
+    )
+    assert denied.status_code == 401
