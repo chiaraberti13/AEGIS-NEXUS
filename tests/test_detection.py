@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from aegis_nexus.alerts import AlertStore
 from aegis_nexus.detection import DETECTION_SCHEMA_VERSION, DetectionEngine
+from aegis_nexus.honeytokens import honeytoken_credential
 
 
 def _event(event_id="evt-1", command="wget http://example.invalid/a"):
@@ -173,3 +174,37 @@ def test_rapid_port_sequence_and_recon_burst_need_breadth():
         recon.append(item)
     ids = {item["rule_id"] for item in engine.evaluate(recon[-1], recon)}
     assert "recon_burst" in ids
+
+
+
+def test_honeytoken_reuse_is_high_confidence_and_does_not_expose_secret(monkeypatch):
+    monkeypatch.setenv("AEGIS_HONEYTOKEN_SEED", "unit-test-honeytoken-seed")
+    token = honeytoken_credential()
+    assert token is not None
+    event = _context_event(
+        "honeytoken-1",
+        1,
+        username=token.username,
+        fingerprint=token.password_sha256,
+    )
+    findings = DetectionEngine().evaluate(event)
+    finding = next(item for item in findings if item["rule_id"] == "honeytoken_reuse")
+
+    assert finding["severity"] == "high"
+    assert finding["confidence"] == 100
+    assert finding["evidence"] == [{"type": "event", "id": "honeytoken-1"}]
+    assert token.password not in str(finding)
+    assert token.password_sha256 not in str(finding)
+    assert "actor" not in finding
+    assert "attribution" not in finding
+
+
+def test_honeytoken_rule_requires_both_username_and_secret_fingerprint(monkeypatch):
+    monkeypatch.setenv("AEGIS_HONEYTOKEN_SEED", "unit-test-honeytoken-seed")
+    token = honeytoken_credential()
+    assert token is not None
+    wrong_user = _context_event("wrong-user", 1, username="root", fingerprint=token.password_sha256)
+    wrong_secret = _context_event("wrong-secret", 2, username=token.username, fingerprint="f" * 64)
+
+    assert "honeytoken_reuse" not in {item["rule_id"] for item in DetectionEngine().evaluate(wrong_user)}
+    assert "honeytoken_reuse" not in {item["rule_id"] for item in DetectionEngine().evaluate(wrong_secret)}
