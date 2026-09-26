@@ -270,19 +270,19 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** identify noteworthy changes and bursts using explainable deterministic analytics before considering ML/AI.
 
-- [ ] Implement baseline framework
-- [ ] Add minimum-sample thresholds so cold-start baselines do not produce findings
-- [ ] Add 24-hour baseline
-- [ ] Add 7-day baseline
-- [ ] Add 30-day baseline
-- [ ] Detect new source IP
-- [ ] Detect new country
-- [ ] Detect new ASN
-- [ ] Detect new username
-- [ ] Detect new payload hash
-- [ ] Detect new URL/domain
-- [ ] Detect rare command
-- [ ] Detect command-frequency spike
+- [x] Implement baseline framework
+- [x] Add minimum-sample thresholds so cold-start baselines do not produce findings
+- [x] Add 24-hour baseline
+- [x] Add 7-day baseline
+- [x] Add 30-day baseline
+- [x] Detect new source IP
+- [x] Detect new country
+- [x] Detect new ASN
+- [x] Detect new username
+- [x] Detect new payload hash
+- [x] Detect new URL/domain
+- [x] Detect rare command
+- [x] Detect command-frequency spike
 - [ ] Detect authentication-attempt burst
 - [ ] Detect event-rate/recon burst
 - [ ] Detect unusual session duration
