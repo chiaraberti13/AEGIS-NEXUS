@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import uuid
 from typing import Any
 
@@ -91,3 +92,71 @@ def stix_sharing_markings(tlp: str) -> tuple[list[dict[str, Any]], list[str]]:
         "definition": {"statement": _POLICY[label]},
     }
     return [standard, statement], [standard["id"], statement_id]
+
+
+
+_SHAREABLE_FIELDS = {
+    "type",
+    "value",
+    "labels",
+    "confidence",
+    "description",
+    "reference",
+    "first_seen",
+    "last_seen",
+    "valid_from",
+    "valid_until",
+}
+
+
+def _contains_sensitive(value: Any, sensitive_values: tuple[str, ...]) -> bool:
+    if value in (None, ""):
+        return False
+    text = str(value)
+    return any(secret and secret in text for secret in sensitive_values)
+
+
+def sanitize_shareable_indicators(
+    indicators: list[dict[str, Any]],
+    *,
+    internal_networks: list[Any] | tuple[Any, ...] = (),
+    sensitive_values: list[str] | tuple[str, ...] = (),
+) -> list[dict[str, Any]]:
+    """Allowlist CTI fields and remove deployment-internal values before sharing."""
+    secrets = tuple(str(value) for value in sensitive_values if value not in (None, ""))
+    networks = []
+    for value in internal_networks:
+        try:
+            networks.append(value if hasattr(value, "version") else ipaddress.ip_network(str(value), strict=False))
+        except ValueError:
+            continue
+
+    sanitized: list[dict[str, Any]] = []
+    for raw in indicators:
+        if not isinstance(raw, dict):
+            continue
+        item = {key: raw[key] for key in _SHAREABLE_FIELDS if key in raw}
+        kind = str(item.get("type") or "").lower()
+        value = item.get("value")
+        if value in (None, "") or _contains_sensitive(value, secrets):
+            continue
+        if kind == "ip":
+            try:
+                address = ipaddress.ip_address(str(value))
+            except ValueError:
+                continue
+            if any(address.version == network.version and address in network for network in networks):
+                continue
+
+        labels = item.get("labels")
+        if isinstance(labels, list):
+            clean_labels = [label for label in labels if not _contains_sensitive(label, secrets)]
+            if clean_labels:
+                item["labels"] = clean_labels
+            else:
+                item.pop("labels", None)
+        for key in ("description", "reference"):
+            if _contains_sensitive(item.get(key), secrets):
+                item.pop(key, None)
+        sanitized.append(item)
+    return sanitized
