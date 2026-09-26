@@ -318,6 +318,56 @@ class Store:
     ) -> list[dict[str, Any]]:
         return self.page_events(limit=limit, q=q, filters=filters, hours=hours)["items"]
 
+    def behavioral_context(
+        self,
+        event: dict[str, Any],
+        *,
+        days: int = 30,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Return a bounded historical baseline ending at the event timestamp.
+
+        The anchor event is explicitly excluded so its measurements cannot train
+        the baseline used to evaluate itself. The event timestamp, rather than
+        wall-clock time, keeps replay and regression analysis deterministic.
+        """
+        anchor_raw = str(event.get("timestamp") or "")
+        try:
+            anchor = datetime.fromisoformat(anchor_raw.replace("Z", "+00:00"))
+        except ValueError:
+            anchor = datetime.now(timezone.utc)
+        if anchor.tzinfo is None:
+            anchor = anchor.replace(tzinfo=timezone.utc)
+        anchor = anchor.astimezone(timezone.utc)
+        bounded_days = max(1, min(int(days), 30))
+        cutoff = (anchor - timedelta(days=bounded_days)).isoformat()
+        bounded_limit = max(100, min(int(limit or self.analytics_max_events), self.analytics_max_events))
+        event_id = str(event.get("id") or "")
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM events
+                WHERE timestamp>=? AND timestamp<=? AND id!=?
+                ORDER BY timestamp DESC,id DESC
+                LIMIT ?
+                """,
+                (cutoff, anchor.isoformat(), event_id, bounded_limit + 1),
+            ).fetchall()
+        truncated = len(rows) > bounded_limit
+        selected = list(rows[:bounded_limit])
+        selected.reverse()
+        return {
+            "events": [self._decode(row) for row in selected],
+            "analysis": {
+                "anchor_event_id": event_id,
+                "anchor_timestamp": anchor.isoformat(),
+                "window_days": bounded_days,
+                "event_limit": bounded_limit,
+                "truncated": truncated,
+                "scope": "historical_events_excluding_anchor",
+            },
+        }
+
     def detection_context(
         self,
         event: dict[str, Any],
