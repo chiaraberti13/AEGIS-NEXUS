@@ -101,6 +101,10 @@ Authenticated operators can export the currently loaded normalized feed indicato
 
 The response uses `application/stix+json` and `Content-Disposition: attachment`. AEGIS maps only supported indicator values and source-supplied metadata. It does not synthesize threat actors, campaigns, ATT&CK techniques or vulnerabilities from a feed match. This export is CTI data, not observed honeypot telemetry.
 
+### STIX 2.1 import
+
+`AEGIS_THREAT_CONTEXT_FILE` may also point to a STIX 2.1 Bundle. The local provider imports only exact `indicator` patterns that map to AEGIS-supported IP, domain, URL or file-hash indicator types. Other STIX objects and non-exact/unsupported patterns are ignored rather than interpreted. The same byte/object/resource bounds and exact-match enrichment semantics apply. Imported STIX is read at provider startup; AEGIS does not modify the source bundle.
+
 ---
 
 ## Italiano
@@ -203,3 +207,7 @@ Gli operatori autenticati possono esportare gli indicatori normalizzati del feed
 `GET /api/v1/threat-context/stix`
 
 La risposta usa `application/stix+json` e `Content-Disposition: attachment`. AEGIS converte esclusivamente indicatori supportati e metadata forniti dalla sorgente. Non genera threat actor, campagne, tecniche ATT&CK o vulnerabilità a partire da un match del feed. L'export contiene dati CTI, non telemetria osservata dall'honeypot.
+
+### Import STIX 2.1
+
+`AEGIS_THREAT_CONTEXT_FILE` può puntare anche a un Bundle STIX 2.1. Il provider locale importa soltanto pattern esatti di tipo `indicator` riconducibili ai tipi IP, dominio, URL o hash di file supportati da AEGIS. Gli altri oggetti STIX e i pattern non esatti/non supportati vengono ignorati, senza interpretarli. Restano validi gli stessi limiti su byte/oggetti/risorse e la stessa semantica di enrichment exact-match. Lo STIX importato viene letto all'avvio del provider; AEGIS non modifica il bundle sorgente.
