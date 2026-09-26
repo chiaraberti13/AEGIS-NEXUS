@@ -528,4 +528,14 @@ class BehavioralAnalytics:
                     ),
                 })
 
+        for finding in findings:
+            if (
+                not isinstance(finding.get("baseline"), dict)
+                or not isinstance(finding.get("evidence"), list)
+                or not finding.get("evidence")
+                or not isinstance(finding.get("explanation"), str)
+                or not finding["explanation"].strip()
+            ):
+                raise RuntimeError("analytic_finding_missing_explainability")
+
         return {**baseline, "findings": findings}
