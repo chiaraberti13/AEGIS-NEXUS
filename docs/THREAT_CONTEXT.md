@@ -93,6 +93,14 @@ Operator status is available at:
 
 `GET /api/v1/threat-context/status`
 
+### STIX 2.1 export
+
+Authenticated operators can export the currently loaded normalized feed indicators as a STIX 2.1 Bundle:
+
+`GET /api/v1/threat-context/stix`
+
+The response uses `application/stix+json` and `Content-Disposition: attachment`. AEGIS maps only supported indicator values and source-supplied metadata. It does not synthesize threat actors, campaigns, ATT&CK techniques or vulnerabilities from a feed match. This export is CTI data, not observed honeypot telemetry.
+
 ---
 
 ## Italiano
@@ -187,3 +195,11 @@ La directory viene montata read-only.
 Lo stato operatore è disponibile tramite:
 
 `GET /api/v1/threat-context/status`
+
+### Export STIX 2.1
+
+Gli operatori autenticati possono esportare gli indicatori normalizzati del feed attualmente caricato come Bundle STIX 2.1:
+
+`GET /api/v1/threat-context/stix`
+
+La risposta usa `application/stix+json` e `Content-Disposition: attachment`. AEGIS converte esclusivamente indicatori supportati e metadata forniti dalla sorgente. Non genera threat actor, campagne, tecniche ATT&CK o vulnerabilità a partire da un match del feed. L'export contiene dati CTI, non telemetria osservata dall'honeypot.
