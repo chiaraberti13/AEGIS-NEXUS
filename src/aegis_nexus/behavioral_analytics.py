@@ -110,6 +110,7 @@ class BehavioralAnalytics:
                 "minimum_samples": self.policy.min_samples,
                 "distinct": {key: len(entries) for key, entries in values.items()},
                 "values": {key: sorted(entries)[:256] for key, entries in values.items()},
+                "values_truncated": {key: len(entries) > 256 for key, entries in values.items()},
             }
         return {
             "schema_version": ANALYTICS_SCHEMA_VERSION,
@@ -140,9 +141,19 @@ class BehavioralAnalytics:
             "payload_sha256": "New payload hash",
             "url_domain": "New URL/domain",
         }
-        baseline_values = long_window["values"]
+        anchor = _timestamp(event.get("timestamp"))
+        assert anchor is not None
+        start_30d = anchor - timedelta(days=30)
+        selected_30d = [
+            item for item in history
+            if (ts := _timestamp(item.get("timestamp"))) is not None and start_30d <= ts <= anchor
+        ]
+        complete_known = {key: set() for key in current}
+        for item in selected_30d:
+            for key, entries in _dimensions(item).items():
+                complete_known[key].update(entries)
         for dimension, values in current.items():
-            known = set(baseline_values[dimension])
+            known = complete_known[dimension]
             for value in sorted(values - known):
                 findings.append({
                     "schema_version": ANALYTICS_SCHEMA_VERSION,
