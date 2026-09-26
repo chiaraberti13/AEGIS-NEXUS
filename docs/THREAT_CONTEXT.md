@@ -4,6 +4,8 @@
 
 AEGIS-NEXUS can correlate observed IPs and derived artifacts against an operator-supplied local JSON feed. The adapter is offline and exact-match only.
 
+The local JSON adapter implements the common `ThreatIntelligenceProvider` contract (`provider_id`, network-use declaration, `status()`, `enrich()` and optional `close()`). This keeps the current offline behavior while allowing future providers to use the same collector boundary instead of adding provider-specific ingestion logic.
+
 It performs **no network requests** and never sends honeypot IPs, URLs, domains or hashes to a third-party service.
 
 ### What a match means
@@ -94,6 +96,8 @@ Operator status is available at:
 ## Italiano
 
 AEGIS-NEXUS può correlare IP osservati e artefatti derivati con un feed JSON locale fornito dall'operatore. L'adapter funziona offline e usa esclusivamente match esatti.
+
+L'adapter JSON locale implementa il contratto comune `ThreatIntelligenceProvider` (`provider_id`, dichiarazione dell'uso rete, `status()`, `enrich()` e `close()` opzionale). Il comportamento offline attuale resta invariato, mentre provider futuri potranno usare lo stesso confine del collector senza introdurre logica di ingestione specifica.
 
 Non effettua **nessuna richiesta di rete** e non invia IP, URL, domini o hash raccolti dall'honeypot a servizi di terze parti.
 
