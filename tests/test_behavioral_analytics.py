@@ -150,3 +150,34 @@ def test_event_analytics_api_returns_baseline_and_concrete_findings(tmp_path):
     assert body["baseline_windows"]["30d"]["ready"] is True
     assert body["history"]["scope"] == "historical_events_excluding_anchor"
     assert any(item["analytic_id"] == "novel_source_ip" for item in body["findings"])
+
+
+
+def test_rare_command_exposes_exact_30d_frequency_without_claiming_maliciousness():
+    engine = BehavioralAnalytics(min_samples=20)
+    history = _history()
+    current = _event(ANCHOR, 99)
+    current["observed"]["command"] = "uname -a"
+    result = engine.evaluate(current, history)
+    finding = next(item for item in result["findings"] if item["analytic_id"] == "rare_command")
+    assert finding["measurement"]["historical_occurrences_30d"] == 0
+    assert finding["measurement"]["rare_at_or_below"] == 1
+    assert finding["baseline"]["sample_count"] == 20
+    assert finding["attribution"] is False
+    assert "not maliciousness or attribution" in finding["explanation"]
+
+
+def test_command_frequency_spike_exposes_formula_measurement_and_evidence():
+    engine = BehavioralAnalytics(min_samples=20)
+    history = _history()
+    for item in history[:5]:
+        item["observed"]["command"] = "id"
+    current = _event(ANCHOR, 99)
+    current["observed"]["command"] = "id"
+    result = engine.evaluate(current, history)
+    finding = next(item for item in result["findings"] if item["analytic_id"] == "command_frequency_spike")
+    assert finding["measurement"]["occurrences_24h"] == 6
+    assert finding["measurement"]["daily_average_7d"] == round(5 / 7, 3)
+    assert finding["measurement"]["threshold"] == 5
+    assert finding["measurement"]["formula"] == "max(5, ceil(3 * seven_day_daily_average))"
+    assert len(finding["evidence"]) == 6
