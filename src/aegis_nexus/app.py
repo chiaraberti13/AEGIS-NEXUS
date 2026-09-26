@@ -15,6 +15,7 @@ from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .alerts import AlertStore
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
+from .cti_stix import export_stix_bundle
 from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
 from .derivation import derive_observed_artifacts
@@ -671,6 +672,28 @@ def create_app(test_config: dict | None = None) -> Flask:
             "configured": True,
             "network_requests": None,
         })
+
+    @app.get("/api/v1/threat-context/stix")
+    def threat_context_stix_export():
+        indicator_reader = getattr(threat_context, "indicators", None)
+        if not callable(indicator_reader):
+            return jsonify({"error": "stix_export_not_supported_by_provider"}), 409
+        source = str(
+            getattr(threat_context, "source", None)
+            or getattr(threat_context, "provider_id", None)
+            or "threat-intelligence-provider"
+        )[:256]
+        bundle = export_stix_bundle(
+            indicator_reader(),
+            source=source,
+            generated_at=getattr(threat_context, "generated_at", None),
+        )
+        payload = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
+        return Response(
+            payload,
+            mimetype="application/stix+json",
+            headers={"Content-Disposition": 'attachment; filename="aegis-threat-context.stix.json"'},
+        )
 
     @app.get("/api/v1/meta/filters")
     def filter_options():
