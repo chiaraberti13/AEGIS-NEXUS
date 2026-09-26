@@ -262,6 +262,11 @@ class FTPHandler(BaseHandler):
                         "content_type": artifact.get("content_type"),
                         "quarantined": True,
                         "inline_serving": False,
+                        "transfer_correlation": {
+                            "method": "source_ip_fifo",
+                            "strength": "heuristic",
+                            "basis": ["control_source_ip", "data_source_ip"],
+                        },
                     },
                 }
                 attach_capture_metadata(observed, filename_audit)
