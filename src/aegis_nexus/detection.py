@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from .honeytokens import honeytoken_descriptor
+
 
 DETECTION_SCHEMA_VERSION = "1.1"
 
@@ -222,6 +224,7 @@ BUILTIN_RULES: tuple[DetectionRule, ...] = (
 class DetectionEngine:
     def __init__(self, rules: tuple[DetectionRule, ...] = BUILTIN_RULES):
         self.rules = rules
+        self.honeytoken = honeytoken_descriptor()
 
     def evaluate(
         self,
@@ -230,12 +233,38 @@ class DetectionEngine:
     ) -> list[dict[str, Any]]:
         history = context or []
         findings: list[dict[str, Any]] = []
+        honeytoken_finding = self._honeytoken_finding(event)
+        if honeytoken_finding:
+            findings.append(honeytoken_finding)
         for rule in self.rules:
             finding = rule.evaluate(event)
             if finding:
                 findings.append(finding)
         findings.extend(self._contextual_findings(event, history))
         return findings
+
+    def _honeytoken_finding(self, event: dict[str, Any]) -> dict[str, Any] | None:
+        token = self.honeytoken
+        if not token or event.get("event_type") != "credential":
+            return None
+        credential = _credential(event)
+        username = str(credential.get("username") or "")
+        fingerprint = _credential_fingerprint(event)
+        if username != token["username"] or fingerprint != token["password_sha256"]:
+            return None
+        return _finding(
+            event,
+            rule_id="honeytoken_reuse",
+            rule_version="1.0.0",
+            title="Planted honeytoken credential reused",
+            severity="high",
+            confidence=100,
+            description=(
+                "A credential intentionally planted in decoy content was observed in normalized "
+                "credential telemetry. This is high-fidelity evidence of honeytoken reuse, not actor attribution."
+            ),
+            evidence=[event],
+        )
 
     def _contextual_findings(
         self,
