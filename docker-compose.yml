@@ -155,9 +155,11 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: legacy-decoy-01
       AEGIS_FTP_PORT: "2121"
+      AEGIS_FTP_DATA_PORT: "2122"
       AEGIS_TELNET_PORT: "2323"
     ports:
       - "${AEGIS_PUBLIC_FTP_PORT:-2121}:2121"
+      - "${AEGIS_PUBLIC_FTP_DATA_PORT:-2122}:2122"
       - "${AEGIS_PUBLIC_TELNET_PORT:-2323}:2323"
     networks:
       - legacy_exposure
