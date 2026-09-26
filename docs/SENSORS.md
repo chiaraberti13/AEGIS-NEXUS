@@ -41,6 +41,10 @@ Honeytokens are disabled unless `AEGIS_HONEYTOKEN_SEED` is configured. When enab
 
 Use a random deployment-specific seed and treat it as configuration secret material. Honeytokens must never reuse a real username/password or production secret.
 
+### Hostile artifact uploads
+
+Web uploads and FTP `STOR` are forwarded to the collector quarantine instead of being written inside exposed sensor containers. FTP uses EPSV passive transfer only; active `PORT` mode is disabled. The current SSH decoy does not emulate SCP/SFTP. Size/count limits, SHA-256 handling and the no-inline-serving rule are defined in `docs/QUARANTINE.md`.
+
 ## Italiano
 
 I decoy built-in di AEGIS implementano l'interfaccia comune in `aegis_nexus.sensors.base` e sono registrabili tramite `SensorRegistry`.
@@ -81,3 +85,7 @@ Il plugin `generic-tcp` è una superficie banner-only e opt-in per porte che non
 Gli honeytoken sono disabilitati finché non viene configurato `AEGIS_HONEYTOKEN_SEED`. Quando attivi, AEGIS deriva una credenziale sintetica di backup specifica del deployment e la inserisce nel fake filesystem SSH. Il collector deriva dallo stesso seed username e fingerprint attesi. Se la telemetria credential normalizzata contiene successivamente entrambi i valori, il Detection Engine genera `honeytoken_reuse` con severity high e confidence 100. L'alert contiene riferimenti alle evidenze, non la password piantata né il suo fingerprint, e non formula attribuzioni sull'attore.
 
 Usa un seed casuale specifico del deployment e trattalo come materiale di configurazione segreto. Gli honeytoken non devono mai riutilizzare username/password reali o secret di produzione.
+
+### Upload di artefatti ostili
+
+Gli upload Web e FTP `STOR` vengono inoltrati alla quarantena del collector invece di essere scritti nei container sensore esposti. FTP usa esclusivamente trasferimento passivo EPSV; la modalità active `PORT` è disabilitata. Il decoy SSH attuale non emula SCP/SFTP. Limiti di dimensione/numero, gestione SHA-256 e regola di non-inline-serving sono definiti in `docs/QUARANTINE.md`.
