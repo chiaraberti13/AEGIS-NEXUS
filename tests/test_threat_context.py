@@ -59,7 +59,10 @@ def test_local_feed_matches_source_ip_and_observed_artifact_without_changing_sev
     assert "mitre" not in enriched["derived"]
     assert "cve" not in enriched["derived"]
     block = enriched["enrichment"]["threat_context"]
+    assert block["provider"] == "local-json"
     assert block["source"] == "fixture-feed"
+    assert block["retrieved_at"] == enricher.loaded_at
+    assert block["observed_at"]
     assert block["data"]["match_policy"] == "exact"
     matches = block["data"]["matches"]
     assert {(item["type"], item["value"]) for item in matches} == {
@@ -149,6 +152,7 @@ def test_collector_applies_local_threat_context_and_exposes_status(tmp_path):
 
     status = client.get("/api/v1/threat-context/status").get_json()
     assert status["ready"] is True
+    assert status["provider"] == "local-json"
     assert status["network_requests"] is False
     assert status["indicator_keys"] == 1
 
@@ -183,3 +187,23 @@ def test_threat_intelligence_provider_contract_rejects_missing_identity():
 
     with pytest.raises(ValueError, match="provider_id"):
         validate_provider(InvalidProvider())
+
+
+
+def test_local_feed_confidence_is_absent_when_source_does_not_supply_it(tmp_path):
+    feed = tmp_path / "feed.json"
+    _write_feed(feed, [{"type": "ip", "value": "8.8.4.4", "labels": ["fixture"]}])
+    provider = LocalThreatContextEnricher(str(feed))
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "8.8.4.4",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+    })
+
+    match = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"][0]
+    assert "confidence" not in match
