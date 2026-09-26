@@ -51,8 +51,8 @@ def _event(ts, index, *, novel=False):
             "payload": payload,
         },
         "enrichment": {
-            "geo": {"source": "fixture", "data": {"country": country}},
-            "asn": {"source": "fixture", "data": {"asn": asn}},
+            "geo": {"source": "fixture", "observed_at": ts.isoformat(), "data": {"country": country}},
+            "asn": {"source": "fixture", "observed_at": ts.isoformat(), "data": {"asn": asn}},
         },
         "derived": {"ioc": iocs},
     })
