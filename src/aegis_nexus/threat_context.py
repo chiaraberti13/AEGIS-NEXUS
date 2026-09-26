@@ -193,8 +193,9 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
 
     def status(self) -> dict[str, Any]:
         return {
+            "provider": self.provider_id,
             "mode": "local_offline_exact_match",
-            "network_requests": False,
+            "network_requests": self.network_requests,
             "configured": self.path is not None,
             "ready": self.path is not None and self.error is None and self.loaded_at is not None,
             "feed": self.path.name if self.path else None,
@@ -246,9 +247,12 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
         if not matches:
             return event
         result = deepcopy(event)
+        enriched_at = _now()
         result.setdefault("enrichment", {})["threat_context"] = {
+            "provider": self.provider_id,
             "source": self.source or (f"local-threat-feed:{self.path.name}" if self.path else "local-threat-feed"),
-            "observed_at": _now(),
+            "retrieved_at": self.loaded_at or enriched_at,
+            "observed_at": enriched_at,
             "data": {
                 "match_policy": "exact",
                 "feed_generated_at": self.generated_at,
