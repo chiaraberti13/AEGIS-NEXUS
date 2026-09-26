@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import sys
 
@@ -38,9 +39,21 @@ def main() -> None:
         attached = set((service.get("networks") or {}).keys())
         if attached != set(expected_networks):
             fail(f"{service_name} networks {sorted(attached)} != {sorted(expected_networks)}")
+        environment = service.get("environment") or {}
+        bind_keys = [key for key in environment if str(key).endswith("_BIND")]
+        if not bind_keys or any(str(environment.get(key)) != "::" for key in bind_keys):
+            fail(f"{service_name} is not configured for dual-stack listening")
         exposure = networks.get(expected_networks[0]) or {}
         if exposure.get("enable_ipv6") is not True:
             fail(f"{expected_networks[0]} is not IPv6-enabled")
+        configs = ((exposure.get("ipam") or {}).get("config") or [])
+        subnets = [str(item.get("subnet") or "") for item in configs if isinstance(item, dict)]
+        try:
+            versions = {ipaddress.ip_network(subnet, strict=False).version for subnet in subnets if subnet}
+        except ValueError as exc:
+            fail(f"{expected_networks[0]} has invalid IPAM subnet: {exc}")
+        if versions != {4, 6}:
+            fail(f"{expected_networks[0]} must have both IPv4 and IPv6 subnets")
 
     collector_networks = set(((services.get("collector") or {}).get("networks") or {}).keys())
     forbidden = {exposure for exposure, _management in SENSORS.values()}
