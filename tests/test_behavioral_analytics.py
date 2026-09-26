@@ -181,3 +181,49 @@ def test_command_frequency_spike_exposes_formula_measurement_and_evidence():
     assert finding["measurement"]["threshold"] == 5
     assert finding["measurement"]["formula"] == "max(5, ceil(3 * seven_day_daily_average))"
     assert len(finding["evidence"]) == 6
+
+
+
+def test_authentication_attempt_burst_exposes_rate_baseline_and_floor_threshold():
+    engine = BehavioralAnalytics(min_samples=20)
+    history = _history()
+    source = "198.51.100.77"
+    for index in range(4):
+        item = _event(ANCHOR - timedelta(minutes=index + 1), 200 + index)
+        item["observed"]["source_ip"] = source
+        history.append(item)
+    current = _event(ANCHOR, 999)
+    current["observed"]["source_ip"] = source
+
+    result = engine.evaluate(current, history)
+    finding = next(item for item in result["findings"] if item["analytic_id"] == "authentication_attempt_burst")
+    assert finding["measurement"]["credential_events_5m"] == 5
+    assert finding["measurement"]["threshold"] == 5
+    assert finding["measurement"]["historical_credential_events_30d"] == 4
+    assert len(finding["evidence"]) == 5
+    assert finding["attribution"] is False
+
+
+def test_event_rate_recon_burst_requires_rate_and_port_or_service_breadth():
+    engine = BehavioralAnalytics(min_samples=20)
+    history = _history()
+    source = "198.51.100.88"
+    for index in range(14):
+        item = _event(ANCHOR - timedelta(seconds=(index + 1) * 10), 300 + index)
+        item["observed"]["source_ip"] = source
+        item["observed"]["destination_port"] = 20 + (index % 7)
+        item["observed"]["service"] = ["ssh", "http", "ftp"][index % 3]
+        history.append(item)
+    current = _event(ANCHOR, 999)
+    current["observed"]["source_ip"] = source
+    current["observed"]["destination_port"] = 443
+    current["observed"]["service"] = "https"
+
+    result = engine.evaluate(current, history)
+    finding = next(item for item in result["findings"] if item["analytic_id"] == "event_rate_recon_burst")
+    assert finding["measurement"]["events_5m"] == 15
+    assert finding["measurement"]["threshold"] == 15
+    assert finding["measurement"]["distinct_ports_5m"] >= 5
+    assert finding["measurement"]["distinct_services_5m"] >= 3
+    assert len(finding["evidence"]) == 15
+    assert finding["attribution"] is False
