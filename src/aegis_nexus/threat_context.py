@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from .cti_stix import StixExportError, import_stix_bundle
+from .custom_feed import CustomFeedAdapter, CustomFeedAdapterError
 from .threat_intelligence import ThreatIntelligenceProvider
 
 SUPPORTED_TYPES = {"ip", "domain", "url", "md5", "sha1", "sha256"}
@@ -164,11 +165,13 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
         max_bytes: int = 20 * 1024 * 1024,
         max_indicators: int = 100_000,
         max_matches: int = 32,
+        adapter_config: dict[str, Any] | None = None,
     ):
         self.path = Path(feed_path).expanduser() if feed_path else None
         self.max_bytes = max(1024, min(int(max_bytes), 100 * 1024 * 1024))
         self.max_indicators = max(1, min(int(max_indicators), 500_000))
         self.max_matches = max(1, min(int(max_matches), 128))
+        self.adapter = CustomFeedAdapter(adapter_config) if adapter_config is not None else None
         self.source: str | None = None
         self.generated_at: str | None = None
         self.loaded_at: str | None = None
@@ -188,6 +191,8 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
             if not isinstance(payload, dict):
                 raise ThreatContextError("feed_root_must_be_object")
             if payload.get("type") == "bundle":
+                if self.adapter is not None:
+                    raise ThreatContextError("custom_adapter_not_supported_for_stix_bundle")
                 try:
                     indicators = import_stix_bundle(payload, max_objects=self.max_indicators)
                 except StixExportError as exc:
@@ -197,12 +202,19 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
                 self.source = f"stix-bundle:{bundle_id or self.path.name}"
                 self.generated_at = None
             else:
+                if self.adapter is not None:
+                    try:
+                        payload = self.adapter.adapt(payload, max_indicators=self.max_indicators)
+                    except CustomFeedAdapterError as exc:
+                        raise ThreatContextError(str(exc)) from exc
+                    self.provider_id = "local-custom-json"
+                else:
+                    self.provider_id = "local-json"
                 indicators = payload.get("indicators")
                 if not isinstance(indicators, list):
                     raise ThreatContextError("indicators_must_be_list")
                 if len(indicators) > self.max_indicators:
                     raise ThreatContextError("too_many_indicators")
-                self.provider_id = "local-json"
                 source = _clean_text(payload.get("source"), 256)
                 self.source = source or f"local-threat-feed:{self.path.name}"
                 self.generated_at = _clean_text(payload.get("generated_at"), 128)
@@ -244,6 +256,7 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
             "configured": self.path is not None,
             "ready": self.path is not None and self.error is None and self.loaded_at is not None,
             "feed": self.path.name if self.path else None,
+            "custom_adapter": self.adapter is not None,
             "source": self.source,
             "generated_at": self.generated_at,
             "loaded_at": self.loaded_at,
