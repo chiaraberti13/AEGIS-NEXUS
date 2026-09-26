@@ -66,6 +66,12 @@ The feed root is a JSON object:
 
 The example uses documentation-only data and is not shipped as live threat intelligence.
 
+### Indicator aging and decay
+
+AEGIS preserves source-supplied confidence unchanged and derives freshness separately. When a match has \`last_seen\`, \`first_seen\`, or a feed \`generated_at\` timestamp, the stored match receives an \`aging\` block containing the timestamp basis, \`age_days\`, a \`fresh\` / \`stale\` / \`aged\` state and a deterministic \`freshness_score\` from 100 to 0. Defaults are 30 days before stale and 90 days before aged; configure them with \`AEGIS_CTI_STALE_AFTER_DAYS\` and \`AEGIS_CTI_AGED_AFTER_DAYS\`.
+
+Source validity windows are reported independently as \`active\`, \`not_yet_valid\`, \`expired\` or \`unspecified\`. An aged or expired indicator is **not deleted and is not silently suppressed**: the historical match remains available with its evidence and source confidence, while the freshness metadata tells the analyst how old the CTI context was when enrichment occurred.
+
 ### Resource bounds
 
 The loader applies:
@@ -213,6 +219,12 @@ La radice del feed è un oggetto JSON:
 ```
 
 L'esempio usa esclusivamente dati di documentazione e non viene distribuito come Threat Intelligence reale.
+
+### Aging e decay degli indicatori
+
+AEGIS conserva invariata la confidence fornita dalla sorgente e deriva separatamente la freschezza. Quando un match dispone di \`last_seen\`, \`first_seen\` o del timestamp \`generated_at\` del feed, il match memorizzato riceve un blocco \`aging\` con timestamp usato come base, \`age_days\`, stato \`fresh\` / \`stale\` / \`aged\` e un \`freshness_score\` deterministico da 100 a 0. I default sono 30 giorni per diventare stale e 90 giorni per diventare aged; sono configurabili con \`AEGIS_CTI_STALE_AFTER_DAYS\` e \`AEGIS_CTI_AGED_AFTER_DAYS\`.
+
+Le validity window della sorgente vengono riportate separatamente come \`active\`, \`not_yet_valid\`, \`expired\` o \`unspecified\`. Un indicatore aged o expired **non viene cancellato né soppresso silenziosamente**: il match storico resta disponibile con evidenza e confidence della sorgente, mentre i metadata di freschezza mostrano all'analista quanto era vecchio il contesto CTI al momento dell'enrichment.
 
 ### Limiti sulle risorse
 
