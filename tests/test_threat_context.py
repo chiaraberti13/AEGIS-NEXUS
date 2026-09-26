@@ -1,3 +1,4 @@
+import ipaddress
 import json
 
 import pytest
@@ -5,6 +6,7 @@ import pytest
 from aegis_nexus.app import create_app
 from aegis_nexus.cti_stix import export_stix_bundle, import_stix_bundle, indicator_pattern
 from aegis_nexus.custom_feed import CustomFeedAdapterError, load_custom_feed_adapter_config
+from aegis_nexus.cti_sharing import sanitize_shareable_indicators
 from aegis_nexus.model import normalize_event
 from aegis_nexus.threat_context import LocalThreatContextEnricher, normalize_indicator
 from aegis_nexus.threat_intelligence import ThreatIntelligenceProvider, validate_provider
@@ -585,3 +587,60 @@ def test_stix_endpoint_fails_closed_on_invalid_configured_tlp(tmp_path):
     response = app.test_client().get("/api/v1/threat-context/stix")
     assert response.status_code == 503
     assert response.get_json()["error"] == "invalid_cti_export_tlp"
+
+
+
+def test_shareable_cti_sanitizer_drops_internal_networks_secrets_and_non_allowlisted_fields():
+    sanitized = sanitize_shareable_indicators(
+        [
+            {"type": "ip", "value": "172.31.101.44", "description": "management"},
+            {
+                "type": "domain",
+                "value": "public.example.org",
+                "description": "contains super-secret-key",
+                "labels": ["safe", "super-secret-key"],
+                "operator_notes": "must never leave the system",
+                "sensor_secret": "super-secret-key",
+            },
+            {"type": "domain", "value": "super-secret-key.example.org"},
+            {"type": "ip", "value": "198.51.100.44", "labels": ["external"]},
+        ],
+        internal_networks=["172.31.101.0/24"],
+        sensitive_values=["super-secret-key"],
+    )
+    assert sanitized == [
+        {"type": "domain", "value": "public.example.org", "labels": ["safe"]},
+        {"type": "ip", "value": "198.51.100.44", "labels": ["external"]},
+    ]
+    serialized = json.dumps(sanitized)
+    assert "operator_notes" not in serialized
+    assert "sensor_secret" not in serialized
+    assert "super-secret-key" not in serialized
+    assert "172.31.101.44" not in serialized
+
+
+def test_stix_api_strips_management_ip_and_deployment_secret_from_shareable_export(tmp_path):
+    feed = tmp_path / "shareable.json"
+    _write_feed(feed, [
+        {"type": "ip", "value": "172.31.101.25", "description": "sensor management"},
+        {"type": "ip", "value": "198.51.100.25", "description": "safe external"},
+        {"type": "domain", "value": "public.example.org", "description": "token sensor-secret-123"},
+    ])
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "shareable.db"),
+        "THREAT_CONTEXT_FILE": str(feed),
+        "SENSOR_SOURCE_CIDRS": {"ssh-decoy-01": ipaddress.ip_network("172.31.101.0/24")},
+        "SENSOR_KEYS": {"ssh-decoy-01": "sensor-secret-123"},
+        "OPERATOR_API_KEY": "operator-secret-456",
+    })
+    response = app.test_client().get(
+        "/api/v1/threat-context/stix",
+        headers={"X-Aegis-Operator-Key": "operator-secret-456"},
+    )
+    assert response.status_code == 200
+    serialized = response.get_data(as_text=True)
+    assert "172.31.101.25" not in serialized
+    assert "sensor-secret-123" not in serialized
+    assert "198.51.100.25" in serialized
+    assert "public.example.org" in serialized
