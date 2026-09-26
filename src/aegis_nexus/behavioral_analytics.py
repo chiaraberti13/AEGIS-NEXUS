@@ -40,6 +40,14 @@ def _username(event: dict[str, Any]) -> str | None:
     return value[:160] or None
 
 
+def _command(event: dict[str, Any]) -> str | None:
+    value = _observed(event).get("command")
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value[:4096] or None
+
+
 def _payload_sha256(event: dict[str, Any]) -> str | None:
     payload = _observed(event).get("payload")
     if not isinstance(payload, str) or not payload:
@@ -176,4 +184,95 @@ class BehavioralAnalytics:
                         "This is novelty only, not maliciousness or attribution."
                     ),
                 })
+        command = _command(event)
+        if command:
+            command_history = [item for item in selected_30d if _command(item) == command]
+            occurrences_30d = len(command_history)
+            if occurrences_30d <= 1:
+                findings.append({
+                    "schema_version": ANALYTICS_SCHEMA_VERSION,
+                    "analytic_id": "rare_command",
+                    "title": "Rare command",
+                    "category": "frequency",
+                    "classification": "derived_analytic",
+                    "attribution": False,
+                    "measurement": {
+                        "command": command[:256],
+                        "historical_occurrences_30d": occurrences_30d,
+                        "rare_at_or_below": 1,
+                    },
+                    "baseline": {
+                        "window": "30d",
+                        "sample_count": long_window["sample_count"],
+                        "minimum_samples": long_window["minimum_samples"],
+                    },
+                    "evidence": (
+                        [{"type": "event", "id": str(event.get("id") or "")[:128]}]
+                        + [
+                            {"type": "event", "id": str(item.get("id") or "")[:128]}
+                            for item in command_history[:5] if item.get("id")
+                        ]
+                    ),
+                    "explanation": (
+                        f"The exact command occurred {occurrences_30d} time(s) in the 30-day historical "
+                        "baseline. Rare means low observed frequency only, not maliciousness or attribution."
+                    ),
+                })
+
+            start_24h = anchor - timedelta(hours=24)
+            start_7d = anchor - timedelta(days=7)
+            occurrences_24h = 1 + sum(
+                1 for item in history
+                if _command(item) == command
+                and (ts := _timestamp(item.get("timestamp"))) is not None
+                and start_24h <= ts <= anchor
+            )
+            occurrences_7d = sum(
+                1 for item in history
+                if _command(item) == command
+                and (ts := _timestamp(item.get("timestamp"))) is not None
+                and start_7d <= ts <= anchor
+            )
+            daily_average_7d = occurrences_7d / 7.0
+            spike_threshold = max(5, int(daily_average_7d * 3 + 0.999999))
+            if occurrences_24h >= spike_threshold:
+                evidence = [
+                    item for item in history
+                    if _command(item) == command
+                    and (ts := _timestamp(item.get("timestamp"))) is not None
+                    and start_24h <= ts <= anchor
+                ]
+                findings.append({
+                    "schema_version": ANALYTICS_SCHEMA_VERSION,
+                    "analytic_id": "command_frequency_spike",
+                    "title": "Command frequency spike",
+                    "category": "frequency",
+                    "classification": "derived_analytic",
+                    "attribution": False,
+                    "measurement": {
+                        "command": command[:256],
+                        "occurrences_24h": occurrences_24h,
+                        "daily_average_7d": round(daily_average_7d, 3),
+                        "threshold": spike_threshold,
+                        "formula": "max(5, ceil(3 * seven_day_daily_average))",
+                    },
+                    "baseline": {
+                        "window": "7d",
+                        "sample_count": baseline["baseline_windows"]["7d"]["sample_count"],
+                        "minimum_samples": baseline["baseline_windows"]["7d"]["minimum_samples"],
+                    },
+                    "evidence": (
+                        [{"type": "event", "id": str(event.get("id") or "")[:128]}]
+                        + [
+                            {"type": "event", "id": str(item.get("id") or "")[:128]}
+                            for item in evidence[:31] if item.get("id")
+                        ]
+                    ),
+                    "explanation": (
+                        f"The exact command occurred {occurrences_24h} time(s) in 24 hours versus a "
+                        f"7-day daily average of {daily_average_7d:.3f}; the deterministic threshold was "
+                        f"{spike_threshold}. This is a frequency change, not attribution."
+                    ),
+                })
+
         return {**baseline, "findings": findings}
