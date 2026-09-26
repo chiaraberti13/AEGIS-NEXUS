@@ -14,7 +14,11 @@ from .persona import load_persona
 from ..network_evidence import make_network_evidence
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("AEGIS_WEB_MAX_BODY", "16384"))
+WEB_UPLOAD_MAX_BYTES = max(1024, min(int(os.getenv("AEGIS_QUARANTINE_MAX_BYTES", "262144")), 16 * 1024 * 1024))
+app.config["MAX_CONTENT_LENGTH"] = max(
+    int(os.getenv("AEGIS_WEB_MAX_BODY", "16384")),
+    WEB_UPLOAD_MAX_BYTES + 65536,
+)
 sensor = SensorClient(os.getenv("AEGIS_HONEYPOT_ID", "web-decoy-01"))
 PERSONA = load_persona()
 
@@ -166,6 +170,56 @@ def login():
     return jsonify({"status": "denied", "message": "Invalid credentials"}), 401
 
 
+@app.post("/upload")
+def upload():
+    audit: dict = {}
+    observed = _base_observed(audit)
+    uploaded = request.files.get("file")
+    if uploaded is None:
+        sensor.emit("web.upload_rejected", attach_capture_metadata(observed, audit), "low")
+        return jsonify({"status": "rejected", "reason": "file_required"}), 400
+
+    data = uploaded.stream.read(WEB_UPLOAD_MAX_BYTES + 1)
+    if len(data) > WEB_UPLOAD_MAX_BYTES:
+        observed["artifact"] = {
+            "original_name": bounded_text(uploaded.filename or "", 255, "observed.artifact.original_name", audit),
+            "bytes_observed_at_least": len(data),
+            "limit": WEB_UPLOAD_MAX_BYTES,
+            "quarantined": False,
+        }
+        sensor.emit("web.upload_rejected", attach_capture_metadata(observed, audit), "medium")
+        return jsonify({"status": "rejected", "reason": "artifact_too_large"}), 413
+    if not data:
+        sensor.emit("web.upload_rejected", attach_capture_metadata(observed, audit), "low")
+        return jsonify({"status": "rejected", "reason": "artifact_empty"}), 400
+
+    artifact = sensor.quarantine_artifact(
+        data,
+        original_name=uploaded.filename or "",
+        content_type=uploaded.mimetype or "application/octet-stream",
+    )
+    if artifact is None:
+        sensor.emit("web.upload_rejected", attach_capture_metadata(observed, audit), "medium")
+        return jsonify({"status": "unavailable"}), 503
+
+    observed["artifact"] = {
+        "artifact_id": artifact.get("artifact_id"),
+        "sha256": artifact.get("sha256"),
+        "size": artifact.get("size"),
+        "original_name": artifact.get("original_name"),
+        "content_type": artifact.get("content_type"),
+        "quarantined": True,
+        "inline_serving": False,
+    }
+    sensor.emit("artifact.quarantined", attach_capture_metadata(observed, audit), "medium")
+    return jsonify({
+        "status": "quarantined",
+        "artifact_id": artifact.get("artifact_id"),
+        "sha256": artifact.get("sha256"),
+        "size": artifact.get("size"),
+    }), 202
+
+
 @app.route("/internal-db", methods=["GET", "POST"])
 def internal_db():
     audit: dict = {}
@@ -208,7 +262,7 @@ class WebSensorPlugin:
     name = "web"
     capabilities = SensorCapabilities(
         protocols=("http", "tcp"),
-        event_types=("web.request", "web.payload", "credential"),
+        event_types=("web.request", "web.payload", "web.upload_rejected", "artifact.quarantined", "credential"),
         interaction_mode="emulated",
         network_evidence=("transport", "http"),
         captures_credentials=True,
@@ -235,7 +289,7 @@ class WebSensorPlugin:
         global sensor
         sensor = SensorClient(config.sensor_id)
         heartbeat = sensor.start_heartbeat()
-        app.config["MAX_CONTENT_LENGTH"] = int(config.options.get("max_body", 16384))
+        app.config["MAX_CONTENT_LENGTH"] = max(int(config.options.get("max_body", 16384)), WEB_UPLOAD_MAX_BYTES + 65536)
         try:
             app.run(host=config.bind_host, port=config.port("http"), threaded=True)
         finally:
