@@ -30,9 +30,9 @@ services:
       AEGIS_DATABASE_PATH: ${AEGIS_DATABASE_PATH:-/data/aegis.db}
       AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:-}
       AEGIS_SENSOR_KEYS: >-
-        {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","smtp-decoy-01":"${AEGIS_SMTP_SENSOR_API_KEY:?set AEGIS_SMTP_SENSOR_API_KEY in .env}","redis-decoy-01":"${AEGIS_REDIS_SENSOR_API_KEY:?set AEGIS_REDIS_SENSOR_API_KEY in .env}","mysql-decoy-01":"${AEGIS_MYSQL_SENSOR_API_KEY:?set AEGIS_MYSQL_SENSOR_API_KEY in .env}","smb-decoy-01":"${AEGIS_SMB_SENSOR_API_KEY:?set AEGIS_SMB_SENSOR_API_KEY in .env}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}
+        {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","smtp-decoy-01":"${AEGIS_SMTP_SENSOR_API_KEY:?set AEGIS_SMTP_SENSOR_API_KEY in .env}","redis-decoy-01":"${AEGIS_REDIS_SENSOR_API_KEY:?set AEGIS_REDIS_SENSOR_API_KEY in .env}","mysql-decoy-01":"${AEGIS_MYSQL_SENSOR_API_KEY:?set AEGIS_MYSQL_SENSOR_API_KEY in .env}","smb-decoy-01":"${AEGIS_SMB_SENSOR_API_KEY:?set AEGIS_SMB_SENSOR_API_KEY in .env}","generic-tcp-decoy-01":"${AEGIS_GENERIC_SENSOR_API_KEY:-}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}
       AEGIS_SENSOR_SOURCE_CIDRS: >-
-        {"ssh-decoy-01":"${AEGIS_SSH_MGMT_SUBNET:-172.31.101.0/24}","web-decoy-01":"${AEGIS_WEB_MGMT_SUBNET:-172.31.102.0/24}","legacy-decoy-01":"${AEGIS_LEGACY_MGMT_SUBNET:-172.31.103.0/24}","smtp-decoy-01":"${AEGIS_SMTP_MGMT_SUBNET:-172.31.104.0/24}","redis-decoy-01":"${AEGIS_REDIS_MGMT_SUBNET:-172.31.105.0/24}","mysql-decoy-01":"${AEGIS_MYSQL_MGMT_SUBNET:-172.31.106.0/24}","smb-decoy-01":"${AEGIS_SMB_MGMT_SUBNET:-172.31.107.0/24}"}
+        {"ssh-decoy-01":"${AEGIS_SSH_MGMT_SUBNET:-172.31.101.0/24}","web-decoy-01":"${AEGIS_WEB_MGMT_SUBNET:-172.31.102.0/24}","legacy-decoy-01":"${AEGIS_LEGACY_MGMT_SUBNET:-172.31.103.0/24}","smtp-decoy-01":"${AEGIS_SMTP_MGMT_SUBNET:-172.31.104.0/24}","redis-decoy-01":"${AEGIS_REDIS_MGMT_SUBNET:-172.31.105.0/24}","mysql-decoy-01":"${AEGIS_MYSQL_MGMT_SUBNET:-172.31.106.0/24}","smb-decoy-01":"${AEGIS_SMB_MGMT_SUBNET:-172.31.107.0/24}","generic-tcp-decoy-01":"${AEGIS_GENERIC_MGMT_SUBNET:-172.31.108.0/24}"}
       AEGIS_OPERATOR_API_KEY: ${AEGIS_OPERATOR_API_KEY:?set AEGIS_OPERATOR_API_KEY in .env}
       AEGIS_REQUIRE_SENSOR_SIGNATURE: ${AEGIS_REQUIRE_SENSOR_SIGNATURE:-true}
       AEGIS_SENSOR_SIGNATURE_MAX_SKEW: ${AEGIS_SENSOR_SIGNATURE_MAX_SKEW:-300}
@@ -68,6 +68,7 @@ services:
       - redis_mgmt
       - mysql_mgmt
       - smb_mgmt
+      - generic_mgmt
     read_only: true
     tmpfs:
       - /tmp:size=16m,noexec,nosuid,nodev
@@ -231,6 +232,29 @@ services:
       - collector
 
 
+  generic-tcp-decoy:
+    <<: *sensor-hardening
+    profiles: ["generic"]
+    build: .
+    command:
+      - sh
+      - -c
+      - 'test -n "$AEGIS_SENSOR_API_KEY" || { echo "Set AEGIS_GENERIC_SENSOR_API_KEY before enabling the generic profile" >&2; exit 1; }; exec python -m aegis_nexus.sensors.generic_tcp'
+    environment:
+      <<: *sensor-env
+      AEGIS_SENSOR_API_KEY: ${AEGIS_GENERIC_SENSOR_API_KEY:-}
+      AEGIS_HONEYPOT_ID: generic-tcp-decoy-01
+      AEGIS_GENERIC_TCP_PORT: "9000"
+      AEGIS_GENERIC_TCP_BANNER: ${AEGIS_GENERIC_TCP_BANNER:-Service ready}
+    ports:
+      - "${AEGIS_PUBLIC_GENERIC_TCP_PORT:-9000}:9000"
+    networks:
+      - generic_exposure
+      - generic_mgmt
+    depends_on:
+      - collector
+
+
   backup:
     build: .
     profiles: ["ops"]
@@ -280,6 +304,10 @@ networks:
     ipam:
       config:
         - subnet: "${AEGIS_SMB_EXPOSURE_SUBNET:-172.30.107.0/24}"
+  generic_exposure:
+    ipam:
+      config:
+        - subnet: "${AEGIS_GENERIC_EXPOSURE_SUBNET:-172.30.108.0/24}"
   ssh_mgmt:
     internal: true
     ipam:
@@ -315,6 +343,11 @@ networks:
     ipam:
       config:
         - subnet: "${AEGIS_SMB_MGMT_SUBNET:-172.31.107.0/24}"
+  generic_mgmt:
+    internal: true
+    ipam:
+      config:
+        - subnet: "${AEGIS_GENERIC_MGMT_SUBNET:-172.31.108.0/24}"
 
 volumes:
   aegis-data:
