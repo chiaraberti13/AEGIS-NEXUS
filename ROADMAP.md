@@ -283,8 +283,8 @@ These are deliberate design boundaries, not missing features:
 - [x] Detect new URL/domain
 - [x] Detect rare command
 - [x] Detect command-frequency spike
-- [ ] Detect authentication-attempt burst
-- [ ] Detect event-rate/recon burst
+- [x] Detect authentication-attempt burst
+- [x] Detect event-rate/recon burst
 - [ ] Detect unusual session duration
 - [ ] Add explainable campaign clustering from shared evidence (clusters are hypotheses, never attribution)
 - [ ] Expose baseline/evidence behind every analytic finding
