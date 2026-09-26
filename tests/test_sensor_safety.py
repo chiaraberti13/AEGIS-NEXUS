@@ -66,3 +66,24 @@ def test_protocol_decoys_do_not_import_or_call_execution_primitives():
                 if name.startswith("subprocess."):
                     violations.append(f"{filename}:{node.lineno}: {name}()")
     assert violations == []
+
+
+
+def test_egress_guard_covers_ipv4_and_ipv6_for_every_builtin_exposure_network():
+    guard = (SENSOR_DIR.parents[2] / "scripts" / "egress_guard.sh").read_text(encoding="utf-8")
+    prefixes = (
+        "SSH",
+        "WEB",
+        "LEGACY",
+        "SMTP",
+        "REDIS",
+        "MYSQL",
+        "SMB",
+        "GENERIC",
+    )
+    for prefix in prefixes:
+        assert f"AEGIS_{prefix}_EXPOSURE_SUBNET " in guard
+        assert f"AEGIS_{prefix}_EXPOSURE_SUBNET_V6 " in guard
+    assert 'CHAIN6="AEGIS_NEXUS_EGRESS6"' in guard
+    assert "ip6tables -A" in guard
+    assert "--ctstate ESTABLISHED,RELATED -j RETURN" in guard
