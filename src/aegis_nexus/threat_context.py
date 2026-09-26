@@ -214,6 +214,16 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
             self.loaded_at = None
             self.error = str(exc)[:160] if isinstance(exc, ThreatContextError) else type(exc).__name__
 
+    def indicators(self) -> list[dict[str, Any]]:
+        """Return bounded normalized feed indicators for explicit CTI export."""
+        items: list[dict[str, Any]] = []
+        for key in sorted(self._index):
+            for item in self._index[key]:
+                items.append(deepcopy(item))
+                if len(items) >= self.max_indicators:
+                    return items
+        return items
+
     def status(self) -> dict[str, Any]:
         return {
             "provider": self.provider_id,
