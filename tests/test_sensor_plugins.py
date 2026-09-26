@@ -5,6 +5,12 @@ import pytest
 
 from aegis_nexus.sensors.base import SensorCapabilities, SensorConfig
 from aegis_nexus.sensors.catalog import load_builtin_sensors
+from aegis_nexus.sensors.generic_tcp import (
+    MAX_BANNER_BYTES,
+    GenericTCPHandler,
+    GenericTCPSensorPlugin,
+    bounded_banner,
+)
 from aegis_nexus.sensors.legacy import LegacySensorPlugin
 from aegis_nexus.sensors.mysql_decoy import (
     CLIENT_PLUGIN_AUTH,
@@ -37,7 +43,7 @@ from aegis_nexus.sensors.web_decoy import WebSensorPlugin
 def test_builtin_sensor_catalog_exposes_safe_capability_metadata():
     registry = load_builtin_sensors(SensorRegistry())
     registry.register(SMTPSensorPlugin)
-    assert registry.names() == ("legacy", "mysql", "redis", "smb", "smtp", "ssh", "web")
+    assert registry.names() == ("generic-tcp", "legacy", "mysql", "redis", "smb", "smtp", "ssh", "web")
     descriptions = {item["name"]: item["capabilities"] for item in registry.describe()}
     assert descriptions["ssh"]["captures_commands"] is True
     assert descriptions["web"]["captures_payloads"] is True
@@ -45,6 +51,7 @@ def test_builtin_sensor_catalog_exposes_safe_capability_metadata():
     assert descriptions["redis"]["captures_payloads"] is True
     assert descriptions["mysql"]["captures_credentials"] is True
     assert descriptions["smb"]["captures_credentials"] is True
+    assert descriptions["generic-tcp"]["interaction_mode"] == "banner_only"
     assert all(item["executes_attacker_input"] is False for item in descriptions.values())
 
 
@@ -85,6 +92,7 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     monkeypatch.setenv("AEGIS_REDIS_PORT", "6380")
     monkeypatch.setenv("AEGIS_MYSQL_PORT", "3307")
     monkeypatch.setenv("AEGIS_SMB_PORT", "1445")
+    monkeypatch.setenv("AEGIS_GENERIC_TCP_PORT", "19000")
 
     ssh = SSHSensorPlugin.config_from_env()
     web = WebSensorPlugin.config_from_env()
@@ -92,6 +100,7 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     redis = RedisSensorPlugin.config_from_env()
     mysql = MySQLSensorPlugin.config_from_env()
     smb = SMBSensorPlugin.config_from_env()
+    generic = GenericTCPSensorPlugin.config_from_env()
 
     assert ssh.sensor_id == "fixture-sensor"
     assert ssh.port("ssh") == 2200
@@ -102,6 +111,7 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     assert redis.port("redis") == 6380
     assert mysql.port("mysql") == 3307
     assert smb.port("smb") == 1445
+    assert generic.port("tcp") == 19000
 
 
 def test_sensor_config_rejects_invalid_listener_port():
@@ -485,3 +495,39 @@ def test_smb_decoy_rejects_oversized_frame_before_body(monkeypatch):
     rejected = next(args[1] for args, _kwargs in captured if args[0] == "sensor.input_rejected")
     assert rejected["sensor_capture"]["reason"] == "frame_too_large"
     assert rejected["sensor_capture"]["frame_limit"] == SMB_MAX_FRAME
+
+
+
+def test_generic_tcp_banner_is_bounded_and_strips_protocol_injection():
+    banner = bounded_banner("service\r\nINJECTED" + ("A" * 1000))
+    assert banner.endswith(b"\r\n")
+    assert len(banner) <= MAX_BANNER_BYTES + 2
+    assert b"\r\nINJECTED" not in banner
+
+
+def test_generic_tcp_banner_emits_hash_only_probe_telemetry(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        GenericTCPHandler.sensor,
+        "emit",
+        lambda *args, **kwargs: captured.append((args, kwargs)) or True,
+    )
+    GenericTCPHandler.banner = bounded_banner("Example service")
+    server = BoundedThreadingTCPServer(("127.0.0.1", 0), GenericTCPHandler, max_connections=2)
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    probe = b"scanner-probe-secret"
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            assert client.recv(1024) == b"Example service\r\n"
+            client.sendall(probe)
+        thread.join(timeout=2)
+    finally:
+        server.server_close()
+
+    event = next(args[1] for args, _kwargs in captured if args[0] == "tcp.banner_probe")
+    assert event["probe"]["captured_length"] == len(probe)
+    assert len(event["probe"]["sha256"]) == 64
+    assert event["probe"]["content_stored"] is False
+    assert probe.decode() not in str(event)
+    assert GenericTCPSensorPlugin.capabilities.executes_attacker_input is False
