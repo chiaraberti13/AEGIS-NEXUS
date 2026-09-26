@@ -260,7 +260,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Prevent TI matches from automatically creating attribution
 - [x] Prevent TI matches from inventing MITRE/CVE relationships
 - [x] Add CTI provenance tests
-- [ ] Document provider trust and enrichment limitations
+- [x] Document provider trust and enrichment limitations
 
 **Done when:** every intelligence assertion is attributable to a named source and timestamp and remains separate from observed evidence.
 
