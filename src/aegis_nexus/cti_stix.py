@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -104,3 +105,80 @@ def export_stix_bundle(
 
     bundle_id = "bundle--" + str(uuid.uuid4())
     return {"type": "bundle", "id": bundle_id, "objects": objects}
+
+
+_STIX_VALUE = r"((?:\\\\.|[^'])*)"
+_VALUE_PATTERN = re.compile(r"^\\[(ipv4-addr|ipv6-addr|domain-name|url):value = '" + _STIX_VALUE + r"'\\]$")
+_HASH_PATTERN = re.compile(r"^\\[file:hashes\\.'(MD5|SHA-1|SHA-256)' = '" + _STIX_VALUE + r"'\\]$")
+
+
+def _unescape_pattern_value(value: str) -> str:
+    result: list[str] = []
+    index = 0
+    while index < len(value):
+        char = value[index]
+        if char != "\\\\":
+            result.append(char)
+            index += 1
+            continue
+        if index + 1 >= len(value) or value[index + 1] not in {"\\\\", "'"}:
+            raise StixExportError("unsupported_pattern_escape")
+        result.append(value[index + 1])
+        index += 2
+    return "".join(result)
+
+
+def import_stix_bundle(bundle: dict[str, Any], *, max_objects: int = 100_000) -> list[dict[str, Any]]:
+    if not isinstance(bundle, dict) or bundle.get("type") != "bundle":
+        raise StixExportError("stix_root_must_be_bundle")
+    objects = bundle.get("objects")
+    if not isinstance(objects, list):
+        raise StixExportError("stix_bundle_objects_must_be_list")
+    limit = max(1, min(int(max_objects), 500_000))
+    if len(objects) > limit:
+        raise StixExportError("too_many_stix_objects")
+
+    indicators: list[dict[str, Any]] = []
+    for obj in objects:
+        if not isinstance(obj, dict) or obj.get("type") != "indicator":
+            continue
+        if obj.get("pattern_type") not in (None, "stix"):
+            continue
+        pattern = str(obj.get("pattern") or "")
+        match = _VALUE_PATTERN.fullmatch(pattern)
+        kind = None
+        value = None
+        if match:
+            object_type, encoded = match.groups()
+            kind = {
+                "ipv4-addr": "ip",
+                "ipv6-addr": "ip",
+                "domain-name": "domain",
+                "url": "url",
+            }[object_type]
+            value = _unescape_pattern_value(encoded)
+        else:
+            match = _HASH_PATTERN.fullmatch(pattern)
+            if match:
+                algorithm, encoded = match.groups()
+                kind = {"MD5": "md5", "SHA-1": "sha1", "SHA-256": "sha256"}[algorithm]
+                value = _unescape_pattern_value(encoded)
+        if not kind or value is None:
+            continue
+
+        item: dict[str, Any] = {"type": kind, "value": value}
+        labels = obj.get("labels")
+        if isinstance(labels, list):
+            item["labels"] = labels[:16]
+        confidence = obj.get("confidence")
+        if isinstance(confidence, int) and not isinstance(confidence, bool) and 0 <= confidence <= 100:
+            item["confidence"] = confidence
+        for source_key, target_key in (
+            ("description", "description"),
+            ("valid_from", "valid_from"),
+            ("valid_until", "valid_until"),
+        ):
+            if obj.get(source_key) not in (None, ""):
+                item[target_key] = obj[source_key]
+        indicators.append(item)
+    return indicators
