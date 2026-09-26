@@ -68,8 +68,13 @@ def _ioc_values(event: dict[str, Any], kinds: set[str]) -> set[str]:
 
 def _dimensions(event: dict[str, Any]) -> dict[str, set[str]]:
     source_ip = str(event.get("source_ip") or _observed(event).get("source_ip") or "").strip()
-    country = str(event.get("country") or "").strip()
-    asn = str(event.get("asn") or "").strip()
+    enrichment = event.get("enrichment") if isinstance(event.get("enrichment"), dict) else {}
+    geo = enrichment.get("geo") if isinstance(enrichment.get("geo"), dict) else {}
+    geo_data = geo.get("data") if isinstance(geo.get("data"), dict) else {}
+    asn_block = enrichment.get("asn") if isinstance(enrichment.get("asn"), dict) else {}
+    asn_data = asn_block.get("data") if isinstance(asn_block.get("data"), dict) else {}
+    country = str(event.get("country") or geo_data.get("country") or "").strip()
+    asn = str(event.get("asn") or asn_data.get("asn") or "").strip()
     username = _username(event)
     payload_hash = _payload_sha256(event)
     return {
