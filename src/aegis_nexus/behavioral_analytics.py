@@ -396,4 +396,63 @@ class BehavioralAnalytics:
                     ),
                 })
 
+        session_id = str(event.get("session_id") or "")
+        if session_id:
+            session_events: dict[str, list[dict[str, Any]]] = {}
+            for item in selected_30d:
+                historical_session = str(item.get("session_id") or "")
+                if historical_session:
+                    session_events.setdefault(historical_session, []).append(item)
+            current_history = session_events.pop(session_id, [])
+            current_timestamps = [
+                ts for item in [*current_history, event]
+                if (ts := _timestamp(item.get("timestamp"))) is not None
+            ]
+            historical_durations: list[float] = []
+            for items in session_events.values():
+                timestamps = [
+                    ts for item in items
+                    if (ts := _timestamp(item.get("timestamp"))) is not None
+                ]
+                if len(timestamps) >= 2:
+                    historical_durations.append((max(timestamps) - min(timestamps)).total_seconds())
+            if len(current_timestamps) >= 2 and len(historical_durations) >= 10:
+                current_duration = (max(current_timestamps) - min(current_timestamps)).total_seconds()
+                ordered = sorted(historical_durations)
+                p95_index = max(0, min(len(ordered) - 1, int(len(ordered) * 0.95 + 0.999999) - 1))
+                p95_duration = ordered[p95_index]
+                duration_threshold = max(1800.0, p95_duration * 2)
+                if current_duration >= duration_threshold:
+                    findings.append({
+                        "schema_version": ANALYTICS_SCHEMA_VERSION,
+                        "analytic_id": "unusual_session_duration",
+                        "title": "Unusual session duration",
+                        "category": "duration",
+                        "classification": "derived_analytic",
+                        "attribution": False,
+                        "measurement": {
+                            "session_id": session_id[:128],
+                            "duration_seconds": round(current_duration, 3),
+                            "historical_sessions": len(historical_durations),
+                            "p95_duration_seconds": round(p95_duration, 3),
+                            "threshold_seconds": round(duration_threshold, 3),
+                            "formula": "max(1800, 2 * historical_session_duration_p95)",
+                        },
+                        "baseline": {
+                            "window": "30d",
+                            "sample_count": long_window["sample_count"],
+                            "minimum_sessions": 10,
+                        },
+                        "evidence": [
+                            {"type": "event", "id": str(item.get("id") or "")[:128]}
+                            for item in [*current_history, event][:32] if item.get("id")
+                        ],
+                        "explanation": (
+                            f"The current session spans {current_duration:.3f}s. Across "
+                            f"{len(historical_durations)} historical sessions the duration p95 is "
+                            f"{p95_duration:.3f}s; threshold={duration_threshold:.3f}s. "
+                            "This is a duration outlier only, not maliciousness or attribution."
+                        ),
+                    })
+
         return {**baseline, "findings": findings}
