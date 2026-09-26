@@ -228,10 +228,10 @@ These are deliberate design boundaries, not missing features:
 - [x] Raise high-fidelity alerts when a planted honeytoken is reused on any sensor
 - [x] Capture attacker uploads (FTP `STOR`, web uploads, SSH `scp`/`sftp` where emulated) into an inert quarantine store
 - [x] Hash quarantined artifacts (SHA-256), enforce size/count limits and never serve them inline
-- [ ] Verify IPv6 listening, normalization and egress-guard coverage for every sensor
-- [ ] Ensure new decoys never execute attacker-supplied commands/payloads
-- [ ] Add isolation and hostile-input tests for every sensor
-- [ ] Document how to build third-party/custom sensors
+- [x] Verify IPv6 listening, normalization and egress-guard coverage for every sensor
+- [x] Ensure new decoys never execute attacker-supplied commands/payloads
+- [x] Add isolation and hostile-input tests for every sensor
+- [x] Document how to build third-party/custom sensors
 
 **Done when:** a new protocol decoy can be added through the sensor interface without modifying the collector core.
 
