@@ -117,11 +117,11 @@ def _unescape_pattern_value(value: str) -> str:
     index = 0
     while index < len(value):
         char = value[index]
-        if char != "\\\\":
+        if char != "\\":
             result.append(char)
             index += 1
             continue
-        if index + 1 >= len(value) or value[index + 1] not in {"\\\\", "'"}:
+        if index + 1 >= len(value) or value[index + 1] not in {"\\", "'"}:
             raise StixExportError("unsupported_pattern_escape")
         result.append(value[index + 1])
         index += 2
