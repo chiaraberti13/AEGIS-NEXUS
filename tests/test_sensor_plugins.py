@@ -89,6 +89,7 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     monkeypatch.setenv("AEGIS_SSH_PORT", "2200")
     monkeypatch.setenv("AEGIS_WEB_PORT", "8088")
     monkeypatch.setenv("AEGIS_FTP_PORT", "2100")
+    monkeypatch.setenv("AEGIS_FTP_DATA_PORT", "2101")
     monkeypatch.setenv("AEGIS_TELNET_PORT", "2300")
     monkeypatch.setenv("AEGIS_REDIS_PORT", "6380")
     monkeypatch.setenv("AEGIS_MYSQL_PORT", "3307")
@@ -108,6 +109,7 @@ def test_declarative_sensor_configs_are_bounded_and_protocol_specific(monkeypatc
     assert ssh.options["max_connections"] == 256
     assert web.port("http") == 8088
     assert legacy.port("ftp") == 2100
+    assert legacy.port("ftp_data") == 2101
     assert legacy.port("telnet") == 2300
     assert redis.port("redis") == 6380
     assert mysql.port("mysql") == 3307
