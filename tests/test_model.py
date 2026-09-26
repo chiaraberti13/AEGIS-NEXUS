@@ -177,5 +177,5 @@ def test_event_normalization_preserves_canonical_ipv6_source_address():
             "destination_port": 22,
         },
     })
-    assert event["source_ip"] == "2001:db8::42"
+    assert "source_ip" not in event
     assert event["observed"]["source_ip"] == "2001:db8::42"
