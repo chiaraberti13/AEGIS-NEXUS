@@ -148,6 +148,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         THREAT_CONTEXT_ADAPTER_JSON=os.getenv("AEGIS_THREAT_CONTEXT_ADAPTER_JSON", ""),
         THREAT_CONTEXT_ADAPTER_FILE=os.getenv("AEGIS_THREAT_CONTEXT_ADAPTER_FILE", ""),
         CTI_EXPORT_TLP=os.getenv("AEGIS_CTI_EXPORT_TLP", "TLP:AMBER+STRICT"),
+        CTI_STALE_AFTER_DAYS=int(os.getenv("AEGIS_CTI_STALE_AFTER_DAYS", "30")),
+        CTI_AGED_AFTER_DAYS=int(os.getenv("AEGIS_CTI_AGED_AFTER_DAYS", "90")),
         MAX_FUTURE_EVENT_SKEW_SECONDS=int(os.getenv("AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS", "300")),
         PCAP_ENABLED=os.getenv("AEGIS_PCAP_ENABLED", "false").lower() in {"1", "true", "yes"},
         PCAP_DIR=os.getenv("AEGIS_PCAP_DIR", "/data/pcap"),
@@ -214,6 +216,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             max_indicators=int(app.config.get("THREAT_CONTEXT_MAX_INDICATORS", 100000)),
             max_matches=int(app.config.get("THREAT_CONTEXT_MAX_MATCHES", 32)),
             adapter_config=adapter_config,
+            stale_after_days=int(app.config.get("CTI_STALE_AFTER_DAYS", 30)),
+            aged_after_days=int(app.config.get("CTI_AGED_AFTER_DAYS", 90)),
         )
         validate_provider(threat_context)
 
