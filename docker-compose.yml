@@ -99,6 +99,7 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: ssh-decoy-01
       AEGIS_SSH_PORT: "2222"
+      AEGIS_SSH_BIND: "::"
     ports:
       - "${AEGIS_PUBLIC_SSH_PORT:-2222}:2222"
     networks:
@@ -113,7 +114,7 @@ services:
     command:
       - gunicorn
       - --bind
-      - 0.0.0.0:8080
+      - "[::]:8080"
       - --workers
       - "2"
       - --threads
@@ -138,6 +139,7 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: web-decoy-01
       AEGIS_WEB_PORT: "8080"
+      AEGIS_WEB_BIND: "::"
     ports:
       - "${AEGIS_PUBLIC_WEB_PORT:-8080}:8080"
     networks:
@@ -155,6 +157,7 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: legacy-decoy-01
       AEGIS_FTP_PORT: "2121"
+      AEGIS_LEGACY_BIND: "::"
       AEGIS_FTP_DATA_PORT: "2122"
       AEGIS_TELNET_PORT: "2323"
     ports:
@@ -177,6 +180,7 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_SMTP_SENSOR_API_KEY:?set AEGIS_SMTP_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: smtp-decoy-01
       AEGIS_SMTP_PORT: "2525"
+      AEGIS_SMTP_BIND: "::"
     ports:
       - "${AEGIS_PUBLIC_SMTP_PORT:-2525}:2525"
     networks:
@@ -195,6 +199,7 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_REDIS_SENSOR_API_KEY:?set AEGIS_REDIS_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: redis-decoy-01
       AEGIS_REDIS_PORT: "6379"
+      AEGIS_REDIS_BIND: "::"
     ports:
       - "${AEGIS_PUBLIC_REDIS_PORT:-6379}:6379"
     networks:
@@ -213,6 +218,7 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_MYSQL_SENSOR_API_KEY:?set AEGIS_MYSQL_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: mysql-decoy-01
       AEGIS_MYSQL_PORT: "3306"
+      AEGIS_MYSQL_BIND: "::"
     ports:
       - "${AEGIS_PUBLIC_MYSQL_PORT:-3306}:3306"
     networks:
@@ -231,6 +237,7 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_SMB_SENSOR_API_KEY:?set AEGIS_SMB_SENSOR_API_KEY in .env}
       AEGIS_HONEYPOT_ID: smb-decoy-01
       AEGIS_SMB_PORT: "445"
+      AEGIS_SMB_BIND: "::"
     ports:
       - "${AEGIS_PUBLIC_SMB_PORT:-445}:445"
     networks:
@@ -253,6 +260,7 @@ services:
       AEGIS_SENSOR_API_KEY: ${AEGIS_GENERIC_SENSOR_API_KEY:-}
       AEGIS_HONEYPOT_ID: generic-tcp-decoy-01
       AEGIS_GENERIC_TCP_PORT: "9000"
+      AEGIS_GENERIC_TCP_BIND: "::"
       AEGIS_GENERIC_TCP_BANNER: ${AEGIS_GENERIC_TCP_BANNER:-Service ready}
     ports:
       - "${AEGIS_PUBLIC_GENERIC_TCP_PORT:-9000}:9000"
@@ -285,37 +293,53 @@ services:
 
 networks:
   ssh_exposure:
+    enable_ipv6: true
     ipam:
       config:
         - subnet: "${AEGIS_SSH_EXPOSURE_SUBNET:-172.30.101.0/24}"
+        - subnet: "${AEGIS_SSH_EXPOSURE_SUBNET_V6:-fd30:101::/64}"
   web_exposure:
+    enable_ipv6: true
     ipam:
       config:
         - subnet: "${AEGIS_WEB_EXPOSURE_SUBNET:-172.30.102.0/24}"
+        - subnet: "${AEGIS_WEB_EXPOSURE_SUBNET_V6:-fd30:102::/64}"
   legacy_exposure:
+    enable_ipv6: true
     ipam:
       config:
         - subnet: "${AEGIS_LEGACY_EXPOSURE_SUBNET:-172.30.103.0/24}"
+        - subnet: "${AEGIS_LEGACY_EXPOSURE_SUBNET_V6:-fd30:103::/64}"
   smtp_exposure:
+    enable_ipv6: true
     ipam:
       config:
         - subnet: "${AEGIS_SMTP_EXPOSURE_SUBNET:-172.30.104.0/24}"
+        - subnet: "${AEGIS_SMTP_EXPOSURE_SUBNET_V6:-fd30:104::/64}"
   redis_exposure:
+    enable_ipv6: true
     ipam:
       config:
         - subnet: "${AEGIS_REDIS_EXPOSURE_SUBNET:-172.30.105.0/24}"
+        - subnet: "${AEGIS_REDIS_EXPOSURE_SUBNET_V6:-fd30:105::/64}"
   mysql_exposure:
+    enable_ipv6: true
     ipam:
       config:
         - subnet: "${AEGIS_MYSQL_EXPOSURE_SUBNET:-172.30.106.0/24}"
+        - subnet: "${AEGIS_MYSQL_EXPOSURE_SUBNET_V6:-fd30:106::/64}"
   smb_exposure:
+    enable_ipv6: true
     ipam:
       config:
         - subnet: "${AEGIS_SMB_EXPOSURE_SUBNET:-172.30.107.0/24}"
+        - subnet: "${AEGIS_SMB_EXPOSURE_SUBNET_V6:-fd30:107::/64}"
   generic_exposure:
+    enable_ipv6: true
     ipam:
       config:
         - subnet: "${AEGIS_GENERIC_EXPOSURE_SUBNET:-172.30.108.0/24}"
+        - subnet: "${AEGIS_GENERIC_EXPOSURE_SUBNET_V6:-fd30:108::/64}"
   ssh_mgmt:
     internal: true
     ipam:
