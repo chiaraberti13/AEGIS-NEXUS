@@ -285,7 +285,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Detect command-frequency spike
 - [x] Detect authentication-attempt burst
 - [x] Detect event-rate/recon burst
-- [ ] Detect unusual session duration
+- [x] Detect unusual session duration
 - [ ] Add explainable campaign clustering from shared evidence (clusters are hypotheses, never attribution)
 - [ ] Expose baseline/evidence behind every analytic finding
 - [ ] Add analytics drill-down from charts
