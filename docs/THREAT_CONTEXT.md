@@ -30,6 +30,10 @@ A match does **not** automatically:
 - attribute activity to an actor or campaign;
 - prove compromise or malicious intent.
 
+### Provider trust and limitations
+
+Threat Intelligence is external context, not ground truth. AEGIS records provider/source/retrieval provenance so analysts can judge where a claim came from and how old it was. Feed labels and confidence remain source-supplied metadata; AEGIS does not promote them into observed facts. Provider matches cannot mutate \`observed\`, cannot create attribution, and cannot create ATT&CK/CVE relationships. Network-backed providers, if added later, must declare network use explicitly and remain independent from telemetry ingestion failures.
+
 ### Supported exact indicator types
 
 - `ip`
@@ -187,6 +191,10 @@ Un match **non**:
 - identifica malware family;
 - attribuisce l'attività ad actor o campagne;
 - dimostra compromissione o intento malevolo.
+
+### Fiducia nel provider e limiti
+
+La Threat Intelligence è contesto esterno, non ground truth. AEGIS registra provenance di provider/sorgente/retrieval per permettere all'analista di valutare origine e anzianità dell'informazione. Label e confidence del feed restano metadata forniti dalla sorgente e non vengono promossi a fatti osservati. I match del provider non possono modificare \`observed\`, creare attribuzione o generare relazioni ATT&CK/CVE. Eventuali provider di rete futuri dovranno dichiarare esplicitamente l'uso della rete e restare indipendenti dagli errori di ingestione della telemetria.
 
 ### Tipi supportati
 
