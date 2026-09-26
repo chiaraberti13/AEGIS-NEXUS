@@ -15,6 +15,7 @@ from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .alerts import AlertStore
 from .benign_scanners import BenignScannerContext
+from .behavioral_analytics import BehavioralAnalytics
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
 from .cti_stix import export_stix_bundle
 from .cti_sharing import sanitize_shareable_indicators
@@ -154,6 +155,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         BENIGN_SCANNER_FILE=os.getenv("AEGIS_BENIGN_SCANNER_FILE", ""),
         BENIGN_SCANNER_MAX_BYTES=int(os.getenv("AEGIS_BENIGN_SCANNER_MAX_BYTES", "1048576")),
         BENIGN_SCANNER_MAX_ENTRIES=int(os.getenv("AEGIS_BENIGN_SCANNER_MAX_ENTRIES", "10000")),
+        ANALYTICS_MIN_SAMPLES=int(os.getenv("AEGIS_ANALYTICS_MIN_SAMPLES", "20")),
         MAX_FUTURE_EVENT_SKEW_SECONDS=int(os.getenv("AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS", "300")),
         PCAP_ENABLED=os.getenv("AEGIS_PCAP_ENABLED", "false").lower() in {"1", "true", "yes"},
         PCAP_DIR=os.getenv("AEGIS_PCAP_DIR", "/data/pcap"),
@@ -244,6 +246,10 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     app.extensions["aegis_threat_intelligence_provider"] = threat_context
     app.extensions["aegis_benign_scanners"] = benign_scanners
+    behavioral_analytics = BehavioralAnalytics(
+        min_samples=int(app.config.get("ANALYTICS_MIN_SAMPLES", 20)),
+    )
+    app.extensions["aegis_behavioral_analytics"] = behavioral_analytics
     close_enricher = getattr(enricher, "close", None)
     if callable(close_enricher):
         atexit.register(close_enricher)
@@ -690,6 +696,20 @@ def create_app(test_config: dict | None = None) -> Flask:
             "configured": True,
             "network_requests": None,
         })
+
+    @app.get("/api/v1/analytics/events/<event_id>")
+    def event_behavioral_analytics(event_id: str):
+        event = store.get_event(event_id[:128])
+        if not event:
+            return jsonify({"error": "not_found"}), 404
+        context = store.behavioral_context(event, days=30)
+        result = behavioral_analytics.evaluate(
+            event,
+            context["events"],
+            truncated=bool(context["analysis"]["truncated"]),
+        )
+        result["history"] = context["analysis"]
+        return jsonify(result)
 
     @app.get("/api/v1/benign-scanners/status")
     def benign_scanner_status():
