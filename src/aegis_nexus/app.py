@@ -146,6 +146,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         THREAT_CONTEXT_MAX_MATCHES=int(os.getenv("AEGIS_THREAT_CONTEXT_MAX_MATCHES", "32")),
         THREAT_CONTEXT_ADAPTER_JSON=os.getenv("AEGIS_THREAT_CONTEXT_ADAPTER_JSON", ""),
         THREAT_CONTEXT_ADAPTER_FILE=os.getenv("AEGIS_THREAT_CONTEXT_ADAPTER_FILE", ""),
+        CTI_EXPORT_TLP=os.getenv("AEGIS_CTI_EXPORT_TLP", "TLP:AMBER+STRICT"),
         MAX_FUTURE_EVENT_SKEW_SECONDS=int(os.getenv("AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS", "300")),
         PCAP_ENABLED=os.getenv("AEGIS_PCAP_ENABLED", "false").lower() in {"1", "true", "yes"},
         PCAP_DIR=os.getenv("AEGIS_PCAP_DIR", "/data/pcap"),
@@ -691,11 +692,15 @@ def create_app(test_config: dict | None = None) -> Flask:
             or getattr(threat_context, "provider_id", None)
             or "threat-intelligence-provider"
         )[:256]
-        bundle = export_stix_bundle(
-            indicator_reader(),
-            source=source,
-            generated_at=getattr(threat_context, "generated_at", None),
-        )
+        try:
+            bundle = export_stix_bundle(
+                indicator_reader(),
+                source=source,
+                generated_at=getattr(threat_context, "generated_at", None),
+                tlp=str(app.config.get("CTI_EXPORT_TLP") or "TLP:AMBER+STRICT"),
+            )
+        except ValueError:
+            return jsonify({"error": "invalid_cti_export_tlp"}), 503
         payload = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
         return Response(
             payload,
