@@ -43,6 +43,10 @@ def main() -> None:
         bind_keys = [key for key in environment if str(key).endswith("_BIND")]
         if not bind_keys or any(str(environment.get(key)) != "::" for key in bind_keys):
             fail(f"{service_name} is not configured for dual-stack listening")
+        if service_name == "web-decoy":
+            command = [str(value) for value in (service.get("command") or [])]
+            if "[::]:8080" not in command:
+                fail("web-decoy gunicorn is not bound to IPv6 any-address")
         exposure = networks.get(expected_networks[0]) or {}
         if exposure.get("enable_ipv6") is not True:
             fail(f"{expected_networks[0]} is not IPv6-enabled")
