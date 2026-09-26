@@ -227,3 +227,31 @@ def test_event_rate_recon_burst_requires_rate_and_port_or_service_breadth():
     assert finding["measurement"]["distinct_services_5m"] >= 3
     assert len(finding["evidence"]) == 15
     assert finding["attribution"] is False
+
+
+
+def test_unusual_session_duration_uses_historical_session_p95_and_minimum_sessions():
+    engine = BehavioralAnalytics(min_samples=20)
+    history = []
+    for session_index in range(10):
+        start = ANCHOR - timedelta(days=session_index + 1)
+        first = _event(start, 400 + session_index * 2)
+        second = _event(start + timedelta(minutes=5), 401 + session_index * 2)
+        first["session_id"] = f"historical-{session_index}"
+        second["session_id"] = f"historical-{session_index}"
+        history.extend([first, second])
+
+    current_prior = _event(ANCHOR - timedelta(hours=1), 900)
+    current_prior["session_id"] = "current-long-session"
+    history.append(current_prior)
+    current = _event(ANCHOR, 901)
+    current["session_id"] = "current-long-session"
+
+    result = engine.evaluate(current, history)
+    finding = next(item for item in result["findings"] if item["analytic_id"] == "unusual_session_duration")
+    assert finding["measurement"]["duration_seconds"] == 3600
+    assert finding["measurement"]["historical_sessions"] == 10
+    assert finding["measurement"]["p95_duration_seconds"] == 300
+    assert finding["measurement"]["threshold_seconds"] == 1800
+    assert finding["measurement"]["formula"] == "max(1800, 2 * historical_session_duration_p95)"
+    assert len(finding["evidence"]) == 2
