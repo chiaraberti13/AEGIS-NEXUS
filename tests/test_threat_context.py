@@ -1,8 +1,11 @@
 import json
 
+import pytest
+
 from aegis_nexus.app import create_app
 from aegis_nexus.model import normalize_event
 from aegis_nexus.threat_context import LocalThreatContextEnricher, normalize_indicator
+from aegis_nexus.threat_intelligence import ThreatIntelligenceProvider, validate_provider
 
 
 def _write_feed(path, indicators):
@@ -151,3 +154,32 @@ def test_collector_applies_local_threat_context_and_exposes_status(tmp_path):
 
     ti = client.get("/api/v1/ips/203.0.113.200/threat-intelligence").get_json()
     assert any(item["kind"] == "threat_context" and item["source"] == "fixture-feed" for item in ti["items"])
+
+
+
+def test_local_json_threat_context_implements_provider_contract(tmp_path):
+    feed = tmp_path / "feed.json"
+    _write_feed(feed, [{"type": "ip", "value": "8.8.8.8"}])
+    provider = LocalThreatContextEnricher(str(feed))
+
+    assert isinstance(provider, ThreatIntelligenceProvider)
+    assert provider.provider_id == "local-json"
+    assert provider.network_requests is False
+    validate_provider(provider)
+    status = provider.status()
+    assert status["ready"] is True
+    assert status["network_requests"] is False
+
+
+def test_threat_intelligence_provider_contract_rejects_missing_identity():
+    class InvalidProvider:
+        network_requests = False
+
+        def status(self):
+            return {}
+
+        def enrich(self, event):
+            return event
+
+    with pytest.raises(ValueError, match="provider_id"):
+        validate_provider(InvalidProvider())
