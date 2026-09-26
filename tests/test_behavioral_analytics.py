@@ -255,3 +255,29 @@ def test_unusual_session_duration_uses_historical_session_p95_and_minimum_sessio
     assert finding["measurement"]["threshold_seconds"] == 1800
     assert finding["measurement"]["formula"] == "max(1800, 2 * historical_session_duration_p95)"
     assert len(finding["evidence"]) == 2
+
+
+
+def test_campaign_cluster_is_explicit_hypothesis_from_shared_evidence_never_attribution():
+    engine = BehavioralAnalytics(min_samples=20)
+    history = _history()
+    related = history[0]
+    related["observed"]["source_ip"] = "203.0.113.200"
+    related["observed"]["credential"]["username"] = "shared-user"
+    related["observed"]["payload"] = "shared-payload"
+
+    current = _event(ANCHOR, 999, novel=True)
+    current["observed"]["source_ip"] = "198.51.100.200"
+    current["observed"]["credential"]["username"] = "shared-user"
+    current["observed"]["payload"] = "shared-payload"
+
+    result = engine.evaluate(current, history)
+    finding = next(item for item in result["findings"] if item["analytic_id"] == "campaign_cluster_hypothesis")
+    assert finding["classification"] == "hypothesis"
+    assert finding["attribution"] is False
+    assert finding["measurement"]["source_count"] == 2
+    assert finding["measurement"]["minimum_shared_features_per_related_source"] == 2
+    assert any(item.startswith("username:") for item in finding["measurement"]["shared_evidence"])
+    assert any(item.startswith("payload_sha256:") for item in finding["measurement"]["shared_evidence"])
+    assert len(finding["evidence"]) == 2
+    assert "does not establish a common actor" in finding["explanation"]
