@@ -218,12 +218,12 @@ These are deliberate design boundaries, not missing features:
 - [x] Add Redis decoy
 - [x] Add MySQL decoy
 - [x] Add SMB decoy
-- [ ] Evaluate PostgreSQL decoy
-- [ ] Evaluate RDP handshake decoy
-- [ ] Evaluate VNC decoy
-- [ ] Evaluate SNMP decoy
-- [ ] Add generic TCP banner decoy
-- [ ] Evaluate read-only Modbus/TCP ICS decoy _(evaluate)_
+- [x] Evaluate PostgreSQL decoy
+- [x] Evaluate RDP handshake decoy
+- [x] Evaluate VNC decoy
+- [x] Evaluate SNMP decoy
+- [x] Add generic TCP banner decoy
+- [x] Evaluate read-only Modbus/TCP ICS decoy _(evaluate)_
 - [ ] Add honeytokens/canary credentials planted in decoy content
 - [ ] Raise high-fidelity alerts when a planted honeytoken is reused on any sensor
 - [ ] Capture attacker uploads (FTP `STOR`, web uploads, SSH `scp`/`sftp` where emulated) into an inert quarantine store
