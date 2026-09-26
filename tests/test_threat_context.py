@@ -4,6 +4,7 @@ import json
 import pytest
 
 from aegis_nexus.app import create_app
+import aegis_nexus.threat_context as threat_context_module
 from aegis_nexus.cti_stix import export_stix_bundle, import_stix_bundle, indicator_pattern
 from aegis_nexus.custom_feed import CustomFeedAdapterError, load_custom_feed_adapter_config
 from aegis_nexus.cti_sharing import sanitize_shareable_indicators
@@ -644,3 +645,74 @@ def test_stix_api_strips_management_ip_and_deployment_secret_from_shareable_expo
     assert "sensor-secret-123" not in serialized
     assert "198.51.100.25" in serialized
     assert "public.example.org" in serialized
+
+
+
+def test_cti_aging_is_derived_without_changing_source_confidence_or_deleting_match(tmp_path, monkeypatch):
+    monkeypatch.setattr(threat_context_module, "_now", lambda: "2026-09-26T12:00:00+00:00")
+    feed = tmp_path / "aging.json"
+    feed.write_text(json.dumps({
+        "source": "aging-fixture",
+        "generated_at": "2026-01-01T00:00:00Z",
+        "indicators": [{
+            "type": "ip",
+            "value": "198.51.100.60",
+            "confidence": 77,
+            "last_seen": "2026-06-01T00:00:00Z",
+            "valid_until": "2026-07-01T00:00:00Z",
+        }],
+    }), encoding="utf-8")
+    provider = LocalThreatContextEnricher(
+        str(feed),
+        stale_after_days=30,
+        aged_after_days=90,
+    )
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "198.51.100.60",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+    })
+    match = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"][0]
+    assert match["confidence"] == 77
+    assert match["aging"]["basis"] == "last_seen"
+    assert match["aging"]["state"] == "aged"
+    assert match["aging"]["freshness_score"] == 0
+    assert match["aging"]["validity_state"] == "expired"
+    assert match["value"] == "198.51.100.60"
+
+
+def test_cti_aging_stale_score_is_separate_from_source_confidence(tmp_path, monkeypatch):
+    monkeypatch.setattr(threat_context_module, "_now", lambda: "2026-09-26T00:00:00+00:00")
+    feed = tmp_path / "stale.json"
+    _write_feed(feed, [{
+        "type": "domain",
+        "value": "stale.example.org",
+        "confidence": 55,
+        "last_seen": "2026-08-07T00:00:00Z",
+    }])
+    provider = LocalThreatContextEnricher(str(feed), stale_after_days=30, aged_after_days=90)
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "web.payload",
+        "observed": {
+            "source_ip": "203.0.113.60",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+        "derived": {"ioc": [{
+            "type": "domain",
+            "value": "stale.example.org",
+            "classification": "observed_artifact",
+            "evidence": ["observed.payload"],
+        }]},
+    })
+    match = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"][0]
+    assert match["confidence"] == 55
+    assert match["aging"]["state"] == "stale"
+    assert 0 < match["aging"]["freshness_score"] < 100
