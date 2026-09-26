@@ -92,6 +92,38 @@ class SensorClient:
         except (urllib.error.URLError, TimeoutError, OSError):
             return False
 
+    def quarantine_artifact(
+        self,
+        data: bytes,
+        *,
+        original_name: str = "",
+        content_type: str = "application/octet-stream",
+    ) -> dict[str, Any] | None:
+        if not self.key or not isinstance(data, bytes) or not data:
+            return None
+        base = self.url.rsplit("/api/v1/events", 1)[0] if self.url.endswith("/api/v1/events") else "http://collector:8600"
+        url = base + "/api/v1/quarantine"
+        headers = {
+            "Content-Type": "application/octet-stream",
+            "X-Aegis-Key": self.key,
+            "X-Aegis-Sensor": self.honeypot,
+            "X-Aegis-Artifact-Name": str(original_name)[:255],
+            "X-Aegis-Artifact-Type": str(content_type)[:128],
+        }
+        if self.sign_requests:
+            timestamp = str(int(time.time()))
+            headers["X-Aegis-Timestamp"] = timestamp
+            headers["X-Aegis-Signature"] = sign_payload(self.key, timestamp, data)
+        request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=max(self.timeout, 5.0)) as response:
+                if not 200 <= response.status < 300:
+                    return None
+                payload = json.loads(response.read().decode("utf-8"))
+                return payload if isinstance(payload, dict) else None
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
+            return None
+
     def emit_heartbeat(self) -> bool:
         if not self.key:
             return False
