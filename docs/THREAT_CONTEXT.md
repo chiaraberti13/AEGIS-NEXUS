@@ -135,6 +135,11 @@ Authenticated operators can export the currently loaded normalized feed indicato
 
 The response uses `application/stix+json` and `Content-Disposition: attachment`. AEGIS maps only supported indicator values and source-supplied metadata. It does not synthesize threat actors, campaigns, ATT&CK techniques or vulnerabilities from a feed match. This export is CTI data, not observed honeypot telemetry.
 
+Every exported indicator is object-marked according to the configured FIRST TLP 2.0 sharing policy (`AEGIS_CTI_EXPORT_TLP`, default `TLP:AMBER+STRICT`). Accepted labels are `TLP:CLEAR`, `TLP:GREEN`, `TLP:AMBER`, `TLP:AMBER+STRICT` and `TLP:RED`. Invalid labels fail the export closed. Because STIX 2.1 predates FIRST TLP 2.0, AEGIS uses the mandatory STIX TLP marking compatible with the level plus an explicit statement marking containing the FIRST TLP 2.0 label and sharing boundary. In particular, `TLP:CLEAR` is paired with STIX's standard `TLP:WHITE` marking, and `TLP:AMBER+STRICT` is paired with standard `TLP:AMBER` plus the stricter statement. AEGIS does not create non-standard STIX TLP marking definitions.
+
+FIRST TLP 2.0: https://www.first.org/tlp/
+STIX 2.1 data markings: https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html
+
 ### STIX 2.1 import
 
 `AEGIS_THREAT_CONTEXT_FILE` may also point to a STIX 2.1 Bundle. The local provider imports only exact `indicator` patterns that map to AEGIS-supported IP, domain, URL or file-hash indicator types. Other STIX objects and non-exact/unsupported patterns are ignored rather than interpreted. The same byte/object/resource bounds and exact-match enrichment semantics apply. Imported STIX is read at provider startup; AEGIS does not modify the source bundle.
@@ -275,6 +280,11 @@ Gli operatori autenticati possono esportare gli indicatori normalizzati del feed
 `GET /api/v1/threat-context/stix`
 
 La risposta usa `application/stix+json` e `Content-Disposition: attachment`. AEGIS converte esclusivamente indicatori supportati e metadata forniti dalla sorgente. Non genera threat actor, campagne, tecniche ATT&CK o vulnerabilità a partire da un match del feed. L'export contiene dati CTI, non telemetria osservata dall'honeypot.
+
+Ogni indicatore esportato riceve object marking coerenti con la sharing policy FIRST TLP 2.0 configurata (`AEGIS_CTI_EXPORT_TLP`, default `TLP:AMBER+STRICT`). Le label accettate sono `TLP:CLEAR`, `TLP:GREEN`, `TLP:AMBER`, `TLP:AMBER+STRICT` e `TLP:RED`; valori non validi fanno fallire l'export in modo chiuso. Poiché STIX 2.1 precede FIRST TLP 2.0, AEGIS usa il marking TLP STIX obbligatorio compatibile con il livello e aggiunge uno statement marking esplicito con label e limite di condivisione FIRST TLP 2.0. In particolare, `TLP:CLEAR` viene associato al marking standard STIX `TLP:WHITE`, mentre `TLP:AMBER+STRICT` usa `TLP:AMBER` più lo statement restrittivo. AEGIS non crea definizioni TLP STIX non standard.
+
+FIRST TLP 2.0: https://www.first.org/tlp/
+Data marking STIX 2.1: https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html
 
 ### Import STIX 2.1
 
