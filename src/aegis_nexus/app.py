@@ -22,6 +22,7 @@ from .enrichment import LocalGeoIPEnricher
 from .ioc import IOCWorkspace
 from .model import EventValidationError, normalize_event
 from .pcap import DisabledPcapCaptureProvider, PcapEvidenceStore, PcapValidationError
+from .quarantine import QuarantineError, QuarantineStore
 from .pagination import CursorError
 from .reporting import case_markdown, session_markdown
 from .security import SlidingWindowLimiter, verify_signed_payload
@@ -146,6 +147,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         PCAP_MAX_BYTES=pcap_max_bytes,
         PCAP_RETENTION_DAYS=int(os.getenv("AEGIS_PCAP_RETENTION_DAYS", "7")),
         PCAP_MAX_FILES=int(os.getenv("AEGIS_PCAP_MAX_FILES", "1000")),
+        QUARANTINE_DIR=os.getenv("AEGIS_QUARANTINE_DIR", "/data/quarantine"),
+        QUARANTINE_MAX_BYTES=int(os.getenv("AEGIS_QUARANTINE_MAX_BYTES", "262144")),
+        QUARANTINE_MAX_FILES=int(os.getenv("AEGIS_QUARANTINE_MAX_FILES", "1000")),
     )
     if test_config:
         app.config.update(test_config)
@@ -153,6 +157,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         int(app.config.get("MAX_CONTENT_LENGTH", 0)),
         int(app.config.get("EVENT_MAX_BYTES", 65536)),
         int(app.config.get("PCAP_MAX_BYTES", 1048576)) + 131072,
+        int(app.config.get("QUARANTINE_MAX_BYTES", 262144)) + 4096,
     )
 
     store = Store(
@@ -176,6 +181,11 @@ def create_app(test_config: dict | None = None) -> Flask:
         max_bytes=int(app.config.get("PCAP_MAX_BYTES", 1048576)),
         retention_days=int(app.config.get("PCAP_RETENTION_DAYS", 7)),
         max_files=int(app.config.get("PCAP_MAX_FILES", 1000)),
+    )
+    quarantine_store = QuarantineStore(
+        str(app.config.get("QUARANTINE_DIR") or "/data/quarantine"),
+        max_bytes=int(app.config.get("QUARANTINE_MAX_BYTES", 262144)),
+        max_files=int(app.config.get("QUARANTINE_MAX_FILES", 1000)),
     )
     pcap_capture_provider = app.config.get("PCAP_CAPTURE_PROVIDER") or DisabledPcapCaptureProvider()
     limiter = SlidingWindowLimiter()
@@ -201,6 +211,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_detection_engine"] = detection_engine
     app.extensions["aegis_pcap_store"] = pcap_store
     app.extensions["aegis_pcap_capture_provider"] = pcap_capture_provider
+    app.extensions["aegis_quarantine_store"] = quarantine_store
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
     app.extensions["aegis_threat_context"] = threat_context
@@ -291,7 +302,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     def protect_trust_boundaries():
         sensor_ingest = (
             request.method == "POST"
-            and request.path in {"/api/v1/events", "/api/v1/integrations/suricata/eve", "/api/v1/sensors/heartbeat"}
+            and request.path in {"/api/v1/events", "/api/v1/integrations/suricata/eve", "/api/v1/sensors/heartbeat", "/api/v1/quarantine"}
         )
         if remote_is_sensor_network() and not sensor_ingest:
             return jsonify({"error": "sensor_network_denied"}), 403
@@ -397,6 +408,35 @@ def create_app(test_config: dict | None = None) -> Flask:
             sensor_timestamp=sensor_timestamp,
         )
         return jsonify(heartbeat), 202
+
+    @app.post("/api/v1/quarantine")
+    def ingest_quarantine_artifact():
+        sensor_id = (request.headers.get("X-Aegis-Sensor") or "")[:96]
+        raw_body = request.get_data(cache=False)
+        if len(raw_body) > int(app.config.get("QUARANTINE_MAX_BYTES", 262144)):
+            return jsonify({"error": "artifact_too_large"}), 413
+        if not sensor_authorized(sensor_id, raw_body):
+            return jsonify({"error": "unauthorized"}), 401
+        if not limiter.allow(
+            f"quarantine:{sensor_id}:{request.remote_addr or 'unknown'}",
+            max(1, min(int(app.config.get("INGEST_RATE_LIMIT", 600)), 120)),
+            60,
+        ):
+            return jsonify({"error": "rate_limited"}), 429
+        try:
+            artifact = quarantine_store.store(
+                raw_body,
+                sensor_id=sensor_id,
+                original_name=request.headers.get("X-Aegis-Artifact-Name", ""),
+                content_type=request.headers.get("X-Aegis-Artifact-Type", "application/octet-stream"),
+            )
+        except QuarantineError as exc:
+            status = 413 if str(exc) == "artifact_too_large" else 422
+            return jsonify({"error": str(exc)}), status
+        except OSError:
+            app.logger.exception("quarantine storage failed")
+            return jsonify({"error": "quarantine_storage_failed"}), 500
+        return jsonify(artifact), 201
 
     @app.post("/api/v1/events")
     def ingest_event():
