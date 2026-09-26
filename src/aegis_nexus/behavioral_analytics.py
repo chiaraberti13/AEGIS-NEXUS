@@ -85,6 +85,22 @@ def _ioc_values(event: dict[str, Any], kinds: set[str]) -> set[str]:
     return values
 
 
+def _cluster_tokens(event: dict[str, Any]) -> set[str]:
+    tokens: set[str] = set()
+    username = _username(event)
+    if username:
+        tokens.add(f"username:{username.casefold()}")
+    payload_hash = _payload_sha256(event)
+    if payload_hash:
+        tokens.add(f"payload_sha256:{payload_hash}")
+    command = _command(event)
+    if command:
+        tokens.add("command_sha256:" + hashlib.sha256(command.encode("utf-8", "replace")).hexdigest())
+    for value in _ioc_values(event, {"url", "domain"}):
+        tokens.add(f"ioc:{value}")
+    return tokens
+
+
 def _dimensions(event: dict[str, Any]) -> dict[str, set[str]]:
     source_ip = str(event.get("source_ip") or _observed(event).get("source_ip") or "").strip()
     enrichment = event.get("enrichment") if isinstance(event.get("enrichment"), dict) else {}
@@ -454,5 +470,62 @@ class BehavioralAnalytics:
                             "This is a duration outlier only, not maliciousness or attribution."
                         ),
                     })
+
+        current_tokens = _cluster_tokens(event)
+        current_source = _source_ip(event)
+        if current_source and len(current_tokens) >= 2:
+            related: dict[str, dict[str, Any]] = {}
+            for item in selected_30d:
+                other_source = _source_ip(item)
+                if not other_source or other_source == current_source:
+                    continue
+                shared = current_tokens & _cluster_tokens(item)
+                if not shared:
+                    continue
+                entry = related.setdefault(other_source, {"tokens": set(), "events": []})
+                entry["tokens"].update(shared)
+                entry["events"].append(item)
+            qualified = {
+                source: data for source, data in related.items()
+                if len(data["tokens"]) >= 2
+            }
+            if qualified:
+                shared_tokens = sorted({
+                    token for data in qualified.values() for token in data["tokens"]
+                })
+                evidence_events = [
+                    item for data in qualified.values() for item in data["events"]
+                ]
+                findings.append({
+                    "schema_version": ANALYTICS_SCHEMA_VERSION,
+                    "analytic_id": "campaign_cluster_hypothesis",
+                    "title": "Shared-evidence activity cluster",
+                    "category": "hypothesis_cluster",
+                    "classification": "hypothesis",
+                    "attribution": False,
+                    "measurement": {
+                        "source_ips": sorted([current_source, *qualified.keys()])[:32],
+                        "source_count": 1 + len(qualified),
+                        "shared_evidence": shared_tokens[:32],
+                        "minimum_shared_features_per_related_source": 2,
+                    },
+                    "baseline": {
+                        "window": "30d",
+                        "sample_count": long_window["sample_count"],
+                        "minimum_samples": long_window["minimum_samples"],
+                    },
+                    "evidence": (
+                        [{"type": "event", "id": str(event.get("id") or "")[:128]}]
+                        + [
+                            {"type": "event", "id": str(item.get("id") or "")[:128]}
+                            for item in evidence_events[:31] if item.get("id")
+                        ]
+                    ),
+                    "explanation": (
+                        "At least one other source IP shares two or more concrete features with the anchor "
+                        "event within the 30-day baseline. The cluster is an investigation hypothesis based "
+                        "on shared evidence; it does not establish a common actor, campaign, ownership or attribution."
+                    ),
+                })
 
         return {**baseline, "findings": findings}
