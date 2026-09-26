@@ -7,7 +7,7 @@ AEGIS treats attacker-supplied files as hostile evidence. Quarantine is a storag
 ### Capture paths
 
 - Web: `POST /upload` accepts one bounded multipart file and forwards its bytes to the collector over the sensor management network.
-- FTP: the legacy decoy supports bounded `STOR` through `EPSV` on the dedicated passive data port. Active `PORT` mode is deliberately disabled so the decoy never opens a new outbound connection to an attacker-controlled address.
+- FTP: the legacy decoy supports bounded `STOR` through `EPSV` on the dedicated passive data port. Active `PORT` mode is deliberately disabled so the decoy never opens a new outbound connection to an attacker-controlled address. Control/data association is a source-IP FIFO heuristic and is disclosed as such in artifact telemetry; it is not a cryptographic session binding.
 - SSH: the current decoy emulates an interactive shell only. SCP/SFTP are not implemented, so AEGIS does not claim to capture SSH file uploads.
 
 ### Storage boundary
@@ -41,7 +41,7 @@ AEGIS tratta ogni file fornito dall'attaccante come evidenza ostile. La quarante
 ### Percorsi di acquisizione
 
 - Web: `POST /upload` accetta un singolo file multipart bounded e inoltra i byte al collector tramite la rete management del sensore.
-- FTP: il decoy legacy supporta `STOR` bounded tramite `EPSV` sulla porta dati passiva dedicata. La modalità active `PORT` è intenzionalmente disabilitata, così il decoy non apre nuove connessioni outbound verso indirizzi controllati dall'attaccante.
+- FTP: il decoy legacy supporta `STOR` bounded tramite `EPSV` sulla porta dati passiva dedicata. La modalità active `PORT` è intenzionalmente disabilitata, così il decoy non apre nuove connessioni outbound verso indirizzi controllati dall'attaccante. L'associazione tra canale control/data è una euristica FIFO basata sul source IP ed è dichiarata come tale nella telemetria dell'artefatto; non è un binding crittografico di sessione.
 - SSH: il decoy attuale emula soltanto una shell interattiva. SCP/SFTP non sono implementati, quindi AEGIS non dichiara di catturare upload SSH.
 
 ### Confine di storage
