@@ -36,7 +36,7 @@ from aegis_nexus.sensors.smb_decoy import (
     SMBSensorPlugin,
     netbios_frame,
 )
-from aegis_nexus.sensors.smtp_decoy import SMTPHandler, SMTPSensorPlugin
+from aegis_nexus.sensors.smtp_decoy import MAX_LINE as SMTP_MAX_LINE, SMTPHandler, SMTPSensorPlugin
 from aegis_nexus.sensors.ssh_decoy import SSHSensorPlugin
 from aegis_nexus.sensors.web_decoy import WebSensorPlugin
 
@@ -152,6 +152,30 @@ def test_smtp_decoy_hashes_auth_blob_and_never_executes_input(monkeypatch):
     assert "dXNlcgB1c2VyAHNlY3JldA==" not in str(auth)
     assert SMTPSensorPlugin.capabilities.executes_attacker_input is False
 
+
+
+def test_smtp_decoy_rejects_oversized_hostile_line(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        SMTPHandler.sensor,
+        "emit",
+        lambda *args, **kwargs: captured.append((args, kwargs)) or True,
+    )
+    server = BoundedThreadingTCPServer(("127.0.0.1", 0), SMTPHandler, max_connections=2)
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    try:
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            assert client.recv(1024).startswith(b"220 ")
+            client.sendall(b"A" * (SMTP_MAX_LINE + 1) + b"\r\n")
+        thread.join(timeout=2)
+    finally:
+        server.server_close()
+
+    rejected = next(args[1] for args, _kwargs in captured if args[0] == "sensor.input_rejected")
+    assert rejected["sensor_capture"]["rejected"] is True
+    assert rejected["sensor_capture"]["reason"] == "line_too_long"
+    assert rejected["sensor_capture"]["limit"] == SMTP_MAX_LINE
 
 def _redis_exchange(monkeypatch, payload: bytes):
     captured = []
