@@ -140,6 +140,8 @@ Every exported indicator is object-marked according to the configured FIRST TLP 
 FIRST TLP 2.0: https://www.first.org/tlp/
 STIX 2.1 data markings: https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html
 
+Before serialization, the shareable export boundary applies an allowlist and deployment-data sanitizer. IP indicators inside configured sensor management CIDRs are excluded. Configured sensor, ingest and operator secrets are excluded if they appear in indicator values or shareable metadata. Unknown fields — including operator notes or sensor-internal fields — are never copied into the STIX export. Sanitization affects only the shareable export and does not delete historical CTI or honeypot evidence from local storage.
+
 ### STIX 2.1 import
 
 `AEGIS_THREAT_CONTEXT_FILE` may also point to a STIX 2.1 Bundle. The local provider imports only exact `indicator` patterns that map to AEGIS-supported IP, domain, URL or file-hash indicator types. Other STIX objects and non-exact/unsupported patterns are ignored rather than interpreted. The same byte/object/resource bounds and exact-match enrichment semantics apply. Imported STIX is read at provider startup; AEGIS does not modify the source bundle.
@@ -285,6 +287,8 @@ Ogni indicatore esportato riceve object marking coerenti con la sharing policy F
 
 FIRST TLP 2.0: https://www.first.org/tlp/
 Data marking STIX 2.1: https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html
+
+Prima della serializzazione, il confine di export condivisibile applica allowlist e sanitizzazione dei dati di deployment. Gli indicatori IP appartenenti ai CIDR management dei sensori configurati vengono esclusi. Secret sensore, ingest e operatore configurati vengono esclusi se compaiono nei valori degli indicatori o nei metadata condivisibili. I campi sconosciuti — incluse note operatore o proprietà interne dei sensori — non vengono mai copiati nell'export STIX. La sanitizzazione riguarda soltanto l'export condivisibile e non cancella CTI storica o evidenze honeypot dallo storage locale.
 
 ### Import STIX 2.1
 
