@@ -240,9 +240,12 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     def remote_ip_address():
         try:
-            return ipaddress.ip_address(request.remote_addr or "")
+            remote = ipaddress.ip_address(request.remote_addr or "")
         except ValueError:
             return None
+        if isinstance(remote, ipaddress.IPv6Address) and remote.ipv4_mapped is not None:
+            return remote.ipv4_mapped
+        return remote
 
     def sensor_source_allowed(sensor_id: str) -> bool:
         source_cidrs = app.config.get("SENSOR_SOURCE_CIDRS") or {}
