@@ -93,6 +93,40 @@ Operator status is available at:
 
 `GET /api/v1/threat-context/status`
 
+### Custom JSON feed adapter
+
+Non-native JSON feeds can be mapped into the canonical AEGIS indicator schema without custom Python code. Configure exactly one of:
+
+- \`AEGIS_THREAT_CONTEXT_ADAPTER_FILE\` — preferred for deployments; point it to a read-only JSON configuration file.
+- \`AEGIS_THREAT_CONTEXT_ADAPTER_JSON\` — bounded inline JSON for simple mappings.
+
+The adapter is declarative only: dotted paths traverse object keys, and no \`eval\`, executable JSONPath, templates or dynamically imported code are supported. The configuration is capped at 16 KiB.
+
+Example adapter:
+
+\`\`\`json
+{
+  "items_path": "data.records",
+  "source_path": "meta.vendor",
+  "generated_at_path": "meta.created",
+  "fields": {
+    "type": "indicator.kind",
+    "value": "indicator.observable",
+    "confidence": "assessment.score",
+    "labels": "assessment.tags"
+  },
+  "type_map": {
+    "ipv4": "ip",
+    "fqdn": "domain",
+    "uri": "url"
+  }
+}
+\`\`\`
+
+For homogeneous feeds, omit the \`type\` field mapping and set \`fixed_type\` instead. Supported output metadata are \`labels\`, \`confidence\`, \`description\`, \`reference\`, \`first_seen\`, \`last_seen\`, \`valid_from\` and \`valid_until\`. After mapping, every record still passes through AEGIS indicator normalization, metadata bounds, exact-match semantics and provenance handling. Unknown configuration keys are rejected. Unsupported or invalid indicator records are skipped.
+
+A configured custom adapter changes the provider ID to \`local-custom-json\`. It remains offline and does not turn external feed fields into attribution, ATT&CK mappings or CVEs.
+
 ### STIX 2.1 export
 
 Authenticated operators can export the currently loaded normalized feed indicators as a STIX 2.1 Bundle:
@@ -199,6 +233,40 @@ La directory viene montata read-only.
 Lo stato operatore è disponibile tramite:
 
 `GET /api/v1/threat-context/status`
+
+### Adapter per feed JSON personalizzati
+
+I feed JSON non nativi possono essere mappati nello schema canonico degli indicatori AEGIS senza scrivere codice Python personalizzato. Configura una sola delle seguenti opzioni:
+
+- \`AEGIS_THREAT_CONTEXT_ADAPTER_FILE\` — preferita nei deployment; deve puntare a un file JSON di configurazione montato read-only.
+- \`AEGIS_THREAT_CONTEXT_ADAPTER_JSON\` — JSON inline con limite dimensionale, utile per mapping semplici.
+
+L'adapter è esclusivamente dichiarativo: i path con punti attraversano chiavi di oggetti e non sono supportati \`eval\`, JSONPath eseguibile, template o import dinamici di codice. La configurazione è limitata a 16 KiB.
+
+Esempio:
+
+\`\`\`json
+{
+  "items_path": "data.records",
+  "source_path": "meta.vendor",
+  "generated_at_path": "meta.created",
+  "fields": {
+    "type": "indicator.kind",
+    "value": "indicator.observable",
+    "confidence": "assessment.score",
+    "labels": "assessment.tags"
+  },
+  "type_map": {
+    "ipv4": "ip",
+    "fqdn": "domain",
+    "uri": "url"
+  }
+}
+\`\`\`
+
+Per feed omogenei puoi omettere il mapping del campo \`type\` e usare \`fixed_type\`. I metadata di output supportati sono \`labels\`, \`confidence\`, \`description\`, \`reference\`, \`first_seen\`, \`last_seen\`, \`valid_from\` e \`valid_until\`. Dopo il mapping, ogni record passa comunque attraverso normalizzazione indicatori, limiti metadata, semantica exact-match e provenance di AEGIS. Le chiavi di configurazione sconosciute vengono rifiutate; indicatori non validi o non supportati vengono ignorati.
+
+Con un adapter personalizzato il provider ID diventa \`local-custom-json\`. Il funzionamento resta offline e i campi del feed esterno non vengono trasformati in attribuzione, mapping ATT&CK o CVE.
 
 ### Export STIX 2.1
 
