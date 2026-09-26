@@ -241,12 +241,12 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** turn enrichment into a provider-based CTI layer while preserving source provenance.
 
-- [ ] Define Threat Intelligence provider interface
-- [ ] Migrate Local JSON Threat Context to provider interface
-- [ ] Store provider/source/retrieval timestamp for every enrichment
-- [ ] Store confidence only when supplied by the source
-- [ ] Add indicator validity windows where available
-- [ ] Add feed/provider health information
+- [x] Define Threat Intelligence provider interface
+- [x] Migrate Local JSON Threat Context to provider interface
+- [x] Store provider/source/retrieval timestamp for every enrichment
+- [x] Store confidence only when supplied by the source
+- [x] Add indicator validity windows where available
+- [x] Add feed/provider health information
 - [ ] Add STIX 2.x export
 - [ ] Add STIX 2.x import
 - [ ] Evaluate TAXII client support
