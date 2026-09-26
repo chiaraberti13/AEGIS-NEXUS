@@ -256,10 +256,10 @@ These are deliberate design boundaries, not missing features:
 - [x] Strip sensor-internal data (management IPs, sensor secrets, operator notes) from shareable exports
 - [x] Add indicator aging/decay without deleting historical evidence
 - [x] Add benign-scanner context lists as enrichment (never as silent suppression)
-- [ ] Keep observed telemetry separate from Threat Intelligence
-- [ ] Prevent TI matches from automatically creating attribution
-- [ ] Prevent TI matches from inventing MITRE/CVE relationships
-- [ ] Add CTI provenance tests
+- [x] Keep observed telemetry separate from Threat Intelligence
+- [x] Prevent TI matches from automatically creating attribution
+- [x] Prevent TI matches from inventing MITRE/CVE relationships
+- [x] Add CTI provenance tests
 - [ ] Document provider trust and enrichment limitations
 
 **Done when:** every intelligence assertion is attributable to a named source and timestamp and remains separate from observed evidence.
