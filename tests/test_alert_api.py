@@ -1,4 +1,5 @@
 from aegis_nexus.app import create_app
+from aegis_nexus.honeytokens import honeytoken_credential
 
 
 def _app(tmp_path):
@@ -141,3 +142,45 @@ def test_temporal_detection_creates_aggregated_alert_from_historical_evidence(tm
     assert alert["status"] == "new"
     assert {item["id"] for item in alert["evidence"]} == set(event_ids)
     assert alert["confidence"] == 95
+
+
+
+def test_honeytoken_reuse_creates_high_fidelity_alert_after_credential_redaction(tmp_path, monkeypatch):
+    monkeypatch.setenv("AEGIS_HONEYTOKEN_SEED", "integration-honeytoken-seed")
+    token = honeytoken_credential()
+    assert token is not None
+    client = _app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/v1/events",
+        headers={"X-Aegis-Key": "secret"},
+        json={
+            "honeypot": "web-decoy-01",
+            "event_type": "credential",
+            "observed": {
+                "source_ip": "203.0.113.150",
+                "service": "http",
+                "protocol": "tcp",
+                "destination_port": 8080,
+                "credential": {
+                    "username": token.username,
+                    "password": token.password,
+                },
+            },
+        },
+    )
+    assert response.status_code == 201
+    event_id = response.get_json()["id"]
+
+    queue = client.get("/api/v1/alerts?severity=high").get_json()["items"]
+    alert = next(item for item in queue if item["rule_id"] == "honeytoken_reuse")
+    assert alert["confidence"] == 100
+    assert alert["evidence"] == [
+        {
+            "type": "event",
+            "id": event_id,
+            "added_at": alert["evidence"][0]["added_at"],
+        }
+    ]
+    assert token.password not in str(alert)
+    assert token.password_sha256 not in str(alert)
