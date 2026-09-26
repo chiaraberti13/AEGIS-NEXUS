@@ -35,6 +35,12 @@ Personas are presentation only. They do not enable command execution, create rea
 
 The `generic-tcp` plugin is a banner-only, opt-in surface for ports that do not justify a protocol-specific emulator. Compose keeps it behind the `generic` profile. Configure a dedicated `AEGIS_GENERIC_SENSOR_API_KEY`, `AEGIS_GENERIC_TCP_BANNER` and public port before enabling it. The banner is bounded and CR/LF/NUL injection is normalized. Client probe content is not stored; telemetry retains only captured length and SHA-256. The sensor has dedicated exposure/management networks and is covered by the host egress guard.
 
+### Honeytoken credentials
+
+Honeytokens are disabled unless `AEGIS_HONEYTOKEN_SEED` is configured. When enabled, AEGIS derives one deployment-specific synthetic backup credential and plants it in the SSH fake filesystem. The collector derives the same expected username and password fingerprint from the seed. If normalized credential telemetry later contains both values, the Detection Engine emits `honeytoken_reuse` with high severity and 100 confidence. The alert contains evidence references, not the planted password or its fingerprint, and makes no actor-attribution claim.
+
+Use a random deployment-specific seed and treat it as configuration secret material. Honeytokens must never reuse a real username/password or production secret.
+
 ## Italiano
 
 I decoy built-in di AEGIS implementano l'interfaccia comune in `aegis_nexus.sensors.base` e sono registrabili tramite `SensorRegistry`.
@@ -69,3 +75,9 @@ Le persona modificano soltanto la presentazione. Non abilitano esecuzione di com
 ### Sensore banner TCP generico
 
 Il plugin `generic-tcp` è una superficie banner-only e opt-in per porte che non richiedono un emulatore di protocollo specifico. Compose lo mantiene dietro il profilo `generic`. Prima di abilitarlo configura `AEGIS_GENERIC_SENSOR_API_KEY`, `AEGIS_GENERIC_TCP_BANNER` e la porta pubblica dedicata. Il banner è bounded e normalizza injection CR/LF/NUL. Il contenuto del probe client non viene conservato: la telemetria mantiene soltanto lunghezza catturata e SHA-256. Il sensore usa reti exposure/management dedicate ed è incluso nell'egress guard host.
+
+### Credenziali honeytoken
+
+Gli honeytoken sono disabilitati finché non viene configurato `AEGIS_HONEYTOKEN_SEED`. Quando attivi, AEGIS deriva una credenziale sintetica di backup specifica del deployment e la inserisce nel fake filesystem SSH. Il collector deriva dallo stesso seed username e fingerprint attesi. Se la telemetria credential normalizzata contiene successivamente entrambi i valori, il Detection Engine genera `honeytoken_reuse` con severity high e confidence 100. L'alert contiene riferimenti alle evidenze, non la password piantata né il suo fingerprint, e non formula attribuzioni sull'attore.
+
+Usa un seed casuale specifico del deployment e trattalo come materiale di configurazione segreto. Gli honeytoken non devono mai riutilizzare username/password reali o secret di produzione.
