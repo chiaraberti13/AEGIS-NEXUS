@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+from .cti_stix import StixExportError, import_stix_bundle
 from .threat_intelligence import ThreatIntelligenceProvider
 
 SUPPORTED_TYPES = {"ip", "domain", "url", "md5", "sha1", "sha256"}
@@ -186,14 +187,25 @@ class LocalThreatContextEnricher(ThreatIntelligenceProvider):
             payload = json.loads(raw)
             if not isinstance(payload, dict):
                 raise ThreatContextError("feed_root_must_be_object")
-            indicators = payload.get("indicators")
-            if not isinstance(indicators, list):
-                raise ThreatContextError("indicators_must_be_list")
-            if len(indicators) > self.max_indicators:
-                raise ThreatContextError("too_many_indicators")
-            source = _clean_text(payload.get("source"), 256)
-            self.source = source or f"local-threat-feed:{self.path.name}"
-            self.generated_at = _clean_text(payload.get("generated_at"), 128)
+            if payload.get("type") == "bundle":
+                try:
+                    indicators = import_stix_bundle(payload, max_objects=self.max_indicators)
+                except StixExportError as exc:
+                    raise ThreatContextError(str(exc)) from exc
+                self.provider_id = "local-stix"
+                bundle_id = _clean_text(payload.get("id"), 128)
+                self.source = f"stix-bundle:{bundle_id or self.path.name}"
+                self.generated_at = None
+            else:
+                indicators = payload.get("indicators")
+                if not isinstance(indicators, list):
+                    raise ThreatContextError("indicators_must_be_list")
+                if len(indicators) > self.max_indicators:
+                    raise ThreatContextError("too_many_indicators")
+                self.provider_id = "local-json"
+                source = _clean_text(payload.get("source"), 256)
+                self.source = source or f"local-threat-feed:{self.path.name}"
+                self.generated_at = _clean_text(payload.get("generated_at"), 128)
             index: dict[tuple[str, str], list[dict[str, Any]]] = {}
             for raw_item in indicators:
                 if not isinstance(raw_item, dict):
