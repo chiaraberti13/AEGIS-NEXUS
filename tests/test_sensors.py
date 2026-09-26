@@ -1,7 +1,10 @@
 import hashlib
 import io
+import socket
+import threading
 
-from aegis_nexus.sensors.legacy import _readline, _readline_with_status
+from aegis_nexus.sensors.legacy import FTPDataHandler, FTPHandler, _readline, _readline_with_status
+from aegis_nexus.sensors.server import BoundedThreadingTCPServer
 from aegis_nexus.sensors.ssh_decoy import PERSONA as SSH_PERSONA, _base_observed, _fake_command, _read_command
 from aegis_nexus.sensors import web_decoy
 
@@ -156,3 +159,57 @@ def test_web_network_header_truncation_is_disclosed(monkeypatch):
     assert len(observed["network"]["http"]["headers"]["accept_language"]) == 1024
     entries = observed["sensor_capture"]["truncated_fields"]
     assert any(item["path"] == "observed.network.http.headers.accept_language" for item in entries)
+
+
+
+def test_ftp_stor_uses_epsv_and_quarantines_without_local_execution(monkeypatch):
+    payload = b"ftp-hostile-upload-fixture"
+    captured = []
+    monkeypatch.setattr(
+        FTPHandler.sensor,
+        "emit",
+        lambda *args, **kwargs: captured.append((args, kwargs)) or True,
+    )
+    monkeypatch.setattr(
+        FTPHandler.sensor,
+        "quarantine_artifact",
+        lambda data, **kwargs: {
+            "artifact_id": "artifact_ftp_fixture",
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "size": len(data),
+            "original_name": "dropper.bin",
+            "content_type": "application/octet-stream",
+        },
+    )
+
+    data_server = BoundedThreadingTCPServer(("127.0.0.1", 0), FTPDataHandler, max_connections=2)
+    control_server = BoundedThreadingTCPServer(("127.0.0.1", 0), FTPHandler, max_connections=2)
+    FTPHandler.data_port = data_server.server_address[1]
+    data_thread = threading.Thread(target=data_server.handle_request, daemon=True)
+    control_thread = threading.Thread(target=control_server.handle_request, daemon=True)
+    data_thread.start()
+    control_thread.start()
+    try:
+        with socket.create_connection(control_server.server_address, timeout=2) as control:
+            assert control.recv(1024).startswith(b"220 ")
+            control.sendall(b"EPSV\r\n")
+            epsv = control.recv(1024)
+            assert str(FTPHandler.data_port).encode() in epsv
+
+            with socket.create_connection(data_server.server_address, timeout=2) as data:
+                control.sendall(b"STOR ../../dropper.bin\r\n")
+                assert control.recv(1024).startswith(b"150 ")
+                data.sendall(payload)
+            assert control.recv(1024).startswith(b"226 ")
+            control.sendall(b"QUIT\r\n")
+            assert control.recv(1024).startswith(b"221 ")
+        data_thread.join(timeout=2)
+        control_thread.join(timeout=2)
+    finally:
+        data_server.server_close()
+        control_server.server_close()
+
+    event = next(args[1] for args, _kwargs in captured if args[0] == "artifact.quarantined")
+    assert event["artifact"]["sha256"] == hashlib.sha256(payload).hexdigest()
+    assert event["artifact"]["inline_serving"] is False
+    assert payload.decode() not in str(event)
