@@ -304,7 +304,11 @@ class DetectionEngine:
                 title="Repeated authentication failures observed",
                 severity="medium",
                 confidence=95,
-                description="Five or more credential attempts from the same source were observed within five minutes.",
+                description=(
+                    f"{self.config.threshold('multiple_auth_failures', 'attempts')} or more credential attempts "
+                    f"from the same source were observed within "
+                    f"{self.config.threshold('multiple_auth_failures', 'window_seconds')} seconds."
+                ),
                 evidence=auth_events,
             ))
 
@@ -324,7 +328,12 @@ class DetectionEngine:
                 title="Credential brute-force pattern observed",
                 severity="high",
                 confidence=90,
-                description="Ten or more credential attempts covering at least five usernames were observed from the same source within ten minutes.",
+                description=(
+                    f"{self.config.threshold('credential_bruteforce', 'attempts')} or more credential attempts "
+                    f"covering at least {self.config.threshold('credential_bruteforce', 'usernames')} usernames "
+                    f"were observed from the same source within "
+                    f"{self.config.threshold('credential_bruteforce', 'window_seconds')} seconds."
+                ),
                 evidence=brute_events,
             ))
 
@@ -350,7 +359,13 @@ class DetectionEngine:
                     title="Credential secret fingerprint reused across sources",
                     severity="medium",
                     confidence=90,
-                    description="The same complete credential-secret fingerprint was observed from at least two source IPs within 24 hours. This is evidence of reuse, not actor attribution.",
+                    description=(
+                        "The same complete credential-secret fingerprint was observed in at least "
+                        f"{self.config.threshold('credential_reuse', 'events')} events from at least "
+                        f"{self.config.threshold('credential_reuse', 'sources')} source IPs within "
+                        f"{self.config.threshold('credential_reuse', 'window_seconds')} seconds. "
+                        "This is evidence of reuse, not actor attribution."
+                    ),
                     evidence=reused,
                 ))
 
@@ -373,7 +388,11 @@ class DetectionEngine:
                 title="Web path scanning pattern observed",
                 severity="medium",
                 confidence=85,
-                description="Eight or more distinct HTTP paths were observed from the same source within five minutes.",
+                description=(
+                    f"{self.config.threshold('web_scanning', 'paths')} or more distinct HTTP paths "
+                    f"were observed from the same source within "
+                    f"{self.config.threshold('web_scanning', 'window_seconds')} seconds."
+                ),
                 evidence=web_events,
             ))
 
@@ -393,7 +412,11 @@ class DetectionEngine:
                 title="Repeated path traversal sequence observed",
                 severity="high",
                 confidence=95,
-                description="Three or more requests or payloads containing path-traversal evidence were observed from the same source within five minutes.",
+                description=(
+                    f"{self.config.threshold('path_traversal_sequence', 'events')} or more requests or payloads "
+                    f"containing path-traversal evidence were observed from the same source within "
+                    f"{self.config.threshold('path_traversal_sequence', 'window_seconds')} seconds."
+                ),
                 evidence=traversal_events,
             ))
 
@@ -407,7 +430,11 @@ class DetectionEngine:
                 title="Rapid multi-port sequence observed",
                 severity="medium",
                 confidence=90,
-                description="Five or more distinct destination ports were observed from the same source within two minutes.",
+                description=(
+                    f"{self.config.threshold('rapid_port_sequence', 'ports')} or more distinct destination ports "
+                    f"were observed from the same source within "
+                    f"{self.config.threshold('rapid_port_sequence', 'window_seconds')} seconds."
+                ),
                 evidence=rapid_window,
             ))
 
@@ -429,7 +456,12 @@ class DetectionEngine:
                 title="Reconnaissance burst observed",
                 severity="medium",
                 confidence=85,
-                description="At least fifteen events with multi-service or multi-port breadth were observed from the same source within five minutes.",
+                description=(
+                    f"At least {self.config.threshold('recon_burst', 'events')} events with at least "
+                    f"{self.config.threshold('recon_burst', 'services')} services or "
+                    f"{self.config.threshold('recon_burst', 'ports')} ports were observed from the same source "
+                    f"within {self.config.threshold('recon_burst', 'window_seconds')} seconds."
+                ),
                 evidence=recon_window,
             ))
 
