@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..honeytokens import honeytoken_credential
+
 MAX_PERSONA_BYTES = 65536
 MAX_FAKE_FILES = 64
 MAX_FAKE_FILE_BYTES = 4096
@@ -163,6 +165,33 @@ def default_fingerprint_markers(persona: DecoyPersona) -> tuple[str, ...]:
         if marker in lowered
     )
 
+def _with_honeytoken(persona: DecoyPersona) -> DecoyPersona:
+    token = honeytoken_credential()
+    if token is None:
+        return persona
+    fake_files = dict(persona.fake_files)
+    path = f"/home/{persona.username}/.backup-service.env"
+    fake_files.setdefault(
+        path,
+        f"BACKUP_USER={token.username}\nBACKUP_PASSWORD={token.password}\n",
+    )
+    return DecoyPersona(
+        name=persona.name,
+        hostname=persona.hostname,
+        username=persona.username,
+        os_name=persona.os_name,
+        os_version=persona.os_version,
+        ssh_version=persona.ssh_version,
+        web_title=persona.web_title,
+        web_heading=persona.web_heading,
+        smtp_hostname=persona.smtp_hostname,
+        ftp_banner=persona.ftp_banner,
+        telnet_banner=persona.telnet_banner,
+        redis_version=persona.redis_version,
+        mysql_version=persona.mysql_version,
+        fake_files=fake_files,
+    )
+
 def load_persona() -> DecoyPersona:
     defaults = _default_persona()
     raw = os.getenv("AEGIS_DECOY_PERSONA_JSON", "").strip()
@@ -176,7 +205,7 @@ def load_persona() -> DecoyPersona:
             raise ValueError("decoy persona file exceeds size limit")
         raw = data.decode("utf-8", "strict")
     if not raw:
-        return defaults
+        return _with_honeytoken(defaults)
     if len(raw.encode("utf-8")) > MAX_PERSONA_BYTES:
         raise ValueError("decoy persona JSON exceeds size limit")
     try:
@@ -186,7 +215,7 @@ def load_persona() -> DecoyPersona:
     if not isinstance(payload, dict):
         raise ValueError("decoy persona must be a JSON object")
 
-    return DecoyPersona(
+    return _with_honeytoken(DecoyPersona(
         name=_text(payload.get("name"), defaults.name, 64),
         hostname=_text(payload.get("hostname"), defaults.hostname, 63),
         username=_text(payload.get("username"), defaults.username, 64),
@@ -201,4 +230,4 @@ def load_persona() -> DecoyPersona:
         redis_version=_text(payload.get("redis_version"), defaults.redis_version, 32),
         mysql_version=_text(payload.get("mysql_version"), defaults.mysql_version, 32),
         fake_files=_fake_files(payload.get("fake_files"), defaults.fake_files),
-    )
+    ))
