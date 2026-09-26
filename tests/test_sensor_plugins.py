@@ -3,6 +3,7 @@ import threading
 
 import pytest
 
+from aegis_nexus.honeytokens import honeytoken_credential
 from aegis_nexus.sensors.base import SensorCapabilities, SensorConfig
 from aegis_nexus.sensors.catalog import load_builtin_sensors
 from aegis_nexus.sensors.generic_tcp import (
@@ -531,3 +532,24 @@ def test_generic_tcp_banner_emits_hash_only_probe_telemetry(monkeypatch):
     assert event["probe"]["content_stored"] is False
     assert probe.decode() not in str(event)
     assert GenericTCPSensorPlugin.capabilities.executes_attacker_input is False
+
+
+
+def test_honeytoken_is_planted_only_when_operator_seed_is_configured(monkeypatch):
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_JSON", raising=False)
+    monkeypatch.delenv("AEGIS_DECOY_PERSONA_FILE", raising=False)
+    monkeypatch.delenv("AEGIS_HONEYTOKEN_SEED", raising=False)
+    without_token = load_persona()
+    assert not any(path.endswith(".backup-service.env") for path in without_token.fake_files)
+
+    monkeypatch.setenv("AEGIS_HONEYTOKEN_SEED", "persona-honeytoken-seed")
+    token = honeytoken_credential()
+    assert token is not None
+    with_token = load_persona()
+    planted = next(
+        content
+        for path, content in with_token.fake_files.items()
+        if path.endswith(".backup-service.env")
+    )
+    assert f"BACKUP_USER={token.username}" in planted
+    assert f"BACKUP_PASSWORD={token.password}" in planted
