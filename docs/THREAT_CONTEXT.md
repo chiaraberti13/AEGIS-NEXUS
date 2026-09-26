@@ -66,6 +66,10 @@ The feed root is a JSON object:
 
 The example uses documentation-only data and is not shipped as live threat intelligence.
 
+### Benign scanner context
+
+Operators may mount a local JSON list through \`AEGIS_BENIGN_SCANNER_FILE\` using entries such as \`{"cidr":"198.51.100.0/24","name":"lab scanner"}\`. Matching source IPs receive \`enrichment.benign_scanner_context\` with source/retrieval provenance, \`context_only: true\` and \`suppression: false\`. The match never changes severity, drops telemetry, suppresses detections or closes alerts. File size and entry count are bounded.
+
 ### Indicator aging and decay
 
 AEGIS preserves source-supplied confidence unchanged and derives freshness separately. When a match has \`last_seen\`, \`first_seen\`, or a feed \`generated_at\` timestamp, the stored match receives an \`aging\` block containing the timestamp basis, \`age_days\`, a \`fresh\` / \`stale\` / \`aged\` state and a deterministic \`freshness_score\` from 100 to 0. Defaults are 30 days before stale and 90 days before aged; configure them with \`AEGIS_CTI_STALE_AFTER_DAYS\` and \`AEGIS_CTI_AGED_AFTER_DAYS\`.
@@ -219,6 +223,10 @@ La radice del feed è un oggetto JSON:
 ```
 
 L'esempio usa esclusivamente dati di documentazione e non viene distribuito come Threat Intelligence reale.
+
+### Contesto scanner benigni
+
+Gli operatori possono montare una lista JSON locale tramite \`AEGIS_BENIGN_SCANNER_FILE\`, con entry come \`{"cidr":"198.51.100.0/24","name":"lab scanner"}\`. Gli IP sorgente corrispondenti ricevono \`enrichment.benign_scanner_context\` con provenance di sorgente/retrieval, \`context_only: true\` e \`suppression: false\`. Il match non modifica la severity, non elimina telemetria, non sopprime detection e non chiude alert. Dimensione file e numero di entry sono bounded.
 
 ### Aging e decay degli indicatori
 
