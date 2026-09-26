@@ -555,3 +555,16 @@ def test_honeytoken_is_planted_only_when_operator_seed_is_configured(monkeypatch
     )
     assert f"BACKUP_USER={token.username}" in planted
     assert f"BACKUP_PASSWORD={token.password}" in planted
+
+
+
+def test_bounded_tcp_server_can_bind_ipv6_loopback():
+    try:
+        server = BoundedThreadingTCPServer(("::1", 0), GenericTCPHandler, max_connections=1)
+    except OSError:
+        pytest.skip("IPv6 loopback is not available on this runner")
+    try:
+        assert server.address_family == socket.AF_INET6
+        assert ":" in server.server_address[0]
+    finally:
+        server.server_close()
