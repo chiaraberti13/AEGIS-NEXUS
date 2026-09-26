@@ -128,9 +128,10 @@ def _bounded_metadata(item: dict[str, Any]) -> dict[str, Any]:
 
 
 class LocalThreatContextEnricher(ThreatIntelligenceProvider):
+    """Offline exact-match threat context from an operator-supplied JSON feed."""
+
     provider_id = "local-json"
     network_requests = False
-    """Offline exact-match threat context from an operator-supplied JSON feed."""
 
     def __init__(
         self,
