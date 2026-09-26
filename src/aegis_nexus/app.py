@@ -30,6 +30,7 @@ from .store import Store
 from .study import explain, explain_session
 from .suricata import SuricataValidationError, normalize_eve_event
 from .threat_context import LocalThreatContextEnricher
+from .threat_intelligence import validate_provider
 from .time_integrity import EventClockError, utc_now_iso, validate_event_clock
 
 
@@ -203,6 +204,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             max_indicators=int(app.config.get("THREAT_CONTEXT_MAX_INDICATORS", 100000)),
             max_matches=int(app.config.get("THREAT_CONTEXT_MAX_MATCHES", 32)),
         )
+        validate_provider(threat_context)
 
     app.extensions["aegis_store"] = store
     app.extensions["aegis_alert_store"] = alert_store
@@ -215,6 +217,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
     app.extensions["aegis_threat_context"] = threat_context
+    app.extensions["aegis_threat_intelligence_provider"] = threat_context
     close_enricher = getattr(enricher, "close", None)
     if callable(close_enricher):
         atexit.register(close_enricher)
