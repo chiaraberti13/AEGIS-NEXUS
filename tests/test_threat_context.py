@@ -207,3 +207,54 @@ def test_local_feed_confidence_is_absent_when_source_does_not_supply_it(tmp_path
 
     match = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"][0]
     assert "confidence" not in match
+
+
+
+def test_local_feed_preserves_only_valid_source_supplied_indicator_validity_window(tmp_path):
+    feed = tmp_path / "feed.json"
+    _write_feed(feed, [{
+        "type": "ip",
+        "value": "1.1.1.1",
+        "valid_from": "2026-09-01T00:00:00Z",
+        "valid_until": "2026-10-01T00:00:00+00:00",
+    }])
+    provider = LocalThreatContextEnricher(str(feed))
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "1.1.1.1",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+    })
+    match = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"][0]
+    assert match["valid_from"] == "2026-09-01T00:00:00+00:00"
+    assert match["valid_until"] == "2026-10-01T00:00:00+00:00"
+
+
+def test_local_feed_drops_invalid_or_reversed_validity_window(tmp_path):
+    feed = tmp_path / "feed.json"
+    _write_feed(feed, [
+        {
+            "type": "ip",
+            "value": "9.9.9.9",
+            "valid_from": "2026-10-01T00:00:00Z",
+            "valid_until": "2026-09-01T00:00:00Z",
+        }
+    ])
+    provider = LocalThreatContextEnricher(str(feed))
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "9.9.9.9",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+    })
+    match = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"][0]
+    assert "valid_from" not in match
+    assert "valid_until" not in match
