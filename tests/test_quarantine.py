@@ -11,7 +11,7 @@ from aegis_nexus.sensors import web_decoy
 
 def test_quarantine_store_hashes_bounds_and_uses_private_random_file(tmp_path):
     root = tmp_path / "quarantine"
-    store = QuarantineStore(str(root), max_bytes=32, max_files=2)
+    store = QuarantineStore(str(root), max_bytes=1024, max_files=2)
     payload = b"hostile-fixture-bytes"
 
     artifact = store.store(
@@ -34,11 +34,11 @@ def test_quarantine_store_hashes_bounds_and_uses_private_random_file(tmp_path):
         assert (stored.stat().st_mode & 0o777) == 0o600
 
     with pytest.raises(QuarantineError, match="artifact_too_large"):
-        store.store(b"A" * 33, sensor_id="web-decoy-01")
+        store.store(b"A" * 1025, sensor_id="web-decoy-01")
 
 
 def test_quarantine_store_enforces_file_count_limit(tmp_path):
-    store = QuarantineStore(str(tmp_path / "q"), max_bytes=32, max_files=1)
+    store = QuarantineStore(str(tmp_path / "q"), max_bytes=1024, max_files=1)
     store.store(b"one", sensor_id="web-decoy-01")
     with pytest.raises(QuarantineError, match="quarantine_file_limit_reached"):
         store.store(b"two", sensor_id="web-decoy-01")
@@ -49,7 +49,7 @@ def test_collector_accepts_sensor_quarantine_upload_but_has_no_inline_get_route(
         "TESTING": True,
         "DATABASE_PATH": str(tmp_path / "aegis.db"),
         "QUARANTINE_DIR": str(tmp_path / "quarantine"),
-        "QUARANTINE_MAX_BYTES": 64,
+        "QUARANTINE_MAX_BYTES": 1024,
         "QUARANTINE_MAX_FILES": 2,
         "INGEST_API_KEY": "secret",
     })
