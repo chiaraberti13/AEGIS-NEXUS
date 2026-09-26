@@ -14,6 +14,7 @@ from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .alerts import AlertStore
+from .benign_scanners import BenignScannerContext
 from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
 from .cti_stix import export_stix_bundle
 from .cti_sharing import sanitize_shareable_indicators
@@ -150,6 +151,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         CTI_EXPORT_TLP=os.getenv("AEGIS_CTI_EXPORT_TLP", "TLP:AMBER+STRICT"),
         CTI_STALE_AFTER_DAYS=int(os.getenv("AEGIS_CTI_STALE_AFTER_DAYS", "30")),
         CTI_AGED_AFTER_DAYS=int(os.getenv("AEGIS_CTI_AGED_AFTER_DAYS", "90")),
+        BENIGN_SCANNER_FILE=os.getenv("AEGIS_BENIGN_SCANNER_FILE", ""),
+        BENIGN_SCANNER_MAX_BYTES=int(os.getenv("AEGIS_BENIGN_SCANNER_MAX_BYTES", "1048576")),
+        BENIGN_SCANNER_MAX_ENTRIES=int(os.getenv("AEGIS_BENIGN_SCANNER_MAX_ENTRIES", "10000")),
         MAX_FUTURE_EVENT_SKEW_SECONDS=int(os.getenv("AEGIS_MAX_FUTURE_EVENT_SKEW_SECONDS", "300")),
         PCAP_ENABLED=os.getenv("AEGIS_PCAP_ENABLED", "false").lower() in {"1", "true", "yes"},
         PCAP_DIR=os.getenv("AEGIS_PCAP_DIR", "/data/pcap"),
@@ -232,7 +236,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
     app.extensions["aegis_threat_context"] = threat_context
+    benign_scanners = BenignScannerContext(
+        str(app.config.get("BENIGN_SCANNER_FILE") or ""),
+        max_bytes=int(app.config.get("BENIGN_SCANNER_MAX_BYTES", 1048576)),
+        max_entries=int(app.config.get("BENIGN_SCANNER_MAX_ENTRIES", 10000)),
+    )
+
     app.extensions["aegis_threat_intelligence_provider"] = threat_context
+    app.extensions["aegis_benign_scanners"] = benign_scanners
     close_enricher = getattr(enricher, "close", None)
     if callable(close_enricher):
         atexit.register(close_enricher)
@@ -487,6 +498,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
+            event = benign_scanners.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
             for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
                 alert_store.record(finding, stored["timestamp"])
@@ -528,6 +540,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = derive_observed_artifacts(event)
             event = enricher.enrich(event)
             event = threat_context.enrich(event)
+            event = benign_scanners.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
             for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
                 alert_store.record(finding, stored["timestamp"])
@@ -677,6 +690,10 @@ def create_app(test_config: dict | None = None) -> Flask:
             "configured": True,
             "network_requests": None,
         })
+
+    @app.get("/api/v1/benign-scanners/status")
+    def benign_scanner_status():
+        return jsonify(benign_scanners.status())
 
     @app.get("/api/v1/threat-context/status")
     def threat_context_status():
