@@ -698,8 +698,9 @@ def test_sensor_heartbeat_identity_header_cannot_spoof_another_sensor(tmp_path):
 
 
 
-def test_console_exposes_behavioral_analytics_drilldown_ui(client):
-    response = client.get("/")
+def test_console_exposes_behavioral_analytics_drilldown_ui(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE_PATH": str(tmp_path / "analytics-ui.db")})
+    response = app.test_client().get("/")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'id="behavioral-baselines"' in html
@@ -707,8 +708,9 @@ def test_console_exposes_behavioral_analytics_drilldown_ui(client):
     assert 'data-i18n="behavioral.limit"' in html
 
 
-def test_static_app_uses_text_content_for_behavioral_finding_evidence(client):
-    response = client.get("/static/app.js")
+def test_static_app_uses_text_content_for_behavioral_finding_evidence(tmp_path):
+    app = create_app({"TESTING": True, "DATABASE_PATH": str(tmp_path / "analytics-static.db")})
+    response = app.test_client().get("/static/app.js")
     assert response.status_code == 200
     script = response.get_data(as_text=True)
     assert "function renderBehavioralAnalytics(data)" in script
