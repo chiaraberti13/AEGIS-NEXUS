@@ -716,3 +716,49 @@ def test_cti_aging_stale_score_is_separate_from_source_confidence(tmp_path, monk
     assert match["confidence"] == 55
     assert match["aging"]["state"] == "stale"
     assert 0 < match["aging"]["freshness_score"] < 100
+
+
+
+def test_cti_provenance_boundary_preserves_observed_and_rejects_attribution_mitre_cve(tmp_path):
+    feed = tmp_path / "hostile-cti.json"
+    _write_feed(feed, [{
+        "type": "ip",
+        "value": "198.51.100.111",
+        "confidence": 81,
+        "labels": ["external-context"],
+        "actor": "invented-actor",
+        "campaign": "invented-campaign",
+        "mitre": ["T0000"],
+        "cve": ["CVE-2099-0001"],
+        "attribution": "must-not-propagate",
+    }])
+    provider = LocalThreatContextEnricher(str(feed))
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "connection",
+        "severity": "low",
+        "observed": {
+            "source_ip": "198.51.100.111",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 22,
+        },
+    })
+    observed_before = json.loads(json.dumps(event["observed"]))
+    enriched = provider.enrich(event)
+
+    assert event["observed"] == observed_before
+    assert enriched["observed"] == observed_before
+    assert enriched["severity"] == "low"
+    assert enriched["derived"].get("mitre") is None
+    assert enriched["derived"].get("cve") is None
+
+    block = enriched["enrichment"]["threat_context"]
+    assert block["provider"] == "local-json"
+    assert block["source"] == "fixture-feed"
+    assert block["retrieved_at"] == provider.loaded_at
+    assert block["observed_at"]
+    match = block["data"]["matches"][0]
+    assert match["confidence"] == 81
+    for forbidden in ("actor", "campaign", "mitre", "cve", "attribution"):
+        assert forbidden not in match
