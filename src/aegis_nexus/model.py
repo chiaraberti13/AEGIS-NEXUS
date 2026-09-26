@@ -141,7 +141,10 @@ def _normalize_ip(value: Any, field: str = "source_ip") -> str | None:
     if not value:
         return None
     try:
-        return str(ipaddress.ip_address(str(value)))
+        address = ipaddress.ip_address(str(value))
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+            address = address.ipv4_mapped
+        return str(address)
     except ValueError as exc:
         raise EventValidationError(f"invalid {field}") from exc
 
