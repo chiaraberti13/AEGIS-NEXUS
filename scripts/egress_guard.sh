@@ -51,6 +51,7 @@ subnets=(
   "$(resolve_subnet AEGIS_REDIS_EXPOSURE_SUBNET 172.30.105.0/24)"
   "$(resolve_subnet AEGIS_MYSQL_EXPOSURE_SUBNET 172.30.106.0/24)"
   "$(resolve_subnet AEGIS_SMB_EXPOSURE_SUBNET 172.30.107.0/24)"
+  "$(resolve_subnet AEGIS_GENERIC_EXPOSURE_SUBNET 172.30.108.0/24)"
 )
 
 validate_subnets() {
