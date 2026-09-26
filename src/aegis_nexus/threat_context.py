@@ -101,6 +101,19 @@ def normalize_indicator(kind: Any, value: Any) -> tuple[str, str] | None:
     return kind_text, text
 
 
+def _iso_timestamp(value: Any) -> str | None:
+    text = _clean_text(value, 128)
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
 def _bounded_metadata(item: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     labels = item.get("labels")
@@ -124,6 +137,16 @@ def _bounded_metadata(item: dict[str, Any]) -> dict[str, Any]:
         text = _clean_text(item.get(key), limit)
         if text:
             result[key] = text
+    valid_from = _iso_timestamp(item.get("valid_from"))
+    valid_until = _iso_timestamp(item.get("valid_until"))
+    if valid_from and valid_until:
+        if datetime.fromisoformat(valid_from) <= datetime.fromisoformat(valid_until):
+            result["valid_from"] = valid_from
+            result["valid_until"] = valid_until
+    elif valid_from:
+        result["valid_from"] = valid_from
+    elif valid_until:
+        result["valid_until"] = valid_until
     return result
 
 
