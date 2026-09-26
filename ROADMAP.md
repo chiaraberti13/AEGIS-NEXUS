@@ -224,8 +224,8 @@ These are deliberate design boundaries, not missing features:
 - [x] Evaluate SNMP decoy
 - [x] Add generic TCP banner decoy
 - [x] Evaluate read-only Modbus/TCP ICS decoy _(evaluate)_
-- [ ] Add honeytokens/canary credentials planted in decoy content
-- [ ] Raise high-fidelity alerts when a planted honeytoken is reused on any sensor
+- [x] Add honeytokens/canary credentials planted in decoy content
+- [x] Raise high-fidelity alerts when a planted honeytoken is reused on any sensor
 - [ ] Capture attacker uploads (FTP `STOR`, web uploads, SSH `scp`/`sftp` where emulated) into an inert quarantine store
 - [ ] Hash quarantined artifacts (SHA-256), enforce size/count limits and never serve them inline
 - [ ] Verify IPv6 listening, normalization and egress-guard coverage for every sensor
