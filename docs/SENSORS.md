@@ -23,6 +23,8 @@ To add a custom sensor:
 
 A custom sensor must emulate an attack surface; it must not execute commands, payloads, uploaded code or authentication material supplied by a remote client.
 
+For the complete plugin contract, containment checklist, evidence rules and required test gate, see [`CUSTOM_SENSORS.md`](CUSTOM_SENSORS.md).
+
 ### Deployment personas
 
 Built-in decoys load one bounded operator-controlled persona from `AEGIS_DECOY_PERSONA_JSON` or, for direct deployments, `AEGIS_DECOY_PERSONA_FILE`. A persona can change hostname, emulated username, Web title/heading, SMTP/FTP/Telnet banners, Redis/MySQL version strings and the SSH fake filesystem without changing collector logic. Persona files are limited to 64 KiB; fake files are limited in count and size, absolute paths only, and traversal paths are rejected. Protocol identity fields strip CR/LF/NUL characters before use.
@@ -67,6 +69,8 @@ Per aggiungere un sensore custom:
 8. aggiungi test di protocollo, hostile-input, isolamento e Compose/CI prima di abilitare il sensore.
 
 Un sensore custom deve emulare una superficie di attacco; non deve eseguire comandi, payload, codice caricato o materiale di autenticazione fornito da un client remoto.
+
+Per contratto plugin completo, checklist di contenimento, regole sulle evidenze e test gate obbligatorio, consulta [`CUSTOM_SENSORS.md`](CUSTOM_SENSORS.md).
 
 ### Persona di deployment
 
