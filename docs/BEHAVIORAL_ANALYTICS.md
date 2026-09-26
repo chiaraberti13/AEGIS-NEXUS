@@ -39,6 +39,16 @@ When the 30-day baseline is ready, an exact observed command is \`rare_command\`
 
 \`command_frequency_spike\` compares the exact command's count in the current 24-hour window with its seven-day daily average. The deterministic threshold is \`max(5, ceil(3 × seven-day daily average))\`. The finding exposes the 24-hour count, seven-day average, threshold, formula and supporting event references. These are frequency measurements only.
 
+### Rate, duration and clustering analytics
+
+\`authentication_attempt_burst\` measures credential events from one source in five minutes. Its threshold is \`max(5, ceil(5 × 30-day expected events per five minutes))\`.
+
+\`event_rate_recon_burst\` measures all events from one source in five minutes and additionally requires breadth of at least five destination ports or three services. Its rate threshold is \`max(15, ceil(5 × 30-day expected events per five minutes))\`.
+
+\`unusual_session_duration\` requires at least ten historical sessions with measurable durations. The current session is reported only when its duration reaches \`max(1800 seconds, 2 × historical duration p95)\`. The current session is excluded from its own historical distribution.
+
+\`campaign_cluster_hypothesis\` is deliberately a hypothesis, not a detection or attribution. A related source must share at least two concrete features with the anchor event (username, payload SHA-256, command SHA-256 and/or exact URL/domain artifacts). The result lists the shared evidence and source IPs but explicitly does not claim common actor, ownership or campaign identity.
+
 ### API drill-down
 
 \`GET /api/v1/analytics/events/<event_id>\` returns the three baseline windows, cold-start/truncation policy, historical scope and findings for that event.
@@ -85,6 +95,16 @@ Lo SHA-256 del payload usato dalle analytics è un fingerprint deterministico de
 Quando la baseline 30 giorni è ready, un comando osservato esatto viene classificato \`rare_command\` se compare al massimo una volta nello storico precedente di 30 giorni. Il finding riporta il numero esatto di occorrenze storiche.
 
 \`command_frequency_spike\` confronta il conteggio del comando esatto nella finestra corrente di 24 ore con la sua media giornaliera sui sette giorni. La soglia deterministica è \`max(5, ceil(3 × media giornaliera 7 giorni))\`. Il finding espone conteggio 24h, media 7 giorni, soglia, formula e riferimenti agli eventi di supporto. Sono esclusivamente misure di frequenza.
+
+### Analitiche di rate, durata e clustering
+
+\`authentication_attempt_burst\` misura gli eventi credential di una sorgente in cinque minuti. La soglia è \`max(5, ceil(5 × eventi attesi per cinque minuti dalla baseline 30 giorni))\`.
+
+\`event_rate_recon_burst\` misura tutti gli eventi di una sorgente in cinque minuti e richiede inoltre una breadth di almeno cinque porte destinazione o tre servizi. La soglia di rate è \`max(15, ceil(5 × eventi attesi per cinque minuti dalla baseline 30 giorni))\`.
+
+\`unusual_session_duration\` richiede almeno dieci sessioni storiche con durata misurabile. La sessione corrente viene segnalata soltanto quando raggiunge \`max(1800 secondi, 2 × p95 storico delle durate)\`. La sessione corrente è esclusa dalla propria distribuzione storica.
+
+\`campaign_cluster_hypothesis\` è intenzionalmente un'ipotesi, non una detection né attribuzione. Una sorgente correlata deve condividere almeno due caratteristiche concrete con l'evento anchor (username, SHA-256 payload, SHA-256 comando e/o artefatti URL/domain esatti). Il risultato elenca evidenze condivise e source IP ma non afferma identità comune dell'attore, ownership o identità di campagna.
 
 ### Drill-down API
 
