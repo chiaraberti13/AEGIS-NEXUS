@@ -4,6 +4,7 @@ import pytest
 
 from aegis_nexus.app import create_app
 from aegis_nexus.cti_stix import export_stix_bundle, import_stix_bundle, indicator_pattern
+from aegis_nexus.custom_feed import CustomFeedAdapterError, load_custom_feed_adapter_config
 from aegis_nexus.model import normalize_event
 from aegis_nexus.threat_context import LocalThreatContextEnricher, normalize_indicator
 from aegis_nexus.threat_intelligence import ThreatIntelligenceProvider, validate_provider
@@ -402,3 +403,135 @@ def test_local_provider_can_load_stix_bundle_as_exact_match_context(tmp_path):
     assert match["value"] == "payload.example.org"
     assert match["confidence"] == 90
     assert "actor" not in match
+
+
+
+def test_custom_feed_adapter_maps_nested_vendor_schema_without_inventing_metadata(tmp_path):
+    feed = tmp_path / "vendor.json"
+    feed.write_text(json.dumps({
+        "meta": {"vendor": "example-vendor", "created": "2026-09-25T10:00:00Z"},
+        "data": {
+            "records": [
+                {
+                    "indicator": {"kind": "ipv4", "observable": "198.51.100.90"},
+                    "assessment": {"score": 72, "tags": ["scanner"]},
+                },
+                {
+                    "indicator": {"kind": "fqdn", "observable": "Payload.Example.ORG"},
+                    "assessment": {"tags": ["payload-host"]},
+                },
+            ]
+        },
+    }), encoding="utf-8")
+    config = {
+        "items_path": "data.records",
+        "source_path": "meta.vendor",
+        "generated_at_path": "meta.created",
+        "fields": {
+            "type": "indicator.kind",
+            "value": "indicator.observable",
+            "confidence": "assessment.score",
+            "labels": "assessment.tags",
+        },
+        "type_map": {"ipv4": "ip", "fqdn": "domain"},
+    }
+    provider = LocalThreatContextEnricher(str(feed), adapter_config=config)
+    assert provider.provider_id == "local-custom-json"
+    assert provider.status()["ready"] is True
+    assert provider.status()["custom_adapter"] is True
+    assert provider.status()["source"] == "example-vendor"
+
+    event = normalize_event({
+        "honeypot": "web-1",
+        "event_type": "web.payload",
+        "observed": {
+            "source_ip": "198.51.100.90",
+            "service": "http",
+            "protocol": "tcp",
+            "destination_port": 80,
+        },
+        "derived": {"ioc": [{
+            "type": "domain",
+            "value": "payload.example.org",
+            "classification": "observed_artifact",
+            "evidence": ["observed.payload"],
+        }]},
+    })
+    matches = provider.enrich(event)["enrichment"]["threat_context"]["data"]["matches"]
+    by_type = {item["type"]: item for item in matches}
+    assert by_type["ip"]["confidence"] == 72
+    assert "confidence" not in by_type["domain"]
+    serialized = json.dumps(matches).lower()
+    assert "threat_actor" not in serialized
+    assert "mitre" not in serialized
+    assert "cve" not in serialized
+
+
+def test_custom_feed_adapter_supports_fixed_type_and_operator_source(tmp_path):
+    feed = tmp_path / "domains.json"
+    feed.write_text(json.dumps({"entries": [{"name": "Example.ORG"}]}), encoding="utf-8")
+    provider = LocalThreatContextEnricher(str(feed), adapter_config={
+        "items_path": "entries",
+        "source": "operator-domain-list",
+        "fixed_type": "domain",
+        "fields": {"value": "name"},
+    })
+    indicators = provider.indicators()
+    assert indicators == [{"type": "domain", "value": "example.org"}]
+    assert provider.status()["source"] == "operator-domain-list"
+
+
+def test_custom_feed_adapter_config_is_bounded_and_mutually_exclusive(tmp_path):
+    config_path = tmp_path / "adapter.json"
+    config_path.write_text(json.dumps({
+        "items_path": "items",
+        "fixed_type": "ip",
+        "fields": {"value": "address"},
+    }), encoding="utf-8")
+    loaded = load_custom_feed_adapter_config(file_path=str(config_path))
+    assert loaded["fixed_type"] == "ip"
+
+    with pytest.raises(CustomFeedAdapterError, match="configure_only_one"):
+        load_custom_feed_adapter_config(raw_json="{}", file_path=str(config_path))
+
+    with pytest.raises(CustomFeedAdapterError, match="adapter_config_too_large"):
+        load_custom_feed_adapter_config(raw_json=" " * (16 * 1024 + 1))
+
+
+def test_custom_feed_adapter_rejects_unknown_config_and_missing_required_mapping():
+    with pytest.raises(CustomFeedAdapterError, match="unsupported_adapter_config_key"):
+        load_custom_feed_adapter_config(raw_json=json.dumps({
+            "items_path": "items",
+            "fixed_type": "ip",
+            "fields": {"value": "address"},
+            "python": "do-not-evaluate",
+        }))
+    with pytest.raises(CustomFeedAdapterError, match="adapter_value_field_required"):
+        load_custom_feed_adapter_config(raw_json=json.dumps({
+            "items_path": "items",
+            "fixed_type": "ip",
+            "fields": {"description": "note"},
+        }))
+
+
+def test_collector_uses_inline_custom_feed_adapter_config(tmp_path):
+    feed = tmp_path / "custom.json"
+    feed.write_text(json.dumps({
+        "rows": [{"category": "address", "observable": "203.0.113.77", "score": 88}]
+    }), encoding="utf-8")
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "custom.db"),
+        "THREAT_CONTEXT_FILE": str(feed),
+        "THREAT_CONTEXT_ADAPTER_JSON": json.dumps({
+            "items_path": "rows",
+            "source": "fixture-custom",
+            "fields": {"type": "category", "value": "observable", "confidence": "score"},
+            "type_map": {"address": "ip"},
+        }),
+    })
+    client = app.test_client()
+    status = client.get("/api/v1/threat-context/status").get_json()
+    assert status["provider"] == "local-custom-json"
+    assert status["source"] == "fixture-custom"
+    assert status["ready"] is True
