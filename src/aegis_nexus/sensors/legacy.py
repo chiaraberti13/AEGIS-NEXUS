@@ -5,6 +5,7 @@ import socketserver
 import threading
 import time
 import uuid
+from collections import defaultdict, deque
 from typing import BinaryIO
 
 from .base import SensorCapabilities, SensorConfig
@@ -17,7 +18,52 @@ from .persona import load_persona
 
 MAX_LINE = 512
 TIMEOUT = 15.0
+FTP_UPLOAD_MAX_BYTES = max(1024, min(int(os.getenv("AEGIS_QUARANTINE_MAX_BYTES", "262144")), 16 * 1024 * 1024))
 PERSONA = load_persona()
+
+
+class FTPDataBroker:
+    def __init__(self):
+        self._condition = threading.Condition()
+        self._items = defaultdict(lambda: deque(maxlen=4))
+
+    def put(self, source_ip: str, data: bytes, too_large: bool) -> None:
+        with self._condition:
+            self._items[source_ip].append((data, too_large))
+            self._condition.notify_all()
+
+    def take(self, source_ip: str, timeout: float = 10.0) -> tuple[bytes, bool] | None:
+        deadline = time.monotonic() + timeout
+        with self._condition:
+            while not self._items[source_ip]:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                self._condition.wait(remaining)
+            return self._items[source_ip].popleft()
+
+
+FTP_DATA_BROKER = FTPDataBroker()
+
+
+class FTPDataHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        self.request.settimeout(TIMEOUT)
+        payload = bytearray()
+        too_large = False
+        try:
+            while len(payload) <= FTP_UPLOAD_MAX_BYTES:
+                chunk = self.request.recv(min(65536, FTP_UPLOAD_MAX_BYTES + 1 - len(payload)))
+                if not chunk:
+                    break
+                payload.extend(chunk)
+                if len(payload) > FTP_UPLOAD_MAX_BYTES:
+                    too_large = True
+                    break
+        except (TimeoutError, OSError):
+            pass
+        FTP_DATA_BROKER.put(str(self.client_address[0]), bytes(payload[:FTP_UPLOAD_MAX_BYTES]), too_large)
+
 
 
 def _readline_with_status(stream: BinaryIO) -> tuple[str, dict | None]:
@@ -117,6 +163,7 @@ class BaseHandler(socketserver.StreamRequestHandler):
 
 class FTPHandler(BaseHandler):
     service = "ftp"
+    data_port = int(os.getenv("AEGIS_FTP_DATA_PORT", "2122"))
 
     def handle(self):
         self.emit("connection", {"destination_port": self.destination_port})
@@ -156,6 +203,70 @@ class FTPHandler(BaseHandler):
                 attach_capture_metadata(observed, audit)
                 self.emit("credential", observed, "medium")
                 self.wfile.write(b"530 Login incorrect\r\n")
+            elif command == "EPSV":
+                self.wfile.write(f"229 Entering Extended Passive Mode (|||{self.data_port}|)\r\n".encode("ascii"))
+            elif command == "PASV":
+                self.wfile.write(b"522 Use EPSV for passive transfers\r\n")
+            elif command == "PORT":
+                self.wfile.write(b"502 Active mode disabled\r\n")
+            elif command == "STOR":
+                filename_audit: dict = {}
+                filename = bounded_text(argument, 255, "observed.artifact.original_name", filename_audit)
+                self.wfile.write(b"150 Opening passive data connection\r\n")
+                transfer = FTP_DATA_BROKER.take(self.source_ip)
+                if transfer is None:
+                    self.emit(
+                        "ftp.upload_rejected",
+                        {"destination_port": self.destination_port, "artifact": {"original_name": filename, "reason": "data_timeout"}},
+                        "low",
+                    )
+                    self.wfile.write(b"425 Data connection timed out\r\n")
+                    continue
+                data, too_large = transfer
+                if too_large:
+                    self.emit(
+                        "ftp.upload_rejected",
+                        {
+                            "destination_port": self.destination_port,
+                            "artifact": {
+                                "original_name": filename,
+                                "bytes_observed_at_least": FTP_UPLOAD_MAX_BYTES + 1,
+                                "limit": FTP_UPLOAD_MAX_BYTES,
+                                "quarantined": False,
+                            },
+                        },
+                        "medium",
+                    )
+                    self.wfile.write(b"552 Transfer exceeds quarantine limit\r\n")
+                    continue
+                artifact = self.sensor.quarantine_artifact(
+                    data,
+                    original_name=filename,
+                    content_type="application/octet-stream",
+                )
+                if artifact is None:
+                    self.emit(
+                        "ftp.upload_rejected",
+                        {"destination_port": self.destination_port, "artifact": {"original_name": filename, "reason": "quarantine_unavailable"}},
+                        "medium",
+                    )
+                    self.wfile.write(b"451 Transfer unavailable\r\n")
+                    continue
+                observed = {
+                    "destination_port": self.destination_port,
+                    "artifact": {
+                        "artifact_id": artifact.get("artifact_id"),
+                        "sha256": artifact.get("sha256"),
+                        "size": artifact.get("size"),
+                        "original_name": artifact.get("original_name"),
+                        "content_type": artifact.get("content_type"),
+                        "quarantined": True,
+                        "inline_serving": False,
+                    },
+                }
+                attach_capture_metadata(observed, filename_audit)
+                self.emit("artifact.quarantined", observed, "medium")
+                self.wfile.write(b"226 Transfer complete\r\n")
             elif command == "QUIT":
                 self.wfile.write(b"221 Goodbye\r\n")
                 break
@@ -209,11 +320,12 @@ class LegacySensorPlugin:
     name = "legacy"
     capabilities = SensorCapabilities(
         protocols=("ftp", "telnet", "tcp"),
-        event_types=("connection", "connection.closed", "credential", "legacy.command", "sensor.input_rejected"),
+        event_types=("connection", "connection.closed", "credential", "legacy.command", "artifact.quarantined", "ftp.upload_rejected", "sensor.input_rejected"),
         interaction_mode="emulated",
         network_evidence=("transport", "connection"),
         captures_credentials=True,
         captures_commands=True,
+        captures_payloads=True,
         executes_attacker_input=False,
     )
 
@@ -226,6 +338,7 @@ class LegacySensorPlugin:
             ports={
                 "ftp": int(os.getenv("AEGIS_FTP_PORT", "2121")),
                 "telnet": int(os.getenv("AEGIS_TELNET_PORT", "2323")),
+                "ftp_data": int(os.getenv("AEGIS_FTP_DATA_PORT", "2122")),
             },
             options={
                 "max_connections": max(1, min(int(os.getenv("AEGIS_SENSOR_MAX_CONNECTIONS", "32")), 256)),
@@ -249,9 +362,16 @@ class LegacySensorPlugin:
             TelnetHandler,
             max_connections=max_connections,
         )
+        FTPHandler.data_port = config.port("ftp_data")
+        ftp_data = BoundedThreadingTCPServer(
+            (config.bind_host, config.port("ftp_data")),
+            FTPDataHandler,
+            max_connections=max_connections,
+        )
         threads = [
             threading.Thread(target=ftp.serve_forever, daemon=True),
             threading.Thread(target=telnet.serve_forever, daemon=True),
+            threading.Thread(target=ftp_data.serve_forever, daemon=True),
         ]
         heartbeat = FTPHandler.sensor.start_heartbeat()
         try:
@@ -263,6 +383,7 @@ class LegacySensorPlugin:
             heartbeat.stop()
             ftp.server_close()
             telnet.server_close()
+            ftp_data.server_close()
 
 
 def main():
