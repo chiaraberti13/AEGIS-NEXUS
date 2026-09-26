@@ -8,6 +8,7 @@
     ipProfile: null,
     eventStudy: null,
     sessionStudy: null,
+    behavioralAnalytics: null,
     dashboard: null,
     enrichmentStatus: null,
     operationsStatus: null,
@@ -281,7 +282,20 @@
     const id = key === "event_type" ? "filter-event-type" : "filter-" + key;
     if ($(id)) $(id).value = state.filters[key];
     updateFilterCount();
-    refresh();
+    return refresh();
+  }
+
+  async function chartDrilldown(behavior, label) {
+    if (behavior.filterKey) {
+      await setFilter(behavior.filterKey, label);
+    } else if (behavior.search) {
+      $("global-search").value = label;
+      await refresh();
+    } else {
+      return;
+    }
+    const event = state.events?.[0];
+    if (event) await selectEvent(event, true);
   }
 
   function bars(id, items, behavior = {}) {
@@ -311,12 +325,12 @@
       value.textContent = String(item.value);
       track.append(fill);
       row.append(label, track, value);
-      if (behavior.filterKey) {
-        row.addEventListener("click", () => setFilter(behavior.filterKey, String(item.label)));
-      } else if (behavior.search) {
+      if (behavior.filterKey || behavior.search) {
+        row.title = t("behavioral.chartDrilldown");
         row.addEventListener("click", () => {
-          $("global-search").value = String(item.label);
-          refresh();
+          chartDrilldown(behavior, String(item.label)).catch((error) => {
+            console.error("AEGIS analytics chart drill-down failed", error);
+          });
         });
       } else {
         row.disabled = true;
@@ -691,6 +705,85 @@
       pre.textContent = pretty(network);
       card.append(head, meta, pre);
       root.append(card);
+    });
+  }
+
+  function renderBehavioralAnalytics(data) {
+    state.behavioralAnalytics = data || null;
+    const baselineRoot = $("behavioral-baselines");
+    const findingsRoot = $("behavioral-findings");
+    baselineRoot.replaceChildren();
+    findingsRoot.replaceChildren();
+    if (!data) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("behavioral.unavailable");
+      findingsRoot.append(empty);
+      return;
+    }
+
+    ["24h", "7d", "30d"].forEach((windowName) => {
+      const baseline = data.baseline_windows?.[windowName];
+      if (!baseline) return;
+      const item = document.createElement("div");
+      const label = document.createElement("span");
+      label.textContent = t("behavioral.baseline") + " " + windowName;
+      const value = document.createElement("strong");
+      value.textContent = String(baseline.sample_count ?? 0) + " · " +
+        (baseline.ready ? t("behavioral.ready") : t("behavioral.coldStart"));
+      item.append(label, value);
+      baselineRoot.append(item);
+    });
+
+    const findings = Array.isArray(data.findings) ? data.findings : [];
+    if (!findings.length) {
+      const empty = document.createElement("p");
+      empty.className = "mini-empty";
+      empty.textContent = t("behavioral.noFindings");
+      findingsRoot.append(empty);
+      return;
+    }
+    findings.forEach((finding) => {
+      const card = document.createElement("article");
+      card.className = "analytics-finding";
+      const head = document.createElement("div");
+      head.className = "analytics-finding-head";
+      const title = document.createElement("strong");
+      title.textContent = String(finding.title || finding.analytic_id || "—");
+      const classification = document.createElement("span");
+      classification.className = "badge";
+      classification.textContent = String(finding.classification || "derived_analytic");
+      head.append(title, classification);
+
+      const explanation = document.createElement("p");
+      explanation.textContent = String(finding.explanation || "");
+      const baseline = document.createElement("pre");
+      baseline.textContent = pretty({
+        measurement: finding.measurement || {},
+        baseline: finding.baseline || {},
+      });
+      const evidenceTitle = document.createElement("span");
+      evidenceTitle.className = "eyebrow";
+      evidenceTitle.textContent = t("behavioral.evidence");
+      const evidence = document.createElement("div");
+      evidence.className = "analytics-evidence";
+      (finding.evidence || []).forEach((ref) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "compact";
+        button.textContent = String(ref.id || "—");
+        if (ref.type === "event" && ref.id) {
+          button.addEventListener("click", async () => {
+            const event = await safeGet("/api/v1/events/" + encodeURIComponent(ref.id));
+            if (event) await selectEvent(event, true);
+          });
+        } else {
+          button.disabled = true;
+        }
+        evidence.append(button);
+      });
+      card.append(head, explanation, baseline, evidenceTitle, evidence);
+      findingsRoot.append(card);
     });
   }
 
@@ -1193,13 +1286,14 @@
 
     const ip = event.source_ip;
     const sessionId = event.session_id;
-    const [eventStudy, session, profile, ti, sessionStudy, pcapData] = await Promise.all([
+    const [eventStudy, session, profile, ti, sessionStudy, pcapData, behavioral] = await Promise.all([
       safeGet("/api/v1/study/" + encodeURIComponent(event.id) + "?lang=" + encodeURIComponent(state.lang)),
       sessionId ? safeGet("/api/v1/sessions/" + encodeURIComponent(sessionId)) : Promise.resolve(null),
       ip ? safeGet("/api/v1/ips/" + encodeURIComponent(ip)) : Promise.resolve(null),
       ip ? safeGet("/api/v1/ips/" + encodeURIComponent(ip) + "/threat-intelligence") : Promise.resolve(null),
       sessionId ? safeGet("/api/v1/study/session/" + encodeURIComponent(sessionId) + "?lang=" + encodeURIComponent(state.lang)) : Promise.resolve(null),
       sessionId ? safeGet("/api/v1/pcap?session_id=" + encodeURIComponent(sessionId)) : Promise.resolve(null),
+      safeGet("/api/v1/analytics/events/" + encodeURIComponent(event.id)),
     ]);
 
     state.eventStudy = eventStudy;
@@ -1212,6 +1306,7 @@
     renderSession(session);
     renderNetworkEvidence(session, pcapData);
     renderThreatIntelligence(ti);
+    renderBehavioralAnalytics(behavioral);
     renderSessionTimeline(session);
     await relations(sessionId);
   }
