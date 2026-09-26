@@ -13,7 +13,9 @@ It performs **no network requests** and never sends honeypot IPs, URLs, domains 
 A match means only that an exact observed value also exists in the configured external feed.
 
 The result is stored in `enrichment.threat_context` with:
+- the provider ID (`local-json`);
 - the feed source;
+- the feed retrieval/load timestamp;
 - the enrichment timestamp;
 - `match_policy: exact`;
 - the feed timestamp when supplied;
@@ -106,7 +108,9 @@ Non effettua **nessuna richiesta di rete** e non invia IP, URL, domini o hash ra
 Un match indica soltanto che un valore osservato è presente anche nel feed esterno configurato.
 
 Il risultato viene salvato in `enrichment.threat_context` con:
+- ID del provider (`local-json`);
 - sorgente del feed;
+- timestamp di retrieval/caricamento del feed;
 - timestamp dell'enrichment;
 - `match_policy: exact`;
 - timestamp del feed, se disponibile;
