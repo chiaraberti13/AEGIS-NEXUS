@@ -212,4 +212,5 @@ def test_ftp_stor_uses_epsv_and_quarantines_without_local_execution(monkeypatch)
     event = next(args[1] for args, _kwargs in captured if args[0] == "artifact.quarantined")
     assert event["artifact"]["sha256"] == hashlib.sha256(payload).hexdigest()
     assert event["artifact"]["inline_serving"] is False
+    assert event["artifact"]["transfer_correlation"]["strength"] == "heuristic"
     assert payload.decode() not in str(event)
