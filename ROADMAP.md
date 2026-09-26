@@ -247,8 +247,8 @@ These are deliberate design boundaries, not missing features:
 - [x] Store confidence only when supplied by the source
 - [x] Add indicator validity windows where available
 - [x] Add feed/provider health information
-- [ ] Add STIX 2.x export
-- [ ] Add STIX 2.x import
+- [x] Add STIX 2.x export
+- [x] Add STIX 2.x import
 - [ ] Evaluate TAXII client support
 - [ ] Add configurable custom-feed adapter
 - [ ] Evaluate MISP export/import _(evaluate)_
