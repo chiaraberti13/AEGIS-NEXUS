@@ -273,12 +273,13 @@ def test_stix_export_maps_supported_indicators_without_inventing_context():
         generated_at="2026-09-22T20:00:00Z",
     )
     assert bundle["type"] == "bundle"
-    assert len(bundle["objects"]) == 2
-    ipv6 = next(item for item in bundle["objects"] if "ipv6-addr" in item["pattern"])
+    indicators = [item for item in bundle["objects"] if item.get("type") == "indicator"]
+    assert len(indicators) == 2
+    ipv6 = next(item for item in indicators if "ipv6-addr" in item["pattern"])
     assert ipv6["spec_version"] == "2.1"
     assert ipv6["confidence"] == 75
     assert ipv6["valid_from"] == "2026-09-22T20:00:00Z"
-    sha = next(item for item in bundle["objects"] if "SHA-256" in item["pattern"])
+    sha = next(item for item in indicators if "SHA-256" in item["pattern"])
     assert "confidence" not in sha
     serialized = json.dumps(bundle).lower()
     assert "threat_actor" not in serialized
@@ -319,8 +320,10 @@ def test_stix_export_endpoint_is_operator_authenticated_attachment(tmp_path):
     assert response.headers["Content-Disposition"].startswith("attachment;")
     bundle = response.get_json()
     assert bundle["type"] == "bundle"
-    assert bundle["objects"][0]["pattern"] == "[domain-name:value = 'payload.example.org']"
-    assert bundle["objects"][0]["confidence"] == 80
+    indicator = next(item for item in bundle["objects"] if item.get("type") == "indicator")
+    assert indicator["pattern"] == "[domain-name:value = 'payload.example.org']"
+    assert indicator["confidence"] == 80
+    assert len(indicator["object_marking_refs"]) == 2
 
 
 
@@ -535,3 +538,50 @@ def test_collector_uses_inline_custom_feed_adapter_config(tmp_path):
     assert status["provider"] == "local-custom-json"
     assert status["source"] == "fixture-custom"
     assert status["ready"] is True
+
+
+
+@pytest.mark.parametrize("tlp,expected_standard", [
+    ("TLP:CLEAR", "TLP:WHITE"),
+    ("TLP:GREEN", "TLP:GREEN"),
+    ("TLP:AMBER", "TLP:AMBER"),
+    ("TLP:AMBER+STRICT", "TLP:AMBER"),
+    ("TLP:RED", "TLP:RED"),
+])
+def test_stix_export_applies_first_tlp_v2_policy_and_stix_compatible_markings(tlp, expected_standard):
+    bundle = export_stix_bundle(
+        [{"type": "ip", "value": "198.51.100.9"}],
+        source="fixture",
+        generated_at="2026-09-26T00:00:00Z",
+        tlp=tlp,
+    )
+    markings = [item for item in bundle["objects"] if item.get("type") == "marking-definition"]
+    indicator = next(item for item in bundle["objects"] if item.get("type") == "indicator")
+    assert len(markings) == 2
+    assert expected_standard in {item.get("name") for item in markings}
+    statement = next(item for item in markings if item.get("definition_type") == "statement")
+    assert tlp in statement["definition"]["statement"]
+    assert set(indicator["object_marking_refs"]) == {item["id"] for item in markings}
+
+
+def test_stix_export_rejects_unknown_tlp_label():
+    with pytest.raises(ValueError, match="invalid_tlp_v2_label"):
+        export_stix_bundle(
+            [{"type": "ip", "value": "198.51.100.9"}],
+            source="fixture",
+            tlp="TLP:WHITE",
+        )
+
+
+def test_stix_endpoint_fails_closed_on_invalid_configured_tlp(tmp_path):
+    feed = tmp_path / "feed.json"
+    _write_feed(feed, [{"type": "ip", "value": "198.51.100.10"}])
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "bad-tlp.db"),
+        "THREAT_CONTEXT_FILE": str(feed),
+        "CTI_EXPORT_TLP": "PUBLIC",
+    })
+    response = app.test_client().get("/api/v1/threat-context/stix")
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "invalid_cti_export_tlp"
