@@ -147,7 +147,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         PCAP_MAX_BYTES=pcap_max_bytes,
         PCAP_RETENTION_DAYS=int(os.getenv("AEGIS_PCAP_RETENTION_DAYS", "7")),
         PCAP_MAX_FILES=int(os.getenv("AEGIS_PCAP_MAX_FILES", "1000")),
-        QUARANTINE_DIR=os.getenv("AEGIS_QUARANTINE_DIR", "/data/quarantine"),
+        QUARANTINE_DIR=os.getenv("AEGIS_QUARANTINE_DIR", ""),
         QUARANTINE_MAX_BYTES=int(os.getenv("AEGIS_QUARANTINE_MAX_BYTES", "262144")),
         QUARANTINE_MAX_FILES=int(os.getenv("AEGIS_QUARANTINE_MAX_FILES", "1000")),
     )
@@ -183,7 +183,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         max_files=int(app.config.get("PCAP_MAX_FILES", 1000)),
     )
     quarantine_store = QuarantineStore(
-        str(app.config.get("QUARANTINE_DIR") or "/data/quarantine"),
+        str(app.config.get("QUARANTINE_DIR") or os.path.join(os.path.dirname(os.path.abspath(app.config["DATABASE_PATH"])), "quarantine")),
         max_bytes=int(app.config.get("QUARANTINE_MAX_BYTES", 262144)),
         max_files=int(app.config.get("QUARANTINE_MAX_FILES", 1000)),
     )
