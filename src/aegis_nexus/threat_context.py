@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+from .threat_intelligence import ThreatIntelligenceProvider
+
 SUPPORTED_TYPES = {"ip", "domain", "url", "md5", "sha1", "sha256"}
 DOMAIN_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$")
 HASH_LENGTHS = {"md5": 32, "sha1": 40, "sha256": 64}
@@ -125,7 +127,9 @@ def _bounded_metadata(item: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-class LocalThreatContextEnricher:
+class LocalThreatContextEnricher(ThreatIntelligenceProvider):
+    provider_id = "local-json"
+    network_requests = False
     """Offline exact-match threat context from an operator-supplied JSON feed."""
 
     def __init__(
