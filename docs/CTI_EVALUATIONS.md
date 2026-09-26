@@ -53,3 +53,52 @@ Per AEGIS è raccomandato:
 Il **push/pubblicazione resta intenzionalmente rinviato**. Prima di inviare CTI verso l'esterno devono essere completati i controlli TLP/sharing policy e la sanitizzazione degli export previsti dalla roadmap, così AEGIS non può divulgare accidentalmente dati interni dei sensori, note operatore o altro contesto non condivisibile.
 
 Un client TAXII dovrà essere eseguito soltanto lato collector/provider. I container decoy non devono ottenere egress Internet per scaricare intelligence.
+
+
+---
+
+## MISP export/import
+
+### English
+
+**Status:** evaluated; interoperable through AEGIS STIX 2.1 now, with native MISP-format integration deferred.
+
+Official MISP documentation describes an extensive REST/OpenAPI interface, a stable MISP standard JSON format, and import/export support including STIX 1.x/2.x. Current MISP releases also continue to invest in STIX interoperability.
+
+References:
+
+- MISP documentation and format specifications: https://www.misp-project.org/documentation/
+- MISP features / import-export capabilities: https://www.misp-project.org/features/
+- MISP tools, including PyMISP and MISP-STIX-Converter: https://www.misp-project.org/tools/
+
+Recommended AEGIS integration path:
+
+1. **Use STIX 2.1 as the first MISP interoperability boundary.** AEGIS already has bounded conservative STIX import/export, while MISP supports STIX import/export. This avoids duplicating a second conversion layer before sharing controls exist.
+2. Treat MISP-originated STIX as external CTI enrichment, never as observed honeypot evidence.
+3. Continue importing only exact supported indicators. Do not turn MISP Galaxy, threat-actor, campaign, relationship or vulnerability objects into attribution, ATT&CK or CVE assertions unless a future explicitly provenance-aware feature is designed for those object types.
+4. Do not automatically publish AEGIS data to MISP yet. Outbound publication must wait for TLP/sharing-policy enforcement and shareable-export sanitization.
+5. If native MISP JSON/API support is later required, implement it as a separate opt-in provider/transport using the common CTI boundary, bounded requests and explicit MISP event/attribute provenance. Prefer the official PyMISP/API ecosystem rather than reimplementing MISP semantics.
+
+**Decision:** no native MISP parser or network client is added in this cycle. Existing STIX 2.1 import/export is the supported bridge for controlled MISP interoperability. Re-evaluate native MISP support only when a concrete deployment requires MISP-specific event/object semantics.
+
+### Italiano
+
+**Stato:** valutato; interoperabilità disponibile tramite STIX 2.1 di AEGIS, mentre l'integrazione nativa del formato MISP resta rinviata.
+
+La documentazione ufficiale MISP descrive una REST/OpenAPI estesa, un formato JSON standard MISP stabile e supporto import/export che comprende STIX 1.x/2.x. Le release MISP attuali continuano inoltre a sviluppare l'interoperabilità STIX.
+
+Riferimenti:
+
+- Documentazione e specifiche dei formati MISP: https://www.misp-project.org/documentation/
+- Funzionalità MISP / capacità import-export: https://www.misp-project.org/features/
+- Tool MISP, inclusi PyMISP e MISP-STIX-Converter: https://www.misp-project.org/tools/
+
+Percorso raccomandato per AEGIS:
+
+1. **Usare STIX 2.1 come primo confine di interoperabilità MISP.** AEGIS dispone già di import/export STIX conservativi e bounded, mentre MISP supporta import/export STIX. Si evita così di duplicare un secondo livello di conversione prima di avere i controlli di condivisione.
+2. Trattare lo STIX proveniente da MISP come CTI esterna di enrichment, mai come evidenza osservata dall'honeypot.
+3. Continuare a importare soltanto indicatori exact-match supportati. Galaxy MISP, threat actor, campagne, relationship o vulnerability non devono diventare automaticamente attribuzione, ATT&CK o CVE.
+4. Non pubblicare ancora automaticamente dati AEGIS verso MISP. La pubblicazione outbound deve attendere enforcement TLP/sharing policy e sanitizzazione degli export condivisibili.
+5. Se in futuro servirà supporto MISP JSON/API nativo, implementarlo come provider/trasporto opt-in separato attraverso il confine CTI comune, con richieste bounded e provenance esplicita di eventi/attributi MISP. È preferibile usare l'ecosistema ufficiale PyMISP/API anziché reimplementare la semantica MISP.
+
+**Decisione:** in questo ciclo non viene aggiunto un parser MISP nativo né un client di rete. L'import/export STIX 2.1 esistente è il bridge supportato per interoperabilità MISP controllata. Il supporto MISP nativo verrà rivalutato solo davanti a un requisito di deployment concreto che richieda semantiche specifiche di eventi/oggetti MISP.
