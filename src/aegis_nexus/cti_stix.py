@@ -6,6 +6,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from .cti_sharing import stix_sharing_markings
+
 STIX_SPEC_VERSION = "2.1"
 _STIX_NAMESPACE = uuid.UUID("0c55f6c8-4b8a-5e5b-9a20-4d7672bbd5bf")
 
@@ -54,10 +56,12 @@ def export_stix_bundle(
     *,
     source: str,
     generated_at: str | None = None,
+    tlp: str = "TLP:AMBER+STRICT",
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     created = _timestamp(generated_at, now)
-    objects: list[dict[str, Any]] = []
+    marking_objects, marking_refs = stix_sharing_markings(tlp)
+    objects: list[dict[str, Any]] = list(marking_objects)
     seen: set[tuple[str, str]] = set()
 
     for item in indicators:
@@ -85,6 +89,7 @@ def export_stix_bundle(
             "pattern_version": STIX_SPEC_VERSION,
             "pattern": pattern,
             "valid_from": valid_from,
+            "object_marking_refs": list(marking_refs),
         }
         valid_until = item.get("valid_until")
         if valid_until:
