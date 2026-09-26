@@ -383,3 +383,36 @@ def test_sensor_identity_binding_supports_ipv6_management_cidr(tmp_path):
         environ_overrides={"REMOTE_ADDR": "fd31:102::22"},
     )
     assert denied.status_code == 401
+
+
+
+def test_ipv4_mapped_ipv6_sensor_source_matches_ipv4_management_cidr(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "mapped-ipv4.db"),
+        "SENSOR_KEYS": {"ssh-decoy-01": "ssh-secret"},
+        "SENSOR_SOURCE_CIDRS": {"ssh-decoy-01": "172.31.101.0/24"},
+    })
+    client = app.test_client()
+    payload = {
+        "id": str(uuid.uuid4()),
+        "honeypot": "ssh-decoy-01",
+        "event_type": "connection",
+        "observed": {
+            "source_ip": "::ffff:203.0.113.151",
+            "service": "ssh",
+            "protocol": "tcp",
+            "destination_port": 2222,
+        },
+    }
+    body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
+    response = client.post(
+        "/api/v1/events",
+        data=body,
+        headers=headers,
+        environ_overrides={"REMOTE_ADDR": "::ffff:172.31.101.22"},
+    )
+    assert response.status_code == 201
+
+    stored = client.get(f"/api/v1/events/{payload['id']}").get_json()
+    assert stored["observed"]["source_ip"] == "203.0.113.151"
