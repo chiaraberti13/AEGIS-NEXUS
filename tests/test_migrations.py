@@ -5,6 +5,7 @@ import pytest
 
 from aegis_nexus.alerts import AlertStore
 from aegis_nexus.correlation_workspace import CorrelationWorkspace
+from aegis_nexus.detection_suppression import DetectionSuppressionStore
 from aegis_nexus.migrations import (
     LATEST_SCHEMA_VERSION,
     MIGRATIONS,
@@ -34,6 +35,8 @@ EXPECTED_TABLES = {
     "pcap_evidence",
     "schema_migrations",
     "sensor_heartbeats",
+    "detection_suppressions",
+    "detection_suppression_audit",
 }
 
 
@@ -59,7 +62,7 @@ def test_fresh_database_is_created_at_latest_version_with_ledger(tmp_path):
     assert ledger[0]["name"] == "baseline_unversioned_schema"
 
 
-@pytest.mark.parametrize("component", [AlertStore, CorrelationWorkspace])
+@pytest.mark.parametrize("component", [AlertStore, CorrelationWorkspace, DetectionSuppressionStore])
 def test_every_component_brings_shared_database_to_latest_version(tmp_path, component):
     path = tmp_path / "component.db"
     component(str(path))
