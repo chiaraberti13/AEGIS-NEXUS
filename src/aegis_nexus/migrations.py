@@ -259,6 +259,36 @@ def _baseline(conn: sqlite3.Connection) -> None:
     _execute_statements(conn, _PCAP_TABLES)
 
 
+def _detection_suppressions(conn: sqlite3.Connection) -> None:
+    _execute_statements(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS detection_suppressions (
+            id TEXT PRIMARY KEY,
+            rule_id TEXT NOT NULL,
+            source_ip TEXT,
+            owner TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_detection_suppressions_match
+        ON detection_suppressions(rule_id, source_ip, expires_at);
+
+        CREATE TABLE IF NOT EXISTS detection_suppression_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            suppression_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '{}'
+        );
+        CREATE INDEX IF NOT EXISTS idx_detection_suppression_audit
+        ON detection_suppression_audit(suppression_id, timestamp DESC, id DESC)
+        """,
+    )
+
+
 def _sensor_heartbeats(conn: sqlite3.Connection) -> None:
     _execute_statements(
         conn,
@@ -280,6 +310,7 @@ def _sensor_heartbeats(conn: sqlite3.Connection) -> None:
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline_unversioned_schema", _baseline),
     Migration(2, "sensor_heartbeats", _sensor_heartbeats),
+    Migration(3, "detection_suppressions", _detection_suppressions),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
