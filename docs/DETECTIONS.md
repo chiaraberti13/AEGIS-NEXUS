@@ -54,6 +54,12 @@ Operators may set `AEGIS_DETECTION_RULES_JSON` to disable individual built-in ru
 
 Rule configuration changes detection evaluation only. It never rewrites source telemetry, evidence references, severity/confidence semantics, enrichment, MITRE/CVE mappings or attribution.
 
+### Time-bounded suppressions
+
+Operator-authenticated suppression entries can temporarily prevent a matching finding from becoming an alert. Each entry requires an exact built-in `rule_id`, owner, reason and timezone-aware expiry; it may optionally be scoped to one exact source IP. Expiry must be in the future and is capped at 30 days. Creation and deletion are written to an append-only suppression audit trail with the actor label and timestamp.
+
+Suppression is applied only after the deterministic finding has been evaluated and before alert persistence. The source event is always retained unchanged. A suppression therefore means “do not create/aggregate this alert during this approved window”; it does not mean the evidence was benign, false, deleted or reclassified.
+
 ### Investigation relationships
 
 Alert detail exposes the retained event references, related session IDs and IOC already derived from those events. IOC remain `derived` evidence and are not promoted to threat intelligence. An alert can be referenced by an investigation case together with its source events and sessions; the case remains analyst-authored context.
@@ -113,6 +119,12 @@ Le soglie sono esplicite e deterministiche. Sono condizioni di detection, non af
 Gli operatori possono usare `AEGIS_DETECTION_RULES_JSON` per disabilitare singole regole integrate o modificare esclusivamente le soglie intere documentate delle regole temporali. La configurazione è bounded e validata all'avvio del collector: regole sconosciute, nomi di soglia sconosciuti, valori non interi o fuori intervallo causano un fail-closed invece di modificare silenziosamente la semantica delle detection. Regole e soglie omesse mantengono i default versionati.
 
 La configurazione modifica soltanto la valutazione delle detection. Non riscrive mai telemetria sorgente, riferimenti alle evidenze, semantica severity/confidence, enrichment, mapping MITRE/CVE o attribuzione.
+
+### Suppression temporanee
+
+Le suppression accessibili agli operatori possono impedire temporaneamente che un finding corrispondente diventi un alert. Ogni voce richiede un `rule_id` integrato esatto, owner, reason e una scadenza con timezone; può inoltre essere limitata a un singolo source IP esatto. La scadenza deve essere futura ed è limitata a un massimo di 30 giorni. Creazione e cancellazione vengono registrate in un audit trail append-only con actor e timestamp.
+
+La suppression viene applicata solo dopo la valutazione deterministica del finding e prima della persistenza dell'alert. L'evento sorgente viene sempre conservato senza modifiche. Una suppression significa quindi “non creare/aggregare questo alert durante la finestra approvata”; non significa che l'evidenza sia benigna, falsa, cancellata o riclassificata.
 
 ### Relazioni investigative
 
