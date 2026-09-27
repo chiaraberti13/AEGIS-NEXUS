@@ -299,7 +299,7 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** treat detections as tested, tunable code and let AEGIS feed existing SOC tooling without weakening provenance.
 
-- [ ] Add per-rule enable/disable and threshold configuration with validation
+- [x] Add per-rule enable/disable and threshold configuration with validation
 - [ ] Add time-bounded, audited suppression/allowlist entries (with owner, reason and expiry)
 - [ ] Add detection backtesting against stored history and the Cycle P replay corpus
 - [ ] Track per-rule hit counts and analyst closure outcomes (true/false positive rates)
