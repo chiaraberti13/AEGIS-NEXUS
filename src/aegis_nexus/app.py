@@ -23,6 +23,7 @@ from .custom_feed import load_custom_feed_adapter_config
 from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
 from .detection_config import DetectionConfig
+from .detection_suppression import DetectionSuppressionStore, SuppressionValidationError
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .ioc import IOCWorkspace
@@ -192,6 +193,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     correlation_workspace = CorrelationWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
     detection_config = DetectionConfig.from_json(str(app.config.get("DETECTION_RULES_JSON") or ""))
     detection_engine = DetectionEngine(config=detection_config)
+    detection_suppressions = DetectionSuppressionStore(app.config["DATABASE_PATH"])
     pcap_store = PcapEvidenceStore(
         app.config["DATABASE_PATH"],
         str(app.config.get("PCAP_DIR") or "/data/pcap"),
@@ -235,6 +237,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_ioc_workspace"] = ioc_workspace
     app.extensions["aegis_correlation_workspace"] = correlation_workspace
     app.extensions["aegis_detection_engine"] = detection_engine
+    app.extensions["aegis_detection_suppressions"] = detection_suppressions
     app.extensions["aegis_pcap_store"] = pcap_store
     app.extensions["aegis_pcap_capture_provider"] = pcap_capture_provider
     app.extensions["aegis_quarantine_store"] = quarantine_store
@@ -479,6 +482,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "quarantine_storage_failed"}), 500
         return jsonify(artifact), 201
 
+    def record_detection_findings(stored: dict) -> None:
+        for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
+            if detection_suppressions.match(finding):
+                continue
+            alert_store.record(finding, stored["timestamp"])
+
     @app.post("/api/v1/events")
     def ingest_event():
         if not request.is_json:
@@ -509,8 +518,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = threat_context.enrich(event)
             event = benign_scanners.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
-            for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
-                alert_store.record(finding, stored["timestamp"])
+            record_detection_findings(stored)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
         except EventClockError as exc:
@@ -551,8 +559,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = threat_context.enrich(event)
             event = benign_scanners.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
-            for finding in detection_engine.evaluate(stored, store.detection_context(stored)):
-                alert_store.record(finding, stored["timestamp"])
+            record_detection_findings(stored)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
         except EventClockError as exc:
@@ -784,6 +791,56 @@ def create_app(test_config: dict | None = None) -> Flask:
                 filters=_filters_from_request(),
             )
         )
+
+    @app.get("/api/v1/detection/suppressions")
+    def detection_suppression_list():
+        return jsonify({
+            "items": detection_suppressions.list(
+                active_only=request.args.get("active_only", "false").lower() in {"1", "true", "yes"},
+                limit=request.args.get("limit", 200, type=int),
+            )
+        })
+
+    @app.post("/api/v1/detection/suppressions")
+    def detection_suppression_create():
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        payload = request.get_json()
+        if not isinstance(payload, dict):
+            return jsonify({"error": "validation_error"}), 422
+        try:
+            item = detection_suppressions.create(
+                rule_id=payload.get("rule_id", ""),
+                source_ip=payload.get("source_ip"),
+                owner=payload.get("owner", ""),
+                reason=payload.get("reason", ""),
+                expires_at=payload.get("expires_at", ""),
+                actor=payload.get("owner", ""),
+            )
+        except SuppressionValidationError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        return jsonify(item), 201
+
+    @app.delete("/api/v1/detection/suppressions/<suppression_id>")
+    def detection_suppression_delete(suppression_id: str):
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        payload = request.get_json()
+        actor = payload.get("actor") if isinstance(payload, dict) else None
+        try:
+            deleted = detection_suppressions.delete(suppression_id[:128], actor=actor or "")
+        except SuppressionValidationError as exc:
+            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
+        return ("", 204) if deleted else (jsonify({"error": "not_found"}), 404)
+
+    @app.get("/api/v1/detection/suppressions/audit")
+    def detection_suppression_audit():
+        return jsonify({
+            "items": detection_suppressions.audit(
+                suppression_id=request.args.get("suppression_id", type=str),
+                limit=request.args.get("limit", 500, type=int),
+            )
+        })
 
     @app.get("/api/v1/alerts")
     def alerts():
