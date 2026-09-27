@@ -22,6 +22,7 @@ from .cti_sharing import sanitize_shareable_indicators
 from .custom_feed import load_custom_feed_adapter_config
 from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
+from .detection_backtest import DetectionBacktester
 from .detection_config import DetectionConfig
 from .detection_suppression import DetectionSuppressionStore, SuppressionValidationError
 from .derivation import derive_observed_artifacts
@@ -194,6 +195,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     detection_config = DetectionConfig.from_json(str(app.config.get("DETECTION_RULES_JSON") or ""))
     detection_engine = DetectionEngine(config=detection_config)
     detection_suppressions = DetectionSuppressionStore(app.config["DATABASE_PATH"])
+    detection_backtester = DetectionBacktester(detection_engine)
     pcap_store = PcapEvidenceStore(
         app.config["DATABASE_PATH"],
         str(app.config.get("PCAP_DIR") or "/data/pcap"),
@@ -237,6 +239,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_ioc_workspace"] = ioc_workspace
     app.extensions["aegis_correlation_workspace"] = correlation_workspace
     app.extensions["aegis_detection_engine"] = detection_engine
+    app.extensions["aegis_detection_backtester"] = detection_backtester
     app.extensions["aegis_detection_suppressions"] = detection_suppressions
     app.extensions["aegis_pcap_store"] = pcap_store
     app.extensions["aegis_pcap_capture_provider"] = pcap_capture_provider
@@ -791,6 +794,28 @@ def create_app(test_config: dict | None = None) -> Flask:
                 filters=_filters_from_request(),
             )
         )
+
+    @app.post("/api/v1/detection/backtest")
+    def detection_backtest():
+        if not request.is_json:
+            return jsonify({"error": "content_type_must_be_json"}), 415
+        payload = request.get_json()
+        if not isinstance(payload, dict):
+            return jsonify({"error": "validation_error"}), 422
+        rule_id = str(payload.get("rule_id") or "").strip() or None
+        if rule_id and rule_id not in detection_config.rules:
+            return jsonify({"error": "validation_error", "detail": "unknown_detection_rule"}), 422
+        try:
+            hours = int(payload.get("hours", 24))
+            max_events = int(payload.get("max_events", 5000))
+        except (TypeError, ValueError):
+            return jsonify({"error": "validation_error", "detail": "hours and max_events must be integers"}), 422
+        return jsonify(detection_backtester.run_store(
+            store,
+            hours=hours,
+            rule_id=rule_id,
+            max_events=max_events,
+        ))
 
     @app.get("/api/v1/detection/suppressions")
     def detection_suppression_list():
