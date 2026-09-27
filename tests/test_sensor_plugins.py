@@ -555,6 +555,11 @@ def test_generic_tcp_banner_emits_hash_only_probe_telemetry(monkeypatch):
             assert client.recv(1024) == b"Example service\r\n"
             client.sendall(probe)
         thread.join(timeout=2)
+        deadline = time.monotonic() + 2
+        while not any(args and args[0] == "tcp.banner_probe" for args, _kwargs in captured):
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.01)
     finally:
         server.server_close()
 
