@@ -1,5 +1,6 @@
 import socket
 import threading
+import time
 
 import pytest
 
@@ -169,6 +170,11 @@ def test_smtp_decoy_rejects_oversized_hostile_line(monkeypatch):
             assert client.recv(1024).startswith(b"220 ")
             client.sendall(b"A" * (SMTP_MAX_LINE + 1) + b"\r\n")
         thread.join(timeout=2)
+        deadline = time.monotonic() + 2
+        while not any(args and args[0] == "sensor.input_rejected" for args, _kwargs in captured):
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.01)
     finally:
         server.server_close()
 
