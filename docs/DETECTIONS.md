@@ -48,6 +48,12 @@ Temporal rules use a bounded evidence window anchored to the event timestamp, so
 
 Thresholds are intentionally explicit and deterministic. They are detection conditions, not statements about attacker identity or intent. These rules do not automatically create MITRE ATT&CK, CVE or threat-actor mappings.
 
+### Rule configuration
+
+Operators may set `AEGIS_DETECTION_RULES_JSON` to disable individual built-in rules or override only the documented integer thresholds for temporal rules. Configuration is bounded and validated at collector startup: unknown rules, unknown threshold names, non-integer values and out-of-range values fail closed instead of silently changing detection semantics. Omitted rules and thresholds retain the versioned defaults.
+
+Rule configuration changes detection evaluation only. It never rewrites source telemetry, evidence references, severity/confidence semantics, enrichment, MITRE/CVE mappings or attribution.
+
 ### Investigation relationships
 
 Alert detail exposes the retained event references, related session IDs and IOC already derived from those events. IOC remain `derived` evidence and are not promoted to threat intelligence. An alert can be referenced by an investigation case together with its source events and sessions; the case remains analyst-authored context.
@@ -101,6 +107,12 @@ Le regole temporali usano una finestra di evidenze limitata e ancorata al timest
 - `recon_burst` — almeno 15 eventi dalla stessa sorgente in 5 minuti con ampiezza multi-servizio o multi-porta.
 
 Le soglie sono esplicite e deterministiche. Sono condizioni di detection, non affermazioni sull'identità o sull'intento dell'attaccante. Le regole non generano automaticamente mapping MITRE ATT&CK, CVE o attribuzioni a threat actor.
+
+### Configurazione delle regole
+
+Gli operatori possono usare `AEGIS_DETECTION_RULES_JSON` per disabilitare singole regole integrate o modificare esclusivamente le soglie intere documentate delle regole temporali. La configurazione è bounded e validata all'avvio del collector: regole sconosciute, nomi di soglia sconosciuti, valori non interi o fuori intervallo causano un fail-closed invece di modificare silenziosamente la semantica delle detection. Regole e soglie omesse mantengono i default versionati.
+
+La configurazione modifica soltanto la valutazione delle detection. Non riscrive mai telemetria sorgente, riferimenti alle evidenze, semantica severity/confidence, enrichment, mapping MITRE/CVE o attribuzione.
 
 ### Relazioni investigative
 
