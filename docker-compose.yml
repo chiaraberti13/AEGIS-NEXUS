@@ -30,6 +30,8 @@ services:
     build: .
     environment:
       AEGIS_DATABASE_PATH: ${AEGIS_DATABASE_PATH:-/data/aegis.db}
+      AEGIS_BACKUP_DIR: ${AEGIS_BACKUP_DIR:-/data/backups}
+      AEGIS_BACKUP_KEEP: ${AEGIS_BACKUP_KEEP:-14}
       AEGIS_INGEST_API_KEY: ${AEGIS_INGEST_API_KEY:-}
       AEGIS_SENSOR_KEYS: >-
         {"ssh-decoy-01":"${AEGIS_SSH_SENSOR_API_KEY:?set AEGIS_SSH_SENSOR_API_KEY in .env}","web-decoy-01":"${AEGIS_WEB_SENSOR_API_KEY:?set AEGIS_WEB_SENSOR_API_KEY in .env}","legacy-decoy-01":"${AEGIS_LEGACY_SENSOR_API_KEY:?set AEGIS_LEGACY_SENSOR_API_KEY in .env}","smtp-decoy-01":"${AEGIS_SMTP_SENSOR_API_KEY:?set AEGIS_SMTP_SENSOR_API_KEY in .env}","redis-decoy-01":"${AEGIS_REDIS_SENSOR_API_KEY:?set AEGIS_REDIS_SENSOR_API_KEY in .env}","mysql-decoy-01":"${AEGIS_MYSQL_SENSOR_API_KEY:?set AEGIS_MYSQL_SENSOR_API_KEY in .env}","smb-decoy-01":"${AEGIS_SMB_SENSOR_API_KEY:?set AEGIS_SMB_SENSOR_API_KEY in .env}","generic-tcp-decoy-01":"${AEGIS_GENERIC_SENSOR_API_KEY:-}","suricata-01":"${AEGIS_SURICATA_SENSOR_API_KEY:-}"}

@@ -1,4 +1,5 @@
 import sqlite3
+import stat
 
 from aegis_nexus.backup import backup_database
 
@@ -16,4 +17,6 @@ def test_backup_database_copies_data_and_rotates(tmp_path):
 
     second = backup_database(source, backup_dir, keep=1)
     assert second.exists()
+    assert stat.S_IMODE(second.stat().st_mode) == 0o600
     assert len(list(backup_dir.glob("aegis-*.db"))) == 1
+    assert list(backup_dir.glob("*.part")) == []

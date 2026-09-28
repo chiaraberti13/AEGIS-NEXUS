@@ -133,7 +133,7 @@ These are deliberate design boundaries, not missing features:
 
 ### Schema & data lifecycle
 - [x] Add versioned, forward-only SQLite schema migrations (`PRAGMA user_version`)
-- [ ] Take an automatic online backup before applying migrations
+- [x] Take an automatic online backup before applying migrations
 - [ ] Add migration tests from every previously released schema version
 - [ ] Add a versioned synthetic attack-replay corpus (SSH/Web/FTP/Telnet/Suricata fixtures) for regression tests in later cycles
 

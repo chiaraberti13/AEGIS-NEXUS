@@ -41,6 +41,8 @@ class Store:
         relation_max_nodes: int = 160,
         max_cases: int = 10_000,
         case_retention_days: int = 0,
+        migration_backup_dir: str | None = None,
+        migration_backup_keep: int = 14,
     ):
         self.path = path
         self.retention_days = max(0, retention_days)
@@ -50,6 +52,8 @@ class Store:
         self.relation_max_nodes = max(32, min(int(relation_max_nodes), 1_000))
         self.max_cases = max(1, min(int(max_cases), 1_000_000))
         self.case_retention_days = max(0, min(int(case_retention_days), 3650))
+        self.migration_backup_dir = migration_backup_dir
+        self.migration_backup_keep = max(1, min(int(migration_backup_keep), 365))
         self._ingest_since_maintenance = 0
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._init()
@@ -67,7 +71,11 @@ class Store:
 
     def _init(self) -> None:
         with self.connect() as conn:
-            apply_migrations(conn)
+            apply_migrations(
+                conn,
+                backup_dir=self.migration_backup_dir,
+                backup_keep=self.migration_backup_keep,
+            )
 
     def _select_or_create_session(self, conn: sqlite3.Connection, event: dict[str, Any]) -> str:
         source_ip, honeypot, service, protocol, destination_port = session_identity(event)

@@ -13,7 +13,7 @@ Default controls:
 - hostile values are rendered as text, never as attacker-controlled HTML;
 - `AEGIS_RETENTION_DAYS` applies time-based retention continuously using canonical collector-side `collector_received_at` (with synchronized compatibility alias `received_at`), so a sensor clock cannot silently extend or shorten raw telemetry retention;
 - `AEGIS_MAX_DB_EVENTS` adds a capacity ceiling so event volume cannot grow the SQLite dataset without bound;
-- SQLite secure deletion is enabled and maintenance truncates the WAL after retention/capacity cleanup; backups and storage snapshots still require their own retention policy;
+- SQLite secure deletion is enabled and maintenance truncates the WAL after retention/capacity cleanup; manual and automatic pre-migration backups are rotated by `AEGIS_BACKUP_KEEP` but still require an operator-defined retention and access policy;
 - SOC cases store references to source event/session IDs rather than copies of payloads or credentials, so creating a case does not silently extend telemetry retention;
 - case notes and analyst metadata have a lifecycle separate from raw telemetry: define an explicit policy for them and avoid putting secrets or unnecessary personal data in notes;
 - the local GeoIP/ASN adapter performs no network requests and does not send captured IPs to a third-party API;
@@ -40,7 +40,7 @@ Controlli predefiniti:
 - i valori ostili vengono renderizzati come testo e mai come HTML controllato dall'attaccante;
 - `AEGIS_RETENTION_DAYS` applica la retention temporale in modo continuo usando il canonico `collector_received_at` del collector (con alias di compatibilità `received_at` sincronizzato), evitando che l'orologio del sensore possa estendere o accorciare implicitamente la conservazione della telemetria raw;
 - `AEGIS_MAX_DB_EVENTS` impone anche un limite di capacità, evitando che il volume degli eventi faccia crescere indefinitamente il dataset SQLite;
-- SQLite utilizza la cancellazione sicura e la manutenzione tronca il WAL dopo i cleanup di retention/capacità; backup e snapshot richiedono comunque una propria policy di conservazione;
+- SQLite utilizza la cancellazione sicura e la manutenzione tronca il WAL dopo i cleanup di retention/capacità; i backup manuali e quelli automatici pre-migrazione sono ruotati da `AEGIS_BACKUP_KEEP`, ma richiedono comunque una policy esplicita di conservazione e accesso;
 - i casi SOC conservano riferimenti agli ID di eventi/sessioni invece di copie di payload o credenziali, quindi creare un caso non estende implicitamente la retention della telemetria;
 - note e metadata dei casi hanno un ciclo di vita separato dalla telemetria raw: definisci una policy esplicita e non inserire nelle note segreti o dati personali non necessari;
 - l'adapter locale GeoIP/ASN non effettua richieste di rete e non invia gli IP raccolti ad API di terze parti;
