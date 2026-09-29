@@ -1,5 +1,7 @@
 import json
+from collections import Counter
 from datetime import datetime, timezone
+from ipaddress import ip_address, ip_network
 from pathlib import Path
 
 from aegis_nexus.app import create_app
@@ -10,6 +12,10 @@ from aegis_nexus.suricata import normalize_eve_event
 
 
 CORPUS = Path(__file__).parent / "fixtures" / "replay" / "v1" / "corpus.json"
+REQUIRED_PROTOCOLS = {"ssh", "web", "ftp", "telnet", "suricata"}
+DOCUMENTATION_NETWORKS = tuple(
+    ip_network(cidr) for cidr in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24")
+)
 
 
 def _load_corpus_events():
@@ -24,11 +30,40 @@ def _load_corpus_events():
 
 
 def test_versioned_replay_corpus_covers_required_protocol_fixtures():
-    corpus, _events = _load_corpus_events()
+    corpus, events = _load_corpus_events()
+    fixtures = Counter(record["protocol_fixture"] for record in corpus["records"])
+
+    assert CORPUS.parent.name == "v1"
+    assert corpus["schema_version"] == 1
     assert corpus["corpus_version"] == "1.0"
     assert corpus["synthetic"] is True
-    assert set(corpus["protocols"]) == {"ssh", "web", "ftp", "telnet", "suricata"}
-    assert all(record["protocol_fixture"] in corpus["protocols"] for record in corpus["records"])
+    assert set(corpus["protocols"]) == REQUIRED_PROTOCOLS
+    assert fixtures == Counter(corpus["fixture_counts"])
+    assert set(fixtures) == REQUIRED_PROTOCOLS
+    assert all(count > 0 for count in fixtures.values())
+    assert len(events) == sum(corpus["fixture_counts"].values())
+
+
+def test_versioned_replay_corpus_uses_only_reserved_synthetic_indicators():
+    corpus, _events = _load_corpus_events()
+    event_ids = []
+    for record in corpus["records"]:
+        payload = record["payload"]
+        if record["kind"] == "aegis_event":
+            event_ids.append(payload["id"])
+            observed = payload["observed"]
+            addresses = [observed.get("source_ip"), observed.get("destination_ip")]
+            command = str(observed.get("command") or "")
+        else:
+            addresses = [payload.get("src_ip"), payload.get("dest_ip")]
+            command = ""
+        for address in filter(None, addresses):
+            parsed = ip_address(address)
+            assert any(parsed in network for network in DOCUMENTATION_NETWORKS)
+        if "http://" in command or "https://" in command:
+            assert ".invalid/" in command
+
+    assert len(event_ids) == len(set(event_ids))
 
 
 def test_detection_backtest_replays_versioned_corpus_without_writes():
@@ -37,7 +72,8 @@ def test_detection_backtest_replays_versioned_corpus_without_writes():
     assert result["writes_alerts"] is False
     assert result["applies_suppressions"] is False
     assert result["events_evaluated"] == len(events)
-    assert set(corpus["expected_rule_ids"]) <= set(result["rule_hit_counts"])
+    assert result["rule_hit_counts"] == corpus["expected_rule_hit_counts"]
+    assert result["total_hits"] == sum(corpus["expected_rule_hit_counts"].values())
     assert all(hit["evidence"] for hit in result["hits"])
 
 

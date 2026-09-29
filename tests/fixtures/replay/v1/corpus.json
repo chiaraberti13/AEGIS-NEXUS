@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "corpus_version": "1.0",
   "purpose": "Deterministic synthetic attack replay for regression tests; documentation/test data only.",
   "synthetic": true,
@@ -9,12 +10,19 @@
     "telnet",
     "suricata"
   ],
-  "expected_rule_ids": [
-    "multiple_auth_failures",
-    "download_attempt",
-    "web_scanning",
-    "suricata_high_severity"
-  ],
+  "fixture_counts": {
+    "ssh": 6,
+    "web": 8,
+    "ftp": 1,
+    "telnet": 1,
+    "suricata": 1
+  },
+  "expected_rule_hit_counts": {
+    "download_attempt": 1,
+    "multiple_auth_failures": 1,
+    "suricata_high_severity": 1,
+    "web_scanning": 1
+  },
   "records": [
     {
       "kind": "aegis_event",

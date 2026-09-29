@@ -60,6 +60,12 @@ Operator-authenticated suppression entries can temporarily prevent a matching fi
 
 Suppression is applied only after the deterministic finding has been evaluated and before alert persistence. The source event is always retained unchanged. A suppression therefore means “do not create/aggregate this alert during this approved window”; it does not mean the evidence was benign, false, deleted or reclassified.
 
+### Versioned synthetic replay corpus
+
+The regression corpus lives under `tests/fixtures/replay/vN/`. Version `v1` contains deterministic SSH, Web, FTP, Telnet and Suricata records plus exact expected detection hit counts. All network indicators use the RFC 5737 documentation ranges and reserved `.invalid` domains; the corpus contains no captured production telemetry or real credentials.
+
+A released corpus directory is immutable. Fixes or intentional expectation changes require a new `vN` directory, a new `corpus_version` and dedicated regression coverage. Each corpus declares its schema version, protocol inventory, per-protocol record counts and expected rule results so later cycles can detect missing fixtures and silent semantic drift.
+
 ### Investigation relationships
 
 Alert detail exposes the retained event references, related session IDs and IOC already derived from those events. IOC remain `derived` evidence and are not promoted to threat intelligence. An alert can be referenced by an investigation case together with its source events and sessions; the case remains analyst-authored context.
@@ -125,6 +131,12 @@ La configurazione modifica soltanto la valutazione delle detection. Non riscrive
 Le suppression accessibili agli operatori possono impedire temporaneamente che un finding corrispondente diventi un alert. Ogni voce richiede un `rule_id` integrato esatto, owner, reason e una scadenza con timezone; può inoltre essere limitata a un singolo source IP esatto. La scadenza deve essere futura ed è limitata a un massimo di 30 giorni. Creazione e cancellazione vengono registrate in un audit trail append-only con actor e timestamp.
 
 La suppression viene applicata solo dopo la valutazione deterministica del finding e prima della persistenza dell'alert. L'evento sorgente viene sempre conservato senza modifiche. Una suppression significa quindi “non creare/aggregare questo alert durante la finestra approvata”; non significa che l'evidenza sia benigna, falsa, cancellata o riclassificata.
+
+### Corpus sintetico versionato per il replay
+
+Il corpus di regressione si trova in `tests/fixtures/replay/vN/`. La versione `v1` contiene record deterministici SSH, Web, FTP, Telnet e Suricata insieme ai conteggi esatti delle detection attese. Tutti gli indicatori di rete usano gli intervalli di documentazione RFC 5737 e domini riservati `.invalid`; il corpus non contiene telemetria di produzione catturata né credenziali reali.
+
+Una directory di corpus rilasciata è immutabile. Correzioni o modifiche intenzionali delle aspettative richiedono una nuova directory `vN`, un nuovo `corpus_version` e una copertura di regressione dedicata. Ogni corpus dichiara versione dello schema, inventario dei protocolli, conteggi dei record per protocollo e risultati attesi delle regole, così i cicli successivi possono rilevare fixture mancanti e derive semantiche silenziose.
 
 ### Relazioni investigative
 
