@@ -76,7 +76,9 @@ The collector database carries a single schema version in SQLite `PRAGMA user_ve
 
 The authenticated `/api/v1/operations/status` response exposes `collector.database_schema` (current version, latest supported version and applied migrations); readiness is degraded if the schema is not current. The automatic pre-migration backup is a safety net; keep using `make backup` for scheduled/manual recovery points and test restores.
 
-To add a migration, append a `Migration(<next version>, "<name>", <function>)` to `MIGRATIONS`, never edit or reorder a released one, and add a test that upgrades a database from the previous version.
+CI exercises the complete upgrade matrix from unversioned schema `v0` and every earlier registered version to the current release. Each path must preserve a sentinel evidence record, produce the complete migration ledger and final table set, and retain a pre-migration backup at the original version. The matrix is derived from `LATEST_SCHEMA_VERSION`, so adding a migration automatically makes the formerly current version part of the required upgrade coverage.
+
+To add a migration, append a `Migration(<next version>, "<name>", <function>)` to `MIGRATIONS`, never edit or reorder a released one, and keep the full upgrade matrix green.
 
 ---
 
@@ -156,4 +158,6 @@ Il database del collector ha un'unica versione di schema in SQLite `PRAGMA user_
 
 La risposta autenticata di `/api/v1/operations/status` espone `collector.database_schema` (versione corrente, ultima versione supportata e migrazioni applicate); la readiness risulta degradata se lo schema non è aggiornato. Il backup automatico pre-migrazione è una rete di sicurezza: continua a usare `make backup` per i punti di ripristino manuali/programmati e verifica i restore.
 
-Per aggiungere una migrazione, accoda `Migration(<versione successiva>, "<nome>", <funzione>)` a `MIGRATIONS`, non modificare né riordinare mai una migrazione già rilasciata e aggiungi un test che aggiorni un database dalla versione precedente.
+La CI esegue la matrice completa di upgrade dallo schema non versionato `v0` e da ogni versione registrata precedente fino alla release corrente. Ogni percorso deve preservare un record-evidenza sentinella, produrre il registro completo delle migrazioni e il set finale di tabelle, oltre a conservare un backup pre-migrazione alla versione di origine. La matrice deriva da `LATEST_SCHEMA_VERSION`: aggiungere una migrazione rende automaticamente la versione fino a quel momento corrente parte della copertura obbligatoria.
+
+Per aggiungere una migrazione, accoda `Migration(<versione successiva>, "<nome>", <funzione>)` a `MIGRATIONS`, non modificare né riordinare mai una migrazione già rilasciata e mantieni verde l'intera matrice di upgrade.

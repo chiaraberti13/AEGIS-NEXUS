@@ -522,6 +522,13 @@ def test_smb_decoy_rejects_oversized_frame_before_body(monkeypatch):
         with socket.create_connection(server.server_address, timeout=2) as client:
             client.sendall(b"\x00" + (SMB_MAX_FRAME + 1).to_bytes(3, "big"))
         thread.join(timeout=2)
+        deadline = time.monotonic() + 2
+        while not any(
+            args and args[0] == "sensor.input_rejected" for args, _kwargs in captured
+        ):
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.01)
     finally:
         server.server_close()
 

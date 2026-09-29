@@ -40,6 +40,14 @@ EXPECTED_TABLES = {
     "detection_suppression_audit",
 }
 
+MIGRATION_SENTINEL_ID = "54000000-0000-4000-8000-000000000001"
+MIGRATION_SENTINEL_TIMESTAMP = "2026-08-01T10:00:00+00:00"
+RELEASED_MIGRATION_IDENTITIES = (
+    (1, "baseline_unversioned_schema"),
+    (2, "sensor_heartbeats"),
+    (3, "detection_suppressions"),
+)
+
 
 def _tables(path) -> set[str]:
     with sqlite3.connect(path) as conn:
@@ -49,6 +57,115 @@ def _tables(path) -> set[str]:
 def _version(path) -> int:
     with sqlite3.connect(path) as conn:
         return schema_version(conn)
+
+
+def _seed_released_database(path, version: int) -> None:
+    """Create a data-bearing database at an exact released schema version."""
+    with sqlite3.connect(path) as conn:
+        if version == 0:
+            conn.executescript("""
+                CREATE TABLE sessions (
+                    id TEXT PRIMARY KEY, source_ip TEXT NOT NULL, honeypot TEXT NOT NULL,
+                    service TEXT NOT NULL, started_at TEXT NOT NULL, last_seen TEXT NOT NULL,
+                    event_count INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE TABLE events (
+                    id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, honeypot TEXT NOT NULL,
+                    event_type TEXT NOT NULL, severity TEXT NOT NULL, source_ip TEXT,
+                    session_id TEXT NOT NULL, protocol TEXT, service TEXT, destination_port INTEGER,
+                    country TEXT, asn TEXT, latitude REAL, longitude REAL,
+                    observed TEXT NOT NULL, enrichment TEXT NOT NULL, derived TEXT NOT NULL,
+                    hypotheses TEXT NOT NULL, schema_version TEXT NOT NULL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                );
+            """)
+            conn.execute(
+                "INSERT INTO sessions VALUES(?,?,?,?,?,?,?)",
+                (
+                    "ses_migration_sentinel",
+                    "203.0.113.7",
+                    "ssh-old",
+                    "ssh",
+                    MIGRATION_SENTINEL_TIMESTAMP,
+                    MIGRATION_SENTINEL_TIMESTAMP,
+                    1,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    MIGRATION_SENTINEL_ID,
+                    MIGRATION_SENTINEL_TIMESTAMP,
+                    "ssh-old",
+                    "connection",
+                    "info",
+                    "203.0.113.7",
+                    "ses_migration_sentinel",
+                    "tcp",
+                    "ssh",
+                    22,
+                    None,
+                    None,
+                    None,
+                    None,
+                    '{"source_ip":"203.0.113.7","service":"ssh","protocol":"tcp","destination_port":22}',
+                    "{}",
+                    "{}",
+                    "[]",
+                    "1.1",
+                ),
+            )
+            return
+
+        apply_migrations(conn, MIGRATIONS[:version], backup_dir=path.parent / "seed-backups")
+        conn.execute(
+            """
+            INSERT INTO sessions(
+                id,source_ip,honeypot,service,protocol,destination_port,
+                started_at,last_seen,event_count
+            ) VALUES(?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                "ses_migration_sentinel",
+                "203.0.113.7",
+                "ssh-release",
+                "ssh",
+                "tcp",
+                22,
+                MIGRATION_SENTINEL_TIMESTAMP,
+                MIGRATION_SENTINEL_TIMESTAMP,
+                1,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO events(
+                id,timestamp,received_at,honeypot,event_type,severity,source_ip,session_id,
+                protocol,service,destination_port,observed,enrichment,derived,hypotheses,
+                collector,schema_version,collector_received_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                MIGRATION_SENTINEL_ID,
+                MIGRATION_SENTINEL_TIMESTAMP,
+                MIGRATION_SENTINEL_TIMESTAMP,
+                "ssh-release",
+                "connection",
+                "info",
+                "203.0.113.7",
+                "ses_migration_sentinel",
+                "tcp",
+                "ssh",
+                22,
+                '{"source_ip":"203.0.113.7","service":"ssh","protocol":"tcp","destination_port":22}',
+                "{}",
+                "{}",
+                "[]",
+                "{}",
+                "1.1",
+                MIGRATION_SENTINEL_TIMESTAMP,
+            ),
+        )
 
 
 def test_fresh_database_is_created_at_latest_version_with_ledger(tmp_path):
@@ -95,48 +212,62 @@ def test_reopening_is_idempotent_and_does_not_rewrite_ledger(tmp_path):
 
 def test_unversioned_legacy_database_is_adopted_without_data_loss(tmp_path):
     path = tmp_path / "legacy.db"
-    timestamp = "2026-08-01T10:00:00+00:00"
-    with sqlite3.connect(path) as conn:
-        conn.executescript("""
-            CREATE TABLE sessions (
-                id TEXT PRIMARY KEY, source_ip TEXT NOT NULL, honeypot TEXT NOT NULL,
-                service TEXT NOT NULL, started_at TEXT NOT NULL, last_seen TEXT NOT NULL,
-                event_count INTEGER NOT NULL DEFAULT 0
-            );
-            CREATE TABLE events (
-                id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, honeypot TEXT NOT NULL,
-                event_type TEXT NOT NULL, severity TEXT NOT NULL, source_ip TEXT,
-                session_id TEXT NOT NULL, protocol TEXT, service TEXT, destination_port INTEGER,
-                country TEXT, asn TEXT, latitude REAL, longitude REAL,
-                observed TEXT NOT NULL, enrichment TEXT NOT NULL, derived TEXT NOT NULL,
-                hypotheses TEXT NOT NULL, schema_version TEXT NOT NULL,
-                FOREIGN KEY(session_id) REFERENCES sessions(id)
-            );
-        """)
-        conn.execute(
-            "INSERT INTO sessions VALUES(?,?,?,?,?,?,?)",
-            ("ses_legacy", "203.0.113.7", "ssh-old", "ssh", timestamp, timestamp, 1),
-        )
-        conn.execute(
-            "INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                "54000000-0000-4000-8000-000000000001", timestamp, "ssh-old", "connection", "info",
-                "203.0.113.7", "ses_legacy", "tcp", "ssh", 22, None, None, None, None,
-                '{"source_ip":"203.0.113.7","service":"ssh","protocol":"tcp","destination_port":22}',
-                "{}", "{}", "[]", "1.1",
-            ),
-        )
+    _seed_released_database(path, 0)
     assert _version(path) == 0
 
     store = Store(str(path), retention_days=0)
 
     assert _version(path) == LATEST_SCHEMA_VERSION
-    event = store.get_event("54000000-0000-4000-8000-000000000001")
+    event = store.get_event(MIGRATION_SENTINEL_ID)
     assert event is not None
-    assert event["received_at"] == timestamp
+    assert event["received_at"] == MIGRATION_SENTINEL_TIMESTAMP
     with sqlite3.connect(path) as conn:
         session_columns = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
     assert {"protocol", "destination_port"} <= session_columns
+
+
+@pytest.mark.parametrize(
+    "released_version",
+    range(LATEST_SCHEMA_VERSION),
+    ids=lambda version: f"v{version}_to_v{LATEST_SCHEMA_VERSION}",
+)
+def test_upgrade_from_every_previously_released_schema_version(tmp_path, released_version):
+    path = tmp_path / f"released-v{released_version}.db"
+    backup_dir = tmp_path / f"backups-v{released_version}"
+    _seed_released_database(path, released_version)
+
+    assert _version(path) == released_version
+    with sqlite3.connect(path) as conn:
+        applied = apply_migrations(conn, backup_dir=backup_dir)
+        event = conn.execute(
+            "SELECT timestamp,received_at,collector_received_at FROM events WHERE id=?",
+            (MIGRATION_SENTINEL_ID,),
+        ).fetchone()
+        ledger = applied_migrations(conn)
+
+    assert applied == [
+        migration.version for migration in MIGRATIONS if migration.version > released_version
+    ]
+    assert _version(path) == LATEST_SCHEMA_VERSION
+    assert EXPECTED_TABLES <= _tables(path)
+    assert event == (
+        MIGRATION_SENTINEL_TIMESTAMP,
+        MIGRATION_SENTINEL_TIMESTAMP,
+        MIGRATION_SENTINEL_TIMESTAMP,
+    )
+    assert [item["version"] for item in ledger] == [migration.version for migration in MIGRATIONS]
+
+    backups = list(
+        backup_dir.glob(
+            f"aegis-pre-migration-v{released_version}-to-v{LATEST_SCHEMA_VERSION}-*.db"
+        )
+    )
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as backup:
+        assert schema_version(backup) == released_version
+        assert backup.execute(
+            "SELECT timestamp FROM events WHERE id=?", (MIGRATION_SENTINEL_ID,)
+        ).fetchone()[0] == MIGRATION_SENTINEL_TIMESTAMP
 
 
 def test_database_from_newer_release_is_refused_and_left_untouched(tmp_path):
@@ -264,6 +395,8 @@ def test_migration_registry_must_be_contiguous(versions):
 def test_released_registry_is_valid():
     validate_migrations(MIGRATIONS)
     assert LATEST_SCHEMA_VERSION == MIGRATIONS[-1].version
+    identities = tuple((migration.version, migration.name) for migration in MIGRATIONS)
+    assert identities == RELEASED_MIGRATION_IDENTITIES
 
 
 def test_concurrent_startup_applies_each_migration_once(tmp_path):
