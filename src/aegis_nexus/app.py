@@ -137,6 +137,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         MAX_CASES=int(os.getenv("AEGIS_MAX_CASES", "10000")),
         CASE_RETENTION_DAYS=int(os.getenv("AEGIS_CASE_RETENTION_DAYS", "0")),
         MIN_FREE_BYTES=int(os.getenv("AEGIS_MIN_FREE_BYTES", "67108864")),
+        BACKUP_DIR=os.getenv("AEGIS_BACKUP_DIR", "./data/backups"),
+        BACKUP_KEEP=int(os.getenv("AEGIS_BACKUP_KEEP", "14")),
         OPERATOR_API_KEY=os.getenv("AEGIS_OPERATOR_API_KEY", ""),
         ALLOW_UNAUTHENTICATED_OPERATOR=os.getenv("AEGIS_ALLOW_UNAUTHENTICATED_OPERATOR", "false").lower() in {"1", "true", "yes"},
         REQUIRE_SENSOR_SIGNATURE=os.getenv("AEGIS_REQUIRE_SENSOR_SIGNATURE", "false").lower() in {"1", "true", "yes"},
@@ -188,6 +190,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         relation_max_nodes=int(app.config.get("RELATION_MAX_NODES", 160)),
         max_cases=int(app.config.get("MAX_CASES", 10000)),
         case_retention_days=int(app.config.get("CASE_RETENTION_DAYS", 0)),
+        migration_backup_dir=str(app.config.get("BACKUP_DIR") or "./data/backups"),
+        migration_backup_keep=int(app.config.get("BACKUP_KEEP", 14)),
     )
     alert_store = AlertStore(app.config["DATABASE_PATH"])
     ioc_workspace = IOCWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))

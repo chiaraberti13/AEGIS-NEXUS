@@ -62,18 +62,19 @@ Use SQLite's online backup API instead of copying a live WAL database directly:
 docker compose --profile ops run --rm backup
 ```
 
-Backups are written under `AEGIS_BACKUP_DIR` (default `/data/backups`) and rotated according to `AEGIS_BACKUP_KEEP`. The Compose backup service uses the shared `aegis-data` volume with `network_mode: none`, because it does not require network access. Apply the same privacy, access-control and retention rules to backups as to the primary telemetry database. Test restoration periodically.
+Backups are written under `AEGIS_BACKUP_DIR` (default `/data/backups`) and rotated according to `AEGIS_BACKUP_KEEP`. The Compose backup service uses the shared `aegis-data` volume with `network_mode: none`, because it does not require network access. Completed files are atomically finalized with owner-only permissions; incomplete `.part` files are removed. Apply the same privacy, access-control and retention rules to backups as to the primary telemetry database. Test restoration periodically.
 
 ### Database schema migrations
 
 The collector database carries a single schema version in SQLite `PRAGMA user_version`, shared by events, sessions, cases, alerts, correlation links and PCAP evidence metadata. Migrations live in `src/aegis_nexus/migrations.py`, are forward-only and run automatically at startup:
 
 - each migration runs in its own `BEGIN IMMEDIATE` transaction together with the version bump and a row in the `schema_migrations` ledger; a failure rolls back completely and the previous version stays in place;
+- before the first pending migration changes a non-empty on-disk database, the collector takes an online backup under `AEGIS_BACKUP_DIR`, named `aegis-pre-migration-v<from>-to-v<to>-<timestamp>.db`; the migration write lock keeps the source coherent, and a backup failure aborts startup before any schema change;
 - concurrent first starts (for example several Gunicorn workers) serialize on the write lock, so every migration is applied exactly once;
 - a database written by a **newer** release is refused with `SchemaVersionError` and left untouched. There are no down-migrations: to roll back the application, restore a backup taken before the upgrade;
 - databases created before versioning (`user_version = 0`) are adopted by migration 1, which only creates missing tables/indexes and applies the historical column upgrades.
 
-The authenticated `/api/v1/operations/status` response exposes `collector.database_schema` (current version, latest supported version and applied migrations); readiness is degraded if the schema is not current. Take a backup before upgrading (`make backup`).
+The authenticated `/api/v1/operations/status` response exposes `collector.database_schema` (current version, latest supported version and applied migrations); readiness is degraded if the schema is not current. The automatic pre-migration backup is a safety net; keep using `make backup` for scheduled/manual recovery points and test restores.
 
 To add a migration, append a `Migration(<next version>, "<name>", <function>)` to `MIGRATIONS`, never edit or reorder a released one, and add a test that upgrades a database from the previous version.
 
@@ -141,17 +142,18 @@ Usa l'API di backup online di SQLite invece di copiare direttamente un database 
 docker compose --profile ops run --rm backup
 ```
 
-I backup vengono salvati in `AEGIS_BACKUP_DIR` (default `/data/backups`) e ruotati secondo `AEGIS_BACKUP_KEEP`. Il servizio backup del Compose usa il volume condiviso `aegis-data` con `network_mode: none`, perché non necessita di accesso di rete. Applica a backup e database primario le stesse regole di privacy, controllo accessi e retention. Verifica periodicamente il ripristino.
+I backup vengono salvati in `AEGIS_BACKUP_DIR` (default `/data/backups`) e ruotati secondo `AEGIS_BACKUP_KEEP`. Il servizio backup del Compose usa il volume condiviso `aegis-data` con `network_mode: none`, perché non necessita di accesso di rete. I file completati vengono finalizzati atomicamente con permessi riservati al proprietario; gli eventuali file `.part` incompleti vengono rimossi. Applica a backup e database primario le stesse regole di privacy, controllo accessi e retention. Verifica periodicamente il ripristino.
 
 ### Migrazioni dello schema del database
 
 Il database del collector ha un'unica versione di schema in SQLite `PRAGMA user_version`, condivisa da eventi, sessioni, casi, alert, collegamenti di correlazione e metadati delle evidenze PCAP. Le migrazioni si trovano in `src/aegis_nexus/migrations.py`, sono solo in avanti e vengono eseguite automaticamente all'avvio:
 
 - ogni migrazione gira in una propria transazione `BEGIN IMMEDIATE` insieme all'aggiornamento della versione e a una riga nel registro `schema_migrations`; in caso di errore tutto viene annullato e resta la versione precedente;
+- prima che la prima migrazione pendente modifichi un database non vuoto su disco, il collector crea un backup online in `AEGIS_BACKUP_DIR`, chiamato `aegis-pre-migration-v<origine>-to-v<destinazione>-<timestamp>.db`; il lock di scrittura mantiene coerente la sorgente e un errore di backup interrompe l'avvio prima di qualsiasi modifica allo schema;
 - avvii concorrenti (ad esempio più worker Gunicorn) si serializzano sul lock di scrittura, quindi ogni migrazione viene applicata una sola volta;
 - un database scritto da una release **più recente** viene rifiutato con `SchemaVersionError` e lasciato intatto. Non esistono migrazioni all'indietro: per tornare a una versione precedente dell'applicazione ripristina un backup fatto prima dell'aggiornamento;
 - i database creati prima del versionamento (`user_version = 0`) vengono adottati dalla migrazione 1, che crea solo tabelle/indici mancanti e applica gli aggiornamenti storici delle colonne.
 
-La risposta autenticata di `/api/v1/operations/status` espone `collector.database_schema` (versione corrente, ultima versione supportata e migrazioni applicate); la readiness risulta degradata se lo schema non è aggiornato. Esegui un backup prima di aggiornare (`make backup`).
+La risposta autenticata di `/api/v1/operations/status` espone `collector.database_schema` (versione corrente, ultima versione supportata e migrazioni applicate); la readiness risulta degradata se lo schema non è aggiornato. Il backup automatico pre-migrazione è una rete di sicurezza: continua a usare `make backup` per i punti di ripristino manuali/programmati e verifica i restore.
 
 Per aggiungere una migrazione, accoda `Migration(<versione successiva>, "<nome>", <funzione>)` a `MIGRATIONS`, non modificare né riordinare mai una migrazione già rilasciata e aggiungi un test che aggiorni un database dalla versione precedente.

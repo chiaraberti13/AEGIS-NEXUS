@@ -15,10 +15,17 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
+
+from .backup import backup_database
 
 
 class SchemaVersionError(RuntimeError):
+    pass
+
+
+class MigrationBackupError(RuntimeError):
     pass
 
 
@@ -338,11 +345,64 @@ def schema_version(conn: sqlite3.Connection) -> int:
     return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
 
+def _database_path(conn: sqlite3.Connection) -> Path | None:
+    for _sequence, name, path in conn.execute("PRAGMA database_list"):
+        if name == "main" and path:
+            return Path(str(path)).resolve()
+    return None
+
+
+def _has_existing_schema(conn: sqlite3.Connection) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master "
+        "WHERE name NOT LIKE 'sqlite_%' AND type IN ('table','index','view','trigger') LIMIT 1"
+    ).fetchone() is not None
+
+
+def _backup_before_migration(
+    conn: sqlite3.Connection,
+    *,
+    current: int,
+    latest: int,
+    destination_dir: str | Path | None,
+    keep: int,
+) -> Path | None:
+    """Create a coherent online copy while the migration write lock is held.
+
+    A separate read-only connection performs the SQLite backup. The caller's
+    ``BEGIN IMMEDIATE`` prevents schema writers from changing the source until
+    the copy is complete, while readers remain available in WAL mode.
+    """
+    source = _database_path(conn)
+    if source is None or not _has_existing_schema(conn):
+        return None
+    backup_dir = Path(destination_dir) if destination_dir is not None else source.parent / "backups"
+    try:
+        return backup_database(
+            source,
+            backup_dir,
+            keep=keep,
+            name_prefix=f"aegis-pre-migration-v{current}-to-v{latest}",
+        )
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        raise MigrationBackupError(
+            f"automatic pre-migration backup failed for schema v{current} -> v{latest}"
+        ) from exc
+
+
 def apply_migrations(
     conn: sqlite3.Connection,
     migrations: tuple[Migration, ...] = MIGRATIONS,
+    *,
+    backup_dir: str | Path | None = None,
+    backup_keep: int = 14,
 ) -> list[int]:
-    """Bring the database to the latest schema version and return the versions applied."""
+    """Bring the database to the latest schema version and return the versions applied.
+
+    A non-empty on-disk database is backed up through SQLite's online backup
+    API after acquiring the migration write lock and before the first schema
+    change. Backup failure aborts the upgrade without changing the schema.
+    """
     validate_migrations(migrations)
     latest = migrations[-1].version
     current = schema_version(conn)
@@ -355,6 +415,7 @@ def apply_migrations(
         return []
 
     applied: list[int] = []
+    backup_taken = False
     previous_isolation = conn.isolation_level
     conn.isolation_level = None  # explicit transaction control below
     try:
@@ -366,6 +427,16 @@ def apply_migrations(
                 if schema_version(conn) >= migration.version:
                     conn.execute("COMMIT")
                     continue
+                if not backup_taken:
+                    locked_version = schema_version(conn)
+                    _backup_before_migration(
+                        conn,
+                        current=locked_version,
+                        latest=latest,
+                        destination_dir=backup_dir,
+                        keep=backup_keep,
+                    )
+                    backup_taken = True
                 migration.apply(conn)
                 conn.execute(_LEDGER)
                 conn.execute(

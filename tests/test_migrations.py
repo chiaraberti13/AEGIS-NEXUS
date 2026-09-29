@@ -10,6 +10,7 @@ from aegis_nexus.migrations import (
     LATEST_SCHEMA_VERSION,
     MIGRATIONS,
     Migration,
+    MigrationBackupError,
     SchemaVersionError,
     applied_migrations,
     apply_migrations,
@@ -195,6 +196,59 @@ def test_pending_migrations_apply_in_order_from_current_version(tmp_path):
     finally:
         conn.close()
     assert calls == [1, 2, 3]
+
+
+def test_existing_database_is_backed_up_before_pending_migration(tmp_path):
+    path = tmp_path / "upgrade.db"
+    backup_dir = tmp_path / "backups"
+
+    def step_one(conn):
+        conn.execute("CREATE TABLE evidence (value TEXT NOT NULL)")
+
+    def step_two(conn):
+        conn.execute("ALTER TABLE evidence ADD COLUMN classification TEXT")
+
+    first = (Migration(1, "one", step_one),)
+    extended = (*first, Migration(2, "two", step_two))
+    with sqlite3.connect(path) as conn:
+        assert apply_migrations(conn, first, backup_dir=backup_dir) == [1]
+        conn.execute("INSERT INTO evidence(value) VALUES('observed-before-upgrade')")
+        conn.commit()
+        assert apply_migrations(conn, extended, backup_dir=backup_dir) == [2]
+
+    backups = list(backup_dir.glob("aegis-pre-migration-v1-to-v2-*.db"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as backup:
+        assert schema_version(backup) == 1
+        assert backup.execute("SELECT value FROM evidence").fetchone()[0] == "observed-before-upgrade"
+        assert {row[1] for row in backup.execute("PRAGMA table_info(evidence)")} == {"value"}
+    assert _version(path) == 2
+
+
+def test_backup_failure_aborts_before_migration_changes(tmp_path, monkeypatch):
+    path = tmp_path / "fail-closed.db"
+
+    def step_one(conn):
+        conn.execute("CREATE TABLE evidence (value TEXT NOT NULL)")
+
+    def step_two(conn):
+        conn.execute("ALTER TABLE evidence ADD COLUMN classification TEXT")
+
+    first = (Migration(1, "one", step_one),)
+    extended = (*first, Migration(2, "two", step_two))
+    with sqlite3.connect(path) as conn:
+        apply_migrations(conn, first, backup_dir=tmp_path / "backups")
+
+    def fail_backup(*args, **kwargs):
+        raise OSError("simulated read-only backup target")
+
+    monkeypatch.setattr("aegis_nexus.migrations.backup_database", fail_backup)
+    with sqlite3.connect(path) as conn:
+        with pytest.raises(MigrationBackupError, match="pre-migration backup failed"):
+            apply_migrations(conn, extended, backup_dir=tmp_path / "unwritable")
+        assert schema_version(conn) == 1
+        assert {row[1] for row in conn.execute("PRAGMA table_info(evidence)")} == {"value"}
+        assert conn.in_transaction is False
 
 
 @pytest.mark.parametrize(
