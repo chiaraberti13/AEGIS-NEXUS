@@ -12,6 +12,7 @@ Key threats and current controls:
 - Unauthorized SOC access -> independent operator key, fail-closed API behavior when the key is absent, explicit development-only unauthenticated opt-in, session-only browser storage, API authorization, operator rate limiting, and denial of operator/UI surfaces from configured sensor-management networks.
 - Collector compromise -> non-root runtime, read-only root filesystem, dropped capabilities, `no-new-privileges`, localhost-only operator exposure.
 - Pivoting -> separate exposure and management networks per sensor; sensors do not share a lateral management segment. Host/VLAN firewalling remains required for production isolation and egress control.
+- Silent telemetry loss -> built-in sensors number events per process stream inside the signed payload and report their high-water mark in heartbeats; the collector counts missing and duplicate sequences in bounded storage and surfaces them to operators as evidence loss. A compromised authenticated sensor can still falsify its own numbering.
 - Persistent-storage exhaustion -> time retention, event-count ceiling, WAL checkpointing and bounded backup rotation.
 - Unsafe schema upgrade or unusable recovery point -> an online backup is finalized atomically before pending migrations touch a non-empty database; migrations fail closed if backup creation fails, and backup files receive owner-only permissions.
 - False analytical certainty -> `observed`, `enrichment`, `derived` and `hypotheses` remain separate; MITRE/CVE mappings require rationale and evidence.

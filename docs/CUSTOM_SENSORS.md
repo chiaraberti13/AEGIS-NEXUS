@@ -93,13 +93,13 @@ Each deployed sensor needs:
 1. a unique `AEGIS_SENSOR_API_KEY`;
 2. an explicit sensor ID in the collector `AEGIS_SENSOR_KEYS` allowlist;
 3. a dedicated internal management subnet in `AEGIS_SENSOR_SOURCE_CIDRS`;
-4. signed telemetry (default) through `SensorClient`, including its fresh per-request nonce;
+4. signed telemetry (default) through `SensorClient`, including its fresh per-request nonce and its per-process event sequence (`observed.sensor_sequence`) used for gap detection — do not set or reuse that field yourself;
 5. a dedicated exposure network;
 6. no access from its management subnet to operator/UI APIs.
 
 Do not reuse another built-in sensor identity or secret.
 
-Ogni sensore deve avere identità, secret, management subnet ed exposure network dedicati. Non riutilizzare l'identità di un altro decoy.
+Ogni sensore deve avere identità, secret, management subnet ed exposure network dedicati. Non riutilizzare l'identità di un altro decoy. Invia gli eventi tramite `SensorClient`, che aggiunge nonce e numero di sequenza (`observed.sensor_sequence`) usati per rilevare i buchi di telemetria: non impostare né riutilizzare quel campo manualmente.
 
 ## 6. Docker and egress checklist / Checklist Docker ed egress
 

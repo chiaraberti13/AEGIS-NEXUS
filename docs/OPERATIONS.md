@@ -56,6 +56,22 @@ Sensors also send a signed heartbeat to `POST /api/v1/sensors/heartbeat` on a se
 
 The operator status distinguishes `healthy`, `stale` and `never`. Health uses the collector-controlled heartbeat receipt time, not the sensor-reported clock. A `stale` heartbeat means authenticated contact is overdue; it does not prove whether the sensor process, network path or collector-side connectivity is the cause.
 
+### Telemetry gaps (sensor sequence numbers)
+
+Every built-in sensor process opens a random delivery **stream** and numbers its events 1, 2, 3, … inside the signed payload (`observed.sensor_sequence = {stream_id, sequence}`). The number is assigned before any local drop, so an event discarded by the sensor (oversize, collector unreachable) or rejected by the collector (rate limit, validation error) still leaves a hole. Heartbeats carry the highest sequence emitted so far (`event_sequence.last_sequence`), which also exposes losses at the tail of a stream.
+
+The collector stores received sequences as compacted ranges in the same transaction as the event, so out-of-order delivery across Gunicorn workers is counted correctly: `missing = highest sequence reported − distinct sequences received`. `GET /api/v1/operations/status` exposes, per sensor, `event_sequence` (`state` = `complete`, `gaps_detected` or `unsequenced`, `missing`, `duplicates`, the current stream and up to 10 `missing_ranges`) plus the totals `sensors_with_sequence_gaps` and `missing_sequenced_events`; the console sidebar shows the same total.
+
+Interpretation and limits:
+
+- a gap is **evidence loss**, not attacker behaviour, and it does not by itself identify the cause;
+- an event emitted a moment ago can appear missing until it arrives;
+- a sensor restart opens a new stream, so it is never reported as a gap, but events lost just before the restart and not yet covered by a heartbeat cannot be counted;
+- a reused sequence number with a new event ID is stored, counted under `duplicates` and never hides a gap;
+- storage is bounded (32 streams per sensor, 256 ranges per stream); when range detail is exhausted, `detail_truncated` is set and counting continues without duplicate detection for that stream;
+- counters are independent of event retention, and Suricata forwarding (`unsequenced`) carries no sequence;
+- an authenticated but compromised sensor can still lie about its own numbering — sequences detect loss in transit and at the collector, not sensor compromise.
+
 ### Backups
 
 Use SQLite's online backup API instead of copying a live WAL database directly:
@@ -139,6 +155,22 @@ Gli operatori autenticati possono usare `GET /api/v1/operations/status`. La risp
 I sensori inviano inoltre una heartbeat firmata a `POST /api/v1/sensors/heartbeat` su un canale operativo separato. Le heartbeat vengono conservate fuori dalle tabelle degli eventi/sessioni di attacco, quindi un sensore sano ma senza traffico non altera i conteggi SOC. `AEGIS_SENSOR_HEARTBEAT_INTERVAL_SECONDS` vale 60 secondi per default e il collector considera il contatto `stale` dopo `AEGIS_SENSOR_HEARTBEAT_STALE_SECONDS` (default 180 secondi).
 
 Lo stato operatore distingue `healthy`, `stale` e `never`. La freschezza usa il tempo di ricezione controllato dal collector, non l'orologio dichiarato dal sensore. `stale` significa che il contatto autenticato è in ritardo: da solo non dimostra se la causa sia il processo sensore, il percorso di rete o la connettività verso il collector.
+
+### Buchi di telemetria (numeri di sequenza dei sensori)
+
+Ogni processo sensore integrato apre uno **stream** di consegna casuale e numera i propri eventi 1, 2, 3, … all'interno del payload firmato (`observed.sensor_sequence = {stream_id, sequence}`). Il numero viene assegnato prima di qualunque scarto locale, quindi un evento scartato dal sensore (troppo grande, collector irraggiungibile) o rifiutato dal collector (rate limit, errore di validazione) lascia comunque un buco. Le heartbeat riportano il numero più alto emesso finora (`event_sequence.last_sequence`), così diventano visibili anche le perdite in coda allo stream.
+
+Il collector salva le sequenze ricevute come intervalli compattati nella stessa transazione dell'evento, quindi la consegna fuori ordine tra worker Gunicorn viene contata correttamente: `mancanti = sequenza più alta riportata − sequenze distinte ricevute`. `GET /api/v1/operations/status` espone per sensore `event_sequence` (`state` = `complete`, `gaps_detected` o `unsequenced`, `missing`, `duplicates`, lo stream corrente e fino a 10 `missing_ranges`) e i totali `sensors_with_sequence_gaps` e `missing_sequenced_events`; la barra laterale della console mostra lo stesso totale.
+
+Interpretazione e limiti:
+
+- un buco è **perdita di evidenze**, non comportamento dell'attaccante, e da solo non identifica la causa;
+- un evento appena emesso può risultare mancante finché non arriva;
+- un riavvio del sensore apre un nuovo stream e non viene mai segnalato come buco, ma gli eventi persi subito prima del riavvio e non ancora coperti da una heartbeat non possono essere contati;
+- un numero di sequenza riusato con un nuovo ID evento viene salvato, contato in `duplicates` e non nasconde mai un buco;
+- lo storage è limitato (32 stream per sensore, 256 intervalli per stream); quando il dettaglio degli intervalli è esaurito viene impostato `detail_truncated` e il conteggio prosegue senza rilevare duplicati per quello stream;
+- i contatori sono indipendenti dalla retention degli eventi, e il forwarding Suricata (`unsequenced`) non porta sequenze;
+- un sensore autenticato ma compromesso può comunque mentire sulla propria numerazione: le sequenze rilevano perdite in transito e al collector, non la compromissione del sensore.
 
 ### Backup
 

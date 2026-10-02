@@ -11,7 +11,7 @@ Sensor time and collector time are intentionally distinct:
 Collector receipt time is system provenance, not attacker enrichment. The canonical `collector_received_at` drives retention, capacity eviction and operational freshness, while `timestamp` remains the investigation timeline time.
 
 
-- `observed`: values captured directly by a sensor or honeypot. Sensor metadata such as `sensor_session_id`, Suricata `flow_id`, `flow_start` and `sensor_capture` also remains observed data. `observed.sensor_capture` is sensor-reported provenance: it discloses fields truncated before transmission or inputs rejected at a sensor boundary.
+- `observed`: values captured directly by a sensor or honeypot. Sensor metadata such as `sensor_session_id`, Suricata `flow_id`, `flow_start` and `sensor_capture` also remains observed data. `observed.sensor_capture` is sensor-reported provenance: it discloses fields truncated before transmission or inputs rejected at a sensor boundary. `observed.sensor_sequence` (`stream_id`, `sequence`) is the sensor's delivery numbering; the collector validates it strictly and uses it only to account for telemetry gaps as evidence loss (see `docs/OPERATIONS.md`).
   Network metadata is stored under the independently versioned `observed.network` block. Its `source` and `capture_layer` fields state whether evidence came from an application sensor/socket or an IDS flow; missing network fields are never inferred. See `docs/NETWORK_EVIDENCE.md`.
 - `enrichment`: external context; every block requires `source` and `observed_at`.
 - `derived`: deterministic or analyst-produced values derived from evidence. MITRE/CVE entries require both `rationale` and `evidence`.
@@ -53,7 +53,7 @@ Tempo sensore e tempo collector sono volutamente distinti:
 Il tempo di ricezione è provenienza di sistema, non enrichment dell'attaccante. Il canonico `collector_received_at` governa retention, eviction per capacità e freschezza operativa, mentre `timestamp` resta il tempo della timeline investigativa.
 
 
-- `observed`: valori catturati direttamente da un sensore o honeypot. Anche metadata del sensore come `sensor_session_id`, `flow_id`, `flow_start` Suricata e `sensor_capture` restano dati osservati. `observed.sensor_capture` è provenienza dichiarata dal sensore: esplicita i campi troncati prima della trasmissione o gli input rifiutati al confine del sensore.
+- `observed`: valori catturati direttamente da un sensore o honeypot. Anche metadata del sensore come `sensor_session_id`, `flow_id`, `flow_start` Suricata e `sensor_capture` restano dati osservati. `observed.sensor_capture` è provenienza dichiarata dal sensore: esplicita i campi troncati prima della trasmissione o gli input rifiutati al confine del sensore. `observed.sensor_sequence` (`stream_id`, `sequence`) è la numerazione di consegna del sensore; il collector la valida in modo rigoroso e la usa solo per contabilizzare i buchi di telemetria come perdita di evidenze (vedi `docs/OPERATIONS.md`).
   I metadata di rete sono conservati nel blocco versionato indipendentemente `observed.network`. I campi `source` e `capture_layer` dichiarano se l'evidenza proviene da sensore/socket applicativo o da un flow IDS; i campi network mancanti non vengono mai inferiti. Vedi `docs/NETWORK_EVIDENCE.md`.
 - `enrichment`: contesto esterno; ogni blocco richiede `source` e `observed_at`.
 - `derived`: valori deterministici o prodotti dall'analista a partire da evidenze. Le voci MITRE/CVE richiedono `rationale` ed `evidence`.

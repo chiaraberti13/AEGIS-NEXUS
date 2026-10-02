@@ -129,7 +129,7 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** close integrity, trust and maintainability gaps that later cycles depend on (new columns, new sensors, per-analyst workflow) before the data model grows further.
 
-**Why first:** new schema fields, new sensors and Cycle G analyst identity all build on this cycle. Schema changes now go through versioned migrations (`src/aegis_nexus/migrations.py`); signed sensor requests now carry single-use nonces, while monotonic gap detection and named analyst identities remain to be added.
+**Why first:** new schema fields, new sensors and Cycle G analyst identity all build on this cycle. Schema changes now go through versioned migrations (`src/aegis_nexus/migrations.py`); signed sensor requests now carry single-use nonces and per-stream sequence numbers that expose telemetry gaps, while named analyst identities remain to be added.
 
 ### Schema & data lifecycle
 - [x] Add versioned, forward-only SQLite schema migrations (`PRAGMA user_version`)
@@ -139,7 +139,7 @@ These are deliberate design boundaries, not missing features:
 
 ### Sensor trust & evidence integrity
 - [x] Add sensor replay protection (per-sensor nonce cache bounded to the signature skew window)
-- [ ] Add per-sensor monotonic sequence numbers to detect telemetry gaps as evidence loss
+- [x] Add per-sensor monotonic sequence numbers to detect telemetry gaps as evidence loss
 - [ ] Add a tamper-evident hash chain over stored events (`prev_hash` / `record_hash`)
 - [ ] Add an offline integrity-verification command for the event hash chain and backups
 - [ ] Document zero-downtime rotation of sensor and operator secrets (overlapping keys)
