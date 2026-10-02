@@ -4,6 +4,7 @@ import hashlib
 import json
 import shutil
 import sqlite3
+import time
 import uuid
 from collections import Counter, defaultdict
 from copy import deepcopy
@@ -76,6 +77,33 @@ class Store:
                 backup_dir=self.migration_backup_dir,
                 backup_keep=self.migration_backup_keep,
             )
+
+    def reserve_sensor_nonce(
+        self,
+        sensor_id: str,
+        nonce: str,
+        *,
+        window_seconds: int,
+        max_nonces_per_sensor: int,
+    ) -> bool:
+        """Atomically reserve a signed-request nonce across collector workers."""
+        now = int(time.time())
+        expires_at = now + max(1, min(int(window_seconds), 3600))
+        capacity = max(1, min(int(max_nonces_per_sensor), 100_000))
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM sensor_replay_nonces WHERE expires_at<=?", (now,))
+            count = conn.execute(
+                "SELECT COUNT(*) FROM sensor_replay_nonces WHERE sensor_id=?",
+                (sensor_id,),
+            ).fetchone()[0]
+            if count >= capacity:
+                return False
+            cursor = conn.execute(
+                "INSERT OR IGNORE INTO sensor_replay_nonces(sensor_id,nonce,expires_at) VALUES(?,?,?)",
+                (sensor_id, nonce, expires_at),
+            )
+            return cursor.rowcount == 1
 
     def _select_or_create_session(self, conn: sqlite3.Connection, event: dict[str, Any]) -> str:
         source_ip, honeypot, service, protocol, destination_port = session_identity(event)

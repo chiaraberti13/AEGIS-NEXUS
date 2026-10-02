@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
 import sys
 import time
 import urllib.error
@@ -14,6 +15,7 @@ from aegis_nexus.security import sign_payload
 def send_event(url: str, sensor: str, secret: str, event: dict, timeout: float) -> int:
     body = json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "replace")
     timestamp = str(int(time.time()))
+    nonce = secrets.token_urlsafe(18)
     request = urllib.request.Request(
         url,
         data=body,
@@ -23,7 +25,8 @@ def send_event(url: str, sensor: str, secret: str, event: dict, timeout: float) 
             "X-Aegis-Key": secret,
             "X-Aegis-Sensor": sensor,
             "X-Aegis-Timestamp": timestamp,
-            "X-Aegis-Signature": sign_payload(secret, timestamp, body),
+            "X-Aegis-Nonce": nonce,
+            "X-Aegis-Signature": sign_payload(secret, timestamp, body, nonce),
         },
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:

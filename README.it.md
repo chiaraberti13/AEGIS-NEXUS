@@ -30,7 +30,7 @@ La regola centrale è la provenienza: **dati osservati, enrichment esterni, anal
 
 ## ✨ Funzionalità principali
 
-- Decoy isolati SSH, web, FTP e Telnet con segreti distinti per sensore e telemetria firmata.
+- Decoy isolati SSH, web, FTP e Telnet con segreti distinti per sensore, telemetria firmata e nonce monouso per richiesta.
 - Collector Flask/Gunicorn con ingestione JSON bounded, rate limit, validazione dell’input ostile e persistenza SQLite.
 - Correlazione delle sessioni tramite ID espliciti delle connessioni o flow Suricata quando disponibili, con fallback temporale.
 - Dashboard SOC con ricerca e filtri globali, Live Feed, attacks over time, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, payload, alert IDS, IOC, MITRE/CVE e heatmap temporali.

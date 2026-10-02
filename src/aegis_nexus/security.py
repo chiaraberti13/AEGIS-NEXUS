@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import time
 from collections import deque
 from threading import Lock
 
+NONCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
 
-def sign_payload(secret: str, timestamp: str, body: bytes) -> str:
-    message = timestamp.encode("ascii", "strict") + b"." + body
+
+def sign_payload(secret: str, timestamp: str, body: bytes, nonce: str = "") -> str:
+    prefix = timestamp.encode("ascii", "strict") + b"."
+    if nonce:
+        prefix += nonce.encode("ascii", "strict") + b"."
+    message = prefix + body
     return hmac.new(secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
 
 
@@ -18,6 +24,7 @@ def verify_signed_payload(
     signature: str,
     body: bytes,
     max_skew_seconds: int = 300,
+    nonce: str = "",
 ) -> bool:
     if not secret or not timestamp or not signature:
         return False
@@ -27,7 +34,9 @@ def verify_signed_payload(
         return False
     if abs(int(time.time()) - sent_at) > max(1, min(max_skew_seconds, 3600)):
         return False
-    expected = sign_payload(secret, timestamp, body)
+    if nonce and not NONCE_PATTERN.fullmatch(nonce):
+        return False
+    expected = sign_payload(secret, timestamp, body, nonce)
     return hmac.compare_digest(expected, signature)
 
 

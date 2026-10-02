@@ -93,7 +93,7 @@ Each deployed sensor needs:
 1. a unique `AEGIS_SENSOR_API_KEY`;
 2. an explicit sensor ID in the collector `AEGIS_SENSOR_KEYS` allowlist;
 3. a dedicated internal management subnet in `AEGIS_SENSOR_SOURCE_CIDRS`;
-4. signed telemetry (default);
+4. signed telemetry (default) through `SensorClient`, including its fresh per-request nonce;
 5. a dedicated exposure network;
 6. no access from its management subnet to operator/UI APIs.
 

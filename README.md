@@ -30,7 +30,7 @@ The central design rule is provenance: **observed data, external enrichment, der
 
 ## ✨ Key capabilities
 
-- Isolated SSH, web, FTP and Telnet decoys with per-sensor secrets and signed telemetry.
+- Isolated SSH, web, FTP and Telnet decoys with per-sensor secrets, signed telemetry and single-use request nonces.
 - Flask/Gunicorn collector with bounded JSON ingestion, rate limits, hostile-input validation and SQLite persistence.
 - Session correlation using explicit decoy connection IDs or Suricata flow identity when available, with temporal fallback.
 - SOC dashboard with global search and filters, Live Feed, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, payloads, IDS alerts, IOC, MITRE/CVE and temporal heatmaps.

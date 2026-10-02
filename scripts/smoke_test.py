@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import time
 import urllib.request
 from datetime import datetime, timezone
@@ -60,12 +61,14 @@ def main() -> None:
         sample.setdefault("derived", {})["data_mode"] = "simulation"
         body = json.dumps(sample, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         signed_at = str(int(time.time()))
+        nonce = secrets.token_urlsafe(18)
         headers = {
             "Content-Type": "application/json",
             "X-Aegis-Key": key,
             "X-Aegis-Sensor": sensor_id,
             "X-Aegis-Timestamp": signed_at,
-            "X-Aegis-Signature": sign_payload(key, signed_at, body),
+            "X-Aegis-Nonce": nonce,
+            "X-Aegis-Signature": sign_payload(key, signed_at, body, nonce),
         }
         request = urllib.request.Request(url, data=body, headers=headers, method="POST")
         with urllib.request.urlopen(request, timeout=5) as response:

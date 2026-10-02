@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import os
-import time
+import secrets
 import threading
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -59,6 +60,15 @@ class SensorClient:
             min(int(os.getenv("AEGIS_SENSOR_HEARTBEAT_INTERVAL_SECONDS", "60")), 3600),
         )
 
+    def _signed_headers(self, payload: bytes) -> dict[str, str]:
+        timestamp = str(int(time.time()))
+        nonce = secrets.token_urlsafe(18)
+        return {
+            "X-Aegis-Timestamp": timestamp,
+            "X-Aegis-Nonce": nonce,
+            "X-Aegis-Signature": sign_payload(self.key, timestamp, payload, nonce),
+        }
+
     def emit(self, event_type: str, observed: dict[str, Any], severity: str = "info", derived: dict[str, Any] | None = None) -> bool:
         if not self.key:
             return False
@@ -82,9 +92,7 @@ class SensorClient:
             "X-Aegis-Sensor": self.honeypot,
         }
         if self.sign_requests:
-            timestamp = str(int(time.time()))
-            headers["X-Aegis-Timestamp"] = timestamp
-            headers["X-Aegis-Signature"] = sign_payload(self.key, timestamp, payload)
+            headers.update(self._signed_headers(payload))
         request = urllib.request.Request(self.url, data=payload, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
@@ -111,9 +119,7 @@ class SensorClient:
             "X-Aegis-Artifact-Type": str(content_type)[:128],
         }
         if self.sign_requests:
-            timestamp = str(int(time.time()))
-            headers["X-Aegis-Timestamp"] = timestamp
-            headers["X-Aegis-Signature"] = sign_payload(self.key, timestamp, data)
+            headers.update(self._signed_headers(data))
         request = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(request, timeout=max(self.timeout, 5.0)) as response:
@@ -138,9 +144,7 @@ class SensorClient:
             "X-Aegis-Sensor": self.honeypot,
         }
         if self.sign_requests:
-            timestamp = str(int(time.time()))
-            headers["X-Aegis-Timestamp"] = timestamp
-            headers["X-Aegis-Signature"] = sign_payload(self.key, timestamp, payload)
+            headers.update(self._signed_headers(payload))
         request = urllib.request.Request(self.heartbeat_url, data=payload, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:

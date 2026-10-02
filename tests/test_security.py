@@ -1,9 +1,10 @@
 import json
+import secrets
 import time
 import uuid
+from datetime import datetime, timezone
 
 import pytest
-from datetime import datetime, timezone
 
 from aegis_nexus.app import create_app
 from aegis_nexus.model import EventValidationError, normalize_event
@@ -14,12 +15,14 @@ from aegis_nexus.store import Store
 def _signed_request(secret: str, sensor: str, payload: dict):
     body = json.dumps(payload, separators=(",", ":")).encode()
     timestamp = str(int(time.time()))
+    nonce = secrets.token_urlsafe(18)
     headers = {
         "Content-Type": "application/json",
         "X-Aegis-Key": secret,
         "X-Aegis-Sensor": sensor,
         "X-Aegis-Timestamp": timestamp,
-        "X-Aegis-Signature": sign_payload(secret, timestamp, body),
+        "X-Aegis-Nonce": nonce,
+        "X-Aegis-Signature": sign_payload(secret, timestamp, body, nonce),
     }
     return body, headers
 
@@ -36,10 +39,11 @@ def test_normalize_event_rejects_non_finite_numeric_values():
 def test_signature_verification_and_tamper_detection():
     body = b'{"event":"example"}'
     timestamp = str(int(time.time()))
-    signature = sign_payload("secret", timestamp, body)
-    assert verify_signed_payload("secret", timestamp, signature, body, 300)
-    assert not verify_signed_payload("secret", timestamp, signature, body + b"x", 300)
-    assert not verify_signed_payload("wrong", timestamp, signature, body, 300)
+    nonce = secrets.token_urlsafe(18)
+    signature = sign_payload("secret", timestamp, body, nonce)
+    assert verify_signed_payload("secret", timestamp, signature, body, 300, nonce)
+    assert not verify_signed_payload("secret", timestamp, signature, body + b"x", 300, nonce)
+    assert not verify_signed_payload("wrong", timestamp, signature, body, 300, nonce)
 
 
 def test_signed_ingest_rejects_replay(tmp_path):
@@ -65,7 +69,73 @@ def test_signed_ingest_rejects_replay(tmp_path):
     }
     body, headers = _signed_request(secret, "ssh-decoy-01", payload)
     assert client.post("/api/v1/events", data=body, headers=headers).status_code == 201
-    assert client.post("/api/v1/events", data=body, headers=headers).status_code == 409
+    replay = client.post("/api/v1/events", data=body, headers=headers)
+    assert replay.status_code == 409
+    assert replay.get_json()["error"] == "sensor_replay_rejected"
+
+
+def test_signed_request_requires_nonce_bound_into_signature(tmp_path):
+    secret = "sensor-secret"
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "nonce-required.db"),
+        "INGEST_API_KEY": secret,
+        "REQUIRE_SENSOR_SIGNATURE": True,
+    })
+    payload = {"sensor_id": "ssh-decoy-01", "timestamp": datetime.now(timezone.utc).isoformat()}
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    timestamp = str(int(time.time()))
+    response = app.test_client().post(
+        "/api/v1/sensors/heartbeat",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Aegis-Key": secret,
+            "X-Aegis-Sensor": "ssh-decoy-01",
+            "X-Aegis-Timestamp": timestamp,
+            "X-Aegis-Signature": sign_payload(secret, timestamp, body),
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_heartbeat_replay_is_rejected_across_collector_workers(tmp_path):
+    config = {
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "shared-replay.db"),
+        "SENSOR_KEYS": {"ssh-decoy-01": "ssh-secret"},
+        "REQUIRE_SENSOR_SIGNATURE": True,
+    }
+    first_worker = create_app(config).test_client()
+    second_worker = create_app(config).test_client()
+    payload = {"sensor_id": "ssh-decoy-01", "timestamp": datetime.now(timezone.utc).isoformat()}
+    body, headers = _signed_request("ssh-secret", "ssh-decoy-01", payload)
+
+    assert first_worker.post("/api/v1/sensors/heartbeat", data=body, headers=headers).status_code == 202
+    replay = second_worker.post("/api/v1/sensors/heartbeat", data=body, headers=headers)
+    assert replay.status_code == 409
+    assert replay.get_json()["error"] == "sensor_replay_rejected"
+
+
+def test_sensor_nonce_cache_is_bounded_and_expires(tmp_path, monkeypatch):
+    clock = [1_000]
+    monkeypatch.setattr("aegis_nexus.store.time.time", lambda: clock[0])
+    store = Store(str(tmp_path / "bounded-replay.db"))
+
+    assert store.reserve_sensor_nonce(
+        "sensor-a", "a" * 20, window_seconds=5, max_nonces_per_sensor=1
+    )
+    assert not store.reserve_sensor_nonce(
+        "sensor-a", "b" * 20, window_seconds=5, max_nonces_per_sensor=1
+    )
+    assert store.reserve_sensor_nonce(
+        "sensor-b", "a" * 20, window_seconds=5, max_nonces_per_sensor=1
+    )
+
+    clock[0] += 6
+    assert store.reserve_sensor_nonce(
+        "sensor-a", "b" * 20, window_seconds=5, max_nonces_per_sensor=1
+    )
 
 
 def test_signed_ingest_rejects_bad_signature(tmp_path):

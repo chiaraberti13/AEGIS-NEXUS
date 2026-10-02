@@ -312,12 +312,29 @@ def _sensor_heartbeats(conn: sqlite3.Connection) -> None:
     )
 
 
+def _sensor_replay_nonces(conn: sqlite3.Connection) -> None:
+    _execute_statements(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS sensor_replay_nonces (
+            sensor_id TEXT NOT NULL,
+            nonce TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            PRIMARY KEY(sensor_id, nonce)
+        );
+        CREATE INDEX IF NOT EXISTS idx_sensor_replay_nonces_expiry
+        ON sensor_replay_nonces(expires_at)
+        """,
+    )
+
+
 # Append new migrations at the end with the next integer version. Never edit or
 # reorder a migration that has been released: deployed databases already recorded it.
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline_unversioned_schema", _baseline),
     Migration(2, "sensor_heartbeats", _sensor_heartbeats),
     Migration(3, "detection_suppressions", _detection_suppressions),
+    Migration(4, "sensor_replay_nonces", _sensor_replay_nonces),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version

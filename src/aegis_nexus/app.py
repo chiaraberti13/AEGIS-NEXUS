@@ -143,6 +143,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         ALLOW_UNAUTHENTICATED_OPERATOR=os.getenv("AEGIS_ALLOW_UNAUTHENTICATED_OPERATOR", "false").lower() in {"1", "true", "yes"},
         REQUIRE_SENSOR_SIGNATURE=os.getenv("AEGIS_REQUIRE_SENSOR_SIGNATURE", "false").lower() in {"1", "true", "yes"},
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
+        SENSOR_REPLAY_MAX_NONCES_PER_SENSOR=int(os.getenv("AEGIS_SENSOR_REPLAY_MAX_NONCES_PER_SENSOR", "4096")),
         SENSOR_HEARTBEAT_STALE_SECONDS=int(os.getenv("AEGIS_SENSOR_HEARTBEAT_STALE_SECONDS", "180")),
         INGEST_RATE_LIMIT=int(os.getenv("AEGIS_INGEST_RATE_LIMIT_PER_MINUTE", "600")),
         OPERATOR_RATE_LIMIT=int(os.getenv("AEGIS_OPERATOR_RATE_LIMIT_PER_MINUTE", "1200")),
@@ -322,25 +323,44 @@ def create_app(test_config: dict | None = None) -> Flask:
                 return True
         return False
 
-    def sensor_authorized(sensor_id: str, raw_body: bytes) -> bool:
+    def sensor_authorization_error(sensor_id: str, raw_body: bytes) -> str | None:
         supplied_key = request.headers.get("X-Aegis-Key", "")
         supplied_sensor = request.headers.get("X-Aegis-Sensor", "")
         if supplied_sensor and supplied_sensor != sensor_id:
-            return False
+            return "unauthorized"
         if not sensor_source_allowed(sensor_id):
-            return False
+            return "unauthorized"
         expected = sensor_secret(sensor_id)
         if not expected or not hmac.compare_digest(expected, supplied_key):
-            return False
+            return "unauthorized"
         if app.config.get("REQUIRE_SENSOR_SIGNATURE"):
-            return verify_signed_payload(
+            nonce = request.headers.get("X-Aegis-Nonce", "")
+            if not nonce:
+                return "unauthorized"
+            signature_valid = verify_signed_payload(
                 expected,
                 request.headers.get("X-Aegis-Timestamp", ""),
                 request.headers.get("X-Aegis-Signature", ""),
                 raw_body,
                 int(app.config.get("SENSOR_SIGNATURE_MAX_SKEW", 300)),
+                nonce,
             )
-        return True
+            if not signature_valid:
+                return "unauthorized"
+            if not store.reserve_sensor_nonce(
+                sensor_id,
+                nonce,
+                window_seconds=int(app.config.get("SENSOR_SIGNATURE_MAX_SKEW", 300)),
+                max_nonces_per_sensor=int(app.config.get("SENSOR_REPLAY_MAX_NONCES_PER_SENSOR", 4096)),
+            ):
+                return "sensor_replay_rejected"
+        return None
+
+    def sensor_auth_failure(sensor_id: str, raw_body: bytes) -> tuple[Response, int] | None:
+        error = sensor_authorization_error(sensor_id, raw_body)
+        if error is None:
+            return None
+        return jsonify({"error": error}), 409 if error == "sensor_replay_rejected" else 401
 
     def operator_authorized() -> bool:
         expected = str(app.config.get("OPERATOR_API_KEY", ""))
@@ -446,7 +466,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not isinstance(payload, dict):
             return jsonify({"error": "invalid_json"}), 400
         sensor_id = str(payload.get("sensor_id") or "")[:96]
-        if not sensor_id or not sensor_authorized(sensor_id, raw_body):
+        auth_failure = sensor_auth_failure(sensor_id, raw_body) if sensor_id else None
+        if not sensor_id or auth_failure is not None:
+            if auth_failure is not None:
+                return auth_failure
             return jsonify({"error": "unauthorized"}), 401
         remote = request.remote_addr or "unknown"
         if not limiter.allow(f"heartbeat:{sensor_id}:{remote}", 12, 60):
@@ -466,8 +489,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         raw_body = request.get_data(cache=False)
         if len(raw_body) > int(app.config.get("QUARANTINE_MAX_BYTES", 262144)):
             return jsonify({"error": "artifact_too_large"}), 413
-        if not sensor_authorized(sensor_id, raw_body):
-            return jsonify({"error": "unauthorized"}), 401
+        if auth_failure := sensor_auth_failure(sensor_id, raw_body):
+            return auth_failure
         if not limiter.allow(
             f"quarantine:{sensor_id}:{request.remote_addr or 'unknown'}",
             max(1, min(int(app.config.get("INGEST_RATE_LIMIT", 600)), 120)),
@@ -505,8 +528,8 @@ def create_app(test_config: dict | None = None) -> Flask:
                 return jsonify({"error": "payload_too_large"}), 413
             payload = request.get_json()
             sensor_id = str(payload.get("honeypot") or "")[:96] if isinstance(payload, dict) else ""
-            if not sensor_authorized(sensor_id, raw_body):
-                return jsonify({"error": "unauthorized"}), 401
+            if auth_failure := sensor_auth_failure(sensor_id, raw_body):
+                return auth_failure
             if not limiter.allow(
                 f"ingest:{sensor_id}:{request.remote_addr or 'unknown'}",
                 int(app.config.get("INGEST_RATE_LIMIT", 600)),
@@ -546,8 +569,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             raw_body = request.get_data(cache=True)
             if len(raw_body) > int(app.config.get("EVENT_MAX_BYTES", 65536)):
                 return jsonify({"error": "payload_too_large"}), 413
-            if not sensor_authorized(sensor_id, raw_body):
-                return jsonify({"error": "unauthorized"}), 401
+            if auth_failure := sensor_auth_failure(sensor_id, raw_body):
+                return auth_failure
             if not limiter.allow(
                 f"suricata:{sensor_id}:{request.remote_addr or 'unknown'}",
                 int(app.config.get("INGEST_RATE_LIMIT", 600)),

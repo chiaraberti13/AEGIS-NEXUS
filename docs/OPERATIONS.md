@@ -16,7 +16,9 @@ The default Compose stack uses separate `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_S
 
 ### Signed telemetry
 
-Compose enables signed sensor requests by default. A sensor sends its ID, Unix timestamp and an HMAC-SHA256 signature over `timestamp + "." + raw_body`. The collector rejects invalid or stale signatures. Normal decoy events include a UUID, so an exact replay is rejected as a duplicate.
+Compose enables signed sensor requests by default. A sensor sends its ID, Unix timestamp, a cryptographically random URL-safe nonce and an HMAC-SHA256 signature over `timestamp + "." + nonce + "." + raw_body`. The collector rejects invalid/stale signatures, missing/malformed nonces and every nonce already accepted for that sensor inside the signature-skew window. Nonces are reserved atomically in SQLite, so the protection is shared by all Gunicorn workers and covers events, Suricata forwarding, heartbeats and quarantine uploads before application processing.
+
+The cache expires old entries and fails closed at `AEGIS_SENSOR_REPLAY_MAX_NONCES_PER_SENSOR` (default 4096) per sensor. Keep this value above the legitimate number of signed requests a sensor can emit during `AEGIS_SENSOR_SIGNATURE_MAX_SKEW`, and do not disable signatures on untrusted networks. HTTP 409 with `sensor_replay_rejected` means the nonce was already used or the bounded window is full; it is not evidence that the source event itself was duplicated.
 
 For Suricata EVE JSON lines, install the project package on the forwarding host first (`python -m pip install -e .`), then:
 
@@ -98,7 +100,9 @@ Lo stack Compose predefinito usa valori distinti `AEGIS_SSH_SENSOR_API_KEY`, `AE
 
 ### Telemetria firmata
 
-Compose abilita per default la firma delle richieste sensore. Il sensore invia ID, timestamp Unix e firma HMAC-SHA256 calcolata su `timestamp + "." + raw_body`. Il collector rifiuta firme non valide o troppo vecchie. Gli eventi dei decoy includono un UUID, quindi il replay identico viene rifiutato come duplicato.
+Compose abilita per default la firma delle richieste sensore. Il sensore invia ID, timestamp Unix, un nonce casuale crittograficamente sicuro e URL-safe, e una firma HMAC-SHA256 calcolata su `timestamp + "." + nonce + "." + raw_body`. Il collector rifiuta firme non valide o scadute, nonce mancanti/non validi e ogni nonce già accettato per quel sensore nella finestra di skew. La prenotazione atomica in SQLite condivide la protezione tra tutti i worker Gunicorn e copre eventi, forwarding Suricata, heartbeat e upload in quarantena prima del processing applicativo.
+
+La cache elimina le voci scadute e fallisce in modo chiuso al limite per sensore `AEGIS_SENSOR_REPLAY_MAX_NONCES_PER_SENSOR` (default 4096). Mantieni il limite superiore al numero legittimo di richieste firmate producibili durante `AEGIS_SENSOR_SIGNATURE_MAX_SKEW` e non disabilitare le firme su reti non fidate. HTTP 409 con `sensor_replay_rejected` indica nonce già usato o finestra bounded piena, non dimostra che l'evento sorgente sia duplicato.
 
 Per file Suricata EVE JSON Lines:
 
