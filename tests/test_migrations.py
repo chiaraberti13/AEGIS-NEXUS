@@ -39,6 +39,8 @@ EXPECTED_TABLES = {
     "detection_suppressions",
     "detection_suppression_audit",
     "sensor_replay_nonces",
+    "sensor_sequence_streams",
+    "sensor_sequence_ranges",
 }
 
 MIGRATION_SENTINEL_ID = "54000000-0000-4000-8000-000000000001"
@@ -48,6 +50,7 @@ RELEASED_MIGRATION_IDENTITIES = (
     (2, "sensor_heartbeats"),
     (3, "detection_suppressions"),
     (4, "sensor_replay_nonces"),
+    (5, "sensor_sequences"),
 )
 
 

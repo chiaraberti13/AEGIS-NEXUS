@@ -328,6 +328,40 @@ def _sensor_replay_nonces(conn: sqlite3.Connection) -> None:
     )
 
 
+def _sensor_sequences(conn: sqlite3.Connection) -> None:
+    _execute_statements(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS sensor_sequence_streams (
+            sensor_id TEXT NOT NULL,
+            stream_id TEXT NOT NULL,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            received_count INTEGER NOT NULL DEFAULT 0,
+            duplicate_count INTEGER NOT NULL DEFAULT 0,
+            max_received_sequence INTEGER NOT NULL DEFAULT 0,
+            max_reported_sequence INTEGER NOT NULL DEFAULT 0,
+            detail_truncated INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(sensor_id, stream_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_sensor_sequence_streams_recent
+        ON sensor_sequence_streams(sensor_id, last_seen_at DESC);
+
+        CREATE TABLE IF NOT EXISTS sensor_sequence_ranges (
+            sensor_id TEXT NOT NULL,
+            stream_id TEXT NOT NULL,
+            start_sequence INTEGER NOT NULL,
+            end_sequence INTEGER NOT NULL,
+            PRIMARY KEY(sensor_id, stream_id, start_sequence),
+            FOREIGN KEY(sensor_id, stream_id)
+                REFERENCES sensor_sequence_streams(sensor_id, stream_id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_sensor_sequence_ranges_end
+        ON sensor_sequence_ranges(sensor_id, stream_id, end_sequence)
+        """,
+    )
+
+
 # Append new migrations at the end with the next integer version. Never edit or
 # reorder a migration that has been released: deployed databases already recorded it.
 MIGRATIONS: tuple[Migration, ...] = (
@@ -335,6 +369,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(2, "sensor_heartbeats", _sensor_heartbeats),
     Migration(3, "detection_suppressions", _detection_suppressions),
     Migration(4, "sensor_replay_nonces", _sensor_replay_nonces),
+    Migration(5, "sensor_sequences", _sensor_sequences),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version

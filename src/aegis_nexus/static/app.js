@@ -148,6 +148,13 @@
         .replace("{observed}", String(telemetry.observed_sensor_ids || 0));
     }
     telemetryNode.title = t("status.telemetryHint");
+    const gapSensors = Number(telemetry.sensors_with_sequence_gaps || 0);
+    if (gapSensors > 0) {
+      telemetryNode.textContent += " · " + t("status.telemetryGaps")
+        .replace("{missing}", String(Number(telemetry.missing_sequenced_events || 0)))
+        .replace("{sensors}", String(gapSensors));
+      telemetryNode.title += " " + t("status.telemetryGapsHint");
+    }
   }
 
   async function loadOperationsStatus() {

@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..security import sign_payload
+from ..sensor_sequence import SEQUENCE_FIELD
 
 MAX_EVENT_BYTES = 60_000
 
@@ -59,6 +60,20 @@ class SensorClient:
             15,
             min(int(os.getenv("AEGIS_SENSOR_HEARTBEAT_INTERVAL_SECONDS", "60")), 3600),
         )
+        # A fresh random stream per process: a restart starts a new sequence
+        # instead of looking like a gap in the previous one.
+        self.stream_id = secrets.token_urlsafe(18)
+        self._last_sequence = 0
+        self._sequence_lock = threading.Lock()
+
+    def _next_sequence(self) -> int:
+        with self._sequence_lock:
+            self._last_sequence += 1
+            return self._last_sequence
+
+    def sequence_high_water(self) -> dict[str, Any]:
+        with self._sequence_lock:
+            return {"stream_id": self.stream_id, "last_sequence": self._last_sequence}
 
     def _signed_headers(self, payload: bytes) -> dict[str, str]:
         timestamp = str(int(time.time()))
@@ -72,6 +87,12 @@ class SensorClient:
     def emit(self, event_type: str, observed: dict[str, Any], severity: str = "info", derived: dict[str, Any] | None = None) -> bool:
         if not self.key:
             return False
+        # Numbered before any local drop (oversize, network failure) so that the
+        # collector can account for every event this stream failed to deliver.
+        observed = {
+            **observed,
+            SEQUENCE_FIELD: {"stream_id": self.stream_id, "sequence": self._next_sequence()},
+        }
         event = {
             "id": str(uuid.uuid4()),
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -136,6 +157,7 @@ class SensorClient:
         payload_obj = {
             "sensor_id": self.honeypot,
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_sequence": self.sequence_high_water(),
         }
         payload = json.dumps(payload_obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         headers = {

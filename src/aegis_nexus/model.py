@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .network_evidence import NetworkEvidenceValidationError, validate_network_evidence
+from .sensor_sequence import SEQUENCE_FIELD, SensorSequenceError, validate_event_sequence
 
 SCHEMA_VERSION = "1.2"
 MAX_STRING = 4096
@@ -316,6 +317,11 @@ def normalize_event(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             validate_network_evidence(observed["network"])
         except NetworkEvidenceValidationError as exc:
+            raise EventValidationError(str(exc)) from exc
+    if observed.get(SEQUENCE_FIELD) is not None:
+        try:
+            observed[SEQUENCE_FIELD] = validate_event_sequence(observed[SEQUENCE_FIELD])
+        except SensorSequenceError as exc:
             raise EventValidationError(str(exc)) from exc
     event_id = str(payload.get("id") or uuid.uuid4())
     try:

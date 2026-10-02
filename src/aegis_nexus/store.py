@@ -15,6 +15,7 @@ from typing import Any
 from .correlation import explicit_session_token, session_id_for, session_id_for_explicit, session_identity, should_join
 from .migrations import LATEST_SCHEMA_VERSION, applied_migrations, apply_migrations, enable_wal, schema_version
 from .pagination import decode_cursor, encode_cursor
+from .sensor_sequence import SEQUENCE_FIELD, record_event_sequence, record_heartbeat_sequence, sequence_summary
 
 
 _EVENT_FILTERS = (
@@ -199,6 +200,11 @@ class Store:
                 json.dumps(event.get("collector", {}), ensure_ascii=False),
                 event["schema_version"], received_at,
             ))
+            sequence = observed.get(SEQUENCE_FIELD)
+            if isinstance(sequence, dict):
+                # Same transaction as the event row: a sequence counts as received
+                # only if the event it numbers was actually stored.
+                record_event_sequence(conn, event["honeypot"], sequence, received_at)
         self._ingest_since_maintenance += 1
         self.maintain()
         safe_event = self._export_safe_event(event)
@@ -1228,6 +1234,7 @@ class Store:
         sensor_id: str,
         sensor_timestamp: str | None = None,
         collector_received_at: str | None = None,
+        event_sequence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         bounded_sensor_id = str(sensor_id)[:96]
         if not bounded_sensor_id:
@@ -1246,6 +1253,8 @@ class Store:
                 """,
                 (bounded_sensor_id, bounded_timestamp, received_at),
             )
+            if event_sequence is not None:
+                record_heartbeat_sequence(conn, bounded_sensor_id, event_sequence, received_at)
         return {
             "sensor_id": bounded_sensor_id,
             "sensor_timestamp": bounded_timestamp,
@@ -1349,6 +1358,26 @@ class Store:
             )
             item["configured"] = True
 
+        with self.connect() as conn:
+            sequences = sequence_summary(conn)
+        for sensor_id, sequence in sequences.items():
+            observed.setdefault(
+                sensor_id,
+                {
+                    "sensor_id": sensor_id,
+                    "configured": False,
+                    "last_received_at": None,
+                    "latest_event_timestamp": None,
+                    "total_events": 0,
+                    "recent_events": 0,
+                    "last_heartbeat_at": None,
+                    "sensor_heartbeat_timestamp": None,
+                    "heartbeat_state": "never",
+                },
+            )
+        for sensor_id, item in observed.items():
+            item["event_sequence"] = sequences.get(sensor_id) or {"state": "unsequenced"}
+
         items = [observed[key] for key in sorted(observed, key=str.casefold)]
         return {
             "recent_hours": bounded_hours,
@@ -1360,12 +1389,19 @@ class Store:
                 1 for item in items if item["configured"] and item["heartbeat_state"] == "healthy"
             ),
             "heartbeat_stale_seconds": stale_after,
+            "sensors_with_sequence_gaps": sum(
+                1 for item in items if item["event_sequence"]["state"] == "gaps_detected"
+            ),
+            "missing_sequenced_events": sum(int(item["event_sequence"].get("missing", 0)) for item in items),
             "observed_sensor_ids": len(items),
             "items": items,
             "interpretation": (
                 "Heartbeat state uses collector receipt time. 'healthy' confirms recent authenticated "
                 "sensor contact; 'stale' means contact is overdue and does not by itself identify the cause. "
-                "Ordinary event telemetry receipt alone is not proof that a sensor is online or offline."
+                "Ordinary event telemetry receipt alone is not proof that a sensor is online or offline. "
+                "Sequence gaps count events a sensor numbered but the collector never stored (evidence loss); "
+                "a just-emitted event can appear missing until it arrives, and 'unsequenced' sources such as "
+                "Suricata forwarding carry no sequence."
             ),
         }
 

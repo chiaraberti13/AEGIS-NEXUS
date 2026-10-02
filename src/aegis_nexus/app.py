@@ -34,6 +34,7 @@ from .quarantine import QuarantineError, QuarantineStore
 from .pagination import CursorError
 from .reporting import case_markdown, session_markdown
 from .security import SlidingWindowLimiter, verify_signed_payload
+from .sensor_sequence import SensorSequenceError, validate_heartbeat_sequence
 from .store import Store
 from .study import explain, explain_session
 from .suricata import SuricataValidationError, normalize_eve_event
@@ -477,9 +478,14 @@ def create_app(test_config: dict | None = None) -> Flask:
         sensor_timestamp = payload.get("timestamp")
         if sensor_timestamp is not None and not isinstance(sensor_timestamp, str):
             return jsonify({"error": "invalid_timestamp"}), 422
+        try:
+            event_sequence = validate_heartbeat_sequence(payload.get("event_sequence"))
+        except SensorSequenceError as exc:
+            return jsonify({"error": "invalid_event_sequence", "detail": str(exc)}), 422
         heartbeat = store.record_sensor_heartbeat(
             sensor_id,
             sensor_timestamp=sensor_timestamp,
+            event_sequence=event_sequence,
         )
         return jsonify(heartbeat), 202
 
