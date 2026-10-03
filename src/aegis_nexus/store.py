@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .event_chain import HASHED_COLUMNS, append_record, verify_chain
 from .correlation import explicit_session_token, session_id_for, session_id_for_explicit, session_identity, should_join
 from .migrations import LATEST_SCHEMA_VERSION, applied_migrations, apply_migrations, enable_wal, schema_version
 from .pagination import decode_cursor, encode_cursor
@@ -182,6 +183,8 @@ class Store:
         received_at = collector_received_at or datetime.now(timezone.utc).isoformat()
         country, asn, latitude, longitude = self._geo(event["enrichment"])
         with self.connect() as conn:
+            # Write lock first: the hash chain head must be read and advanced atomically.
+            conn.execute("BEGIN IMMEDIATE")
             session_id = self._select_or_create_session(conn, event)
             conn.execute("""
                 INSERT INTO events(
@@ -200,6 +203,10 @@ class Store:
                 json.dumps(event.get("collector", {}), ensure_ascii=False),
                 event["schema_version"], received_at,
             ))
+            stored = conn.execute(
+                f"SELECT {', '.join(HASHED_COLUMNS)} FROM events WHERE id=?", (event["id"],)
+            ).fetchone()
+            append_record(conn, dict(zip(HASHED_COLUMNS, tuple(stored))))
             sequence = observed.get(SEQUENCE_FIELD)
             if isinstance(sequence, dict):
                 # Same transaction as the event row: a sequence counts as received
@@ -214,6 +221,11 @@ class Store:
             "received_at": received_at,
             "collector_received_at": received_at,
         }
+
+    def verify_event_chain(self) -> dict[str, Any]:
+        """Verify the tamper-evident event hash chain (read-only)."""
+        with self.connect() as conn:
+            return verify_chain(conn)
 
     def maintain(self, force: bool = False) -> dict[str, int]:
         if not force and self._ingest_since_maintenance < 100:

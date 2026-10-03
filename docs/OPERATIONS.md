@@ -72,6 +72,17 @@ Interpretation and limits:
 - counters are independent of event retention, and Suricata forwarding (`unsequenced`) carries no sequence;
 - an authenticated but compromised sensor can still lie about its own numbering — sequences detect loss in transit and at the collector, not sensor compromise.
 
+### Event hash chain (tamper evidence)
+
+Every stored event carries `chain_seq`, `prev_hash` and `record_hash` (SHA-256 over the exact stored columns, including the observed/enrichment/derived/hypotheses/collector JSON, plus the previous hash). The chain head (`last_seq`, `last_hash`) is advanced in the same `BEGIN IMMEDIATE` transaction as the event insert, so concurrent Gunicorn workers cannot fork it. Verify with `python scripts/verify_integrity.py aegis.db [backup.db ...]` (read-only; exit 0 = intact, 1 = tamper evidence, 2 = unreadable).
+
+Semantics and limits:
+
+- editing a record, deleting one in the middle, reordering, or truncating the tail is reported (`record_hash_mismatch`, `sequence_gap`, `broken_link`, `head_mismatch`);
+- retention/capacity pruning removes the oldest records legitimately: the first surviving record is the anchor and is reported as `pruned_before`;
+- events stored before schema v6 are `unchained_legacy`: counted, never vouched for;
+- the chain proves consistency, not authenticity: someone who can rewrite the whole database can rebuild it. Record `head_hash` off-host (e.g. with each backup) to detect that.
+
 ### Backups
 
 Use SQLite's online backup API instead of copying a live WAL database directly:
@@ -171,6 +182,17 @@ Interpretazione e limiti:
 - lo storage è limitato (32 stream per sensore, 256 intervalli per stream); quando il dettaglio degli intervalli è esaurito viene impostato `detail_truncated` e il conteggio prosegue senza rilevare duplicati per quello stream;
 - i contatori sono indipendenti dalla retention degli eventi, e il forwarding Suricata (`unsequenced`) non porta sequenze;
 - un sensore autenticato ma compromesso può comunque mentire sulla propria numerazione: le sequenze rilevano perdite in transito e al collector, non la compromissione del sensore.
+
+### Hash chain degli eventi (evidenza di manomissione)
+
+Ogni evento salvato ha `chain_seq`, `prev_hash` e `record_hash` (SHA-256 sulle colonne esattamente come salvate, inclusi i JSON observed/enrichment/derived/hypotheses/collector, più l'hash precedente). La testa della catena (`last_seq`, `last_hash`) avanza nella stessa transazione `BEGIN IMMEDIATE` dell'inserimento, quindi worker Gunicorn concorrenti non possono biforcarla. Verifica con `python scripts/verify_integrity.py aegis.db [backup.db ...]` (sola lettura; exit 0 = integro, 1 = manomissione rilevata, 2 = illeggibile).
+
+Semantica e limiti:
+
+- modifica di un record, cancellazione intermedia, riordino o troncamento della coda vengono segnalati (`record_hash_mismatch`, `sequence_gap`, `broken_link`, `head_mismatch`);
+- la retention/capacity elimina legittimamente i record più vecchi: il primo superstite è l'àncora ed è riportato come `pruned_before`;
+- gli eventi salvati prima dello schema v6 sono `unchained_legacy`: contati, mai garantiti;
+- la catena prova la coerenza, non l'autenticità: chi può riscrivere l'intero database può ricostruirla. Registra `head_hash` fuori dall'host (es. a ogni backup) per rilevarlo.
 
 ### Backup
 

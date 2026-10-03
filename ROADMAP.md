@@ -140,7 +140,7 @@ These are deliberate design boundaries, not missing features:
 ### Sensor trust & evidence integrity
 - [x] Add sensor replay protection (per-sensor nonce cache bounded to the signature skew window)
 - [x] Add per-sensor monotonic sequence numbers to detect telemetry gaps as evidence loss
-- [ ] Add a tamper-evident hash chain over stored events (`prev_hash` / `record_hash`)
+- [x] Add a tamper-evident hash chain over stored events (`prev_hash` / `record_hash`)
 - [ ] Add an offline integrity-verification command for the event hash chain and backups
 - [ ] Document zero-downtime rotation of sensor and operator secrets (overlapping keys)
 

@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: aegis-nexus
+Version: 0.2.0
+Summary: Honeypot telemetry, SOC analysis and study lab
+Requires-Python: >=3.12
+License-File: LICENSE
+Requires-Dist: Flask<4,>=3.1
+Requires-Dist: gunicorn<24,>=23
+Requires-Dist: geoip2<6,>=5.3
+Requires-Dist: paramiko<5,>=3.5
+Provides-Extra: dev
+Requires-Dist: pytest<9,>=8.3; extra == "dev"
+Dynamic: license-file

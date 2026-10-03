@@ -51,6 +51,7 @@ RELEASED_MIGRATION_IDENTITIES = (
     (3, "detection_suppressions"),
     (4, "sensor_replay_nonces"),
     (5, "sensor_sequences"),
+    (6, "event_hash_chain"),
 )
 
 

@@ -362,6 +362,30 @@ def _sensor_sequences(conn: sqlite3.Connection) -> None:
     )
 
 
+def _event_hash_chain(conn: sqlite3.Connection) -> None:
+    # Existing rows stay unchained (NULL): their history cannot be vouched for
+    # retroactively, and verification reports them as ``unchained_legacy``.
+    columns = _column_names(conn, "events")
+    for name, ddl in (
+        ("chain_seq", "INTEGER"),
+        ("prev_hash", "TEXT"),
+        ("record_hash", "TEXT"),
+    ):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE events ADD COLUMN {name} {ddl}")
+    _execute_statements(
+        conn,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_events_chain_seq ON events(chain_seq);
+        CREATE TABLE IF NOT EXISTS event_chain_head (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            last_seq INTEGER NOT NULL,
+            last_hash TEXT NOT NULL
+        )
+        """,
+    )
+
+
 # Append new migrations at the end with the next integer version. Never edit or
 # reorder a migration that has been released: deployed databases already recorded it.
 MIGRATIONS: tuple[Migration, ...] = (
@@ -370,6 +394,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(3, "detection_suppressions", _detection_suppressions),
     Migration(4, "sensor_replay_nonces", _sensor_replay_nonces),
     Migration(5, "sensor_sequences", _sensor_sequences),
+    Migration(6, "event_hash_chain", _event_hash_chain),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
