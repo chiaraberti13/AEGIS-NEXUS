@@ -79,6 +79,7 @@ tests/test_migrations.py
 tests/test_model.py
 tests/test_network_evidence.py
 tests/test_operations.py
+tests/test_operator_identity.py
 tests/test_pagination.py
 tests/test_pcap.py
 tests/test_quarantine.py

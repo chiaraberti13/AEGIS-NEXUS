@@ -55,6 +55,18 @@ When `AEGIS_OPERATOR_API_KEY` is configured, analytical APIs require `X-Aegis-Op
 
 Do not use remote operator access without TLS. The example in `deploy/nginx.conf.example` provides a starting point for TLS termination and edge rate limiting. Adjust it to your environment and certificate management.
 
+#### Named operator identities (per-analyst keys)
+
+The single `AEGIS_OPERATOR_API_KEY` is the lab mode and still works unchanged. For multi-analyst deployments you can additionally configure `AEGIS_OPERATOR_KEYS` as a JSON object mapping an identity name to a key (or to a rotation list whose first entry is the current key and the rest stay valid during a cut-over, max 4):
+
+```
+AEGIS_OPERATOR_KEYS={"alice":"alice-long-random-secret","bob":["bob-new","bob-old"]}
+```
+
+Identity names are bounded to `[A-Za-z0-9._@-]` (max 64 characters) and at most 64 identities. Named keys are accepted **alongside** the single key, so you can introduce per-analyst keys without an outage and retire the shared key afterwards. When no named identity is configured, the single/shared key resolves to the identity in `AEGIS_OPERATOR_IDENTITY` (default `operator`).
+
+The authenticated identity is reported by `GET /api/v1/operator/status` (as `operator`, with `operator_auth_mode` one of `named_identities`, `shared_key` or `unauthenticated_lab`) and shown in the console header. The identity is attached to the request so later audit logging and case ownership can attribute actions to a named operator. The roster is never exposed to unauthenticated callers, and operator keys are stripped from shareable CTI exports. All configured keys are compared in constant time without an early exit.
+
 ### Rate limits and analytics bounds
 
 Application-level request limits protect sensor ingestion and operator APIs, but they are per process. For an Internet-facing deployment, keep an independent firewall/reverse-proxy rate limit as well.
@@ -185,6 +197,18 @@ L'adapter Suricata genera un ID deterministico dal record EVE, quindi l'invio ri
 Quando `AEGIS_OPERATOR_API_KEY` è configurata, le API analitiche richiedono `X-Aegis-Operator-Key`. La console web chiede la chiave e la conserva solo nel `sessionStorage` del browser. La chiusura della sessione del browser o il comando di blocco la rimuovono.
 
 Non usare accesso operatore remoto senza TLS. L'esempio `deploy/nginx.conf.example` fornisce una base per terminazione TLS e rate limiting perimetrale, da adattare al proprio ambiente e alla gestione dei certificati.
+
+#### Identità operatore nominali (chiavi per analista)
+
+La singola `AEGIS_OPERATOR_API_KEY` è la modalità lab e continua a funzionare senza modifiche. Per deployment multi-analista puoi configurare in aggiunta `AEGIS_OPERATOR_KEYS` come oggetto JSON che mappa un nome di identità a una chiave (o a una lista di rotazione in cui la prima voce è la chiave corrente e le altre restano valide durante il cambio, massimo 4):
+
+```
+AEGIS_OPERATOR_KEYS={"alice":"segreto-casuale-lungo-alice","bob":["bob-nuova","bob-vecchia"]}
+```
+
+I nomi delle identità sono limitati a `[A-Za-z0-9._@-]` (massimo 64 caratteri) e ad al massimo 64 identità. Le chiavi nominali sono accettate **insieme** alla chiave singola, così puoi introdurre chiavi per analista senza interruzioni e ritirare la chiave condivisa in seguito. Se non è configurata alcuna identità nominale, la chiave singola/condivisa viene associata all'identità in `AEGIS_OPERATOR_IDENTITY` (predefinita `operator`).
+
+L'identità autenticata è riportata da `GET /api/v1/operator/status` (come `operator`, con `operator_auth_mode` tra `named_identities`, `shared_key` o `unauthenticated_lab`) ed è mostrata nell'intestazione della console. L'identità è associata alla richiesta così che il futuro audit log e l'ownership dei casi possano attribuire le azioni a un operatore nominale. L'elenco non è mai esposto a chiamanti non autenticati e le chiavi operatore sono rimosse dagli export CTI condivisibili. Tutte le chiavi configurate sono confrontate a tempo costante senza uscita anticipata.
 
 ### Rate limit e limiti analitici
 

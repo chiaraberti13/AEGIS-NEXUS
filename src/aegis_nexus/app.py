@@ -8,9 +8,10 @@ import io
 import ipaddress
 import json
 import os
+import re
 import sqlite3
 
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, g, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from .alerts import AlertStore
@@ -89,6 +90,51 @@ def _secret_candidates(value) -> tuple[str, ...]:
     return tuple(str(item) for item in value if item)[:MAX_OVERLAPPING_KEYS]
 
 
+OPERATOR_IDENTITY_PATTERN = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
+MAX_OPERATOR_IDENTITIES = 64
+
+
+def _load_operator_keys(raw: str) -> dict[str, str | list[str]]:
+    """Parse per-analyst operator keys from a JSON object (name -> key or key list).
+
+    Keeps the single-key lab mode intact: an empty value yields no named
+    identities and callers fall back to ``AEGIS_OPERATOR_API_KEY``. Every
+    captured value is treated as hostile, so the identity name charset, the
+    identity count and each secret are bounded here rather than at use time.
+    """
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("AEGIS_OPERATOR_KEYS must be valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("AEGIS_OPERATOR_KEYS must be a JSON object")
+    if len(parsed) > MAX_OPERATOR_IDENTITIES:
+        raise ValueError(f"AEGIS_OPERATOR_KEYS supports at most {MAX_OPERATOR_IDENTITIES} identities")
+
+    result: dict[str, str | list[str]] = {}
+    for name, key in parsed.items():
+        if not isinstance(name, str) or not OPERATOR_IDENTITY_PATTERN.fullmatch(name):
+            raise ValueError("invalid operator identity in AEGIS_OPERATOR_KEYS")
+        if key in (None, ""):
+            continue
+        if isinstance(key, list):
+            # Overlapping keys for zero-downtime per-analyst key rotation: the
+            # first entry is the current key, the others stay accepted until the
+            # rotation ends.
+            if len(key) > MAX_OVERLAPPING_KEYS or not all(isinstance(item, str) for item in key):
+                raise ValueError(f"invalid secret list for operator {name}")
+            keys = [item[:512] for item in key if item]
+            if keys:
+                result[name] = keys
+            continue
+        if not isinstance(key, str):
+            raise ValueError(f"invalid secret for operator {name}")
+        result[name] = key[:512]
+    return result
+
+
 def _load_sensor_source_cidrs(raw: str) -> dict[str, ipaddress.IPv4Network | ipaddress.IPv6Network]:
     if not raw:
         return {}
@@ -164,6 +210,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         BACKUP_KEEP=int(os.getenv("AEGIS_BACKUP_KEEP", "14")),
         OPERATOR_API_KEY=os.getenv("AEGIS_OPERATOR_API_KEY", ""),
         OPERATOR_API_KEY_PREVIOUS=os.getenv("AEGIS_OPERATOR_API_KEY_PREVIOUS", ""),
+        OPERATOR_KEYS=_load_operator_keys(os.getenv("AEGIS_OPERATOR_KEYS", "")),
+        OPERATOR_IDENTITY=(os.getenv("AEGIS_OPERATOR_IDENTITY", "").strip() or "operator"),
         ALLOW_UNAUTHENTICATED_OPERATOR=os.getenv("AEGIS_ALLOW_UNAUTHENTICATED_OPERATOR", "false").lower() in {"1", "true", "yes"},
         REQUIRE_SENSOR_SIGNATURE=os.getenv("AEGIS_REQUIRE_SENSOR_SIGNATURE", "false").lower() in {"1", "true", "yes"},
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
@@ -395,15 +443,50 @@ def create_app(test_config: dict | None = None) -> Flask:
             return None
         return jsonify({"error": error}), 409 if error == "sensor_replay_rejected" else 401
 
-    def operator_authorized() -> bool:
-        expected = str(app.config.get("OPERATOR_API_KEY", ""))
-        if not expected:
-            return bool(app.config.get("TESTING")) or bool(app.config.get("ALLOW_UNAUTHENTICATED_OPERATOR"))
+    def _default_operator_identity() -> str:
+        return str(app.config.get("OPERATOR_IDENTITY") or "operator")
+
+    def resolve_operator_identity() -> str | None:
+        """Return the authenticated operator name, or ``None`` if unauthorized.
+
+        Named per-analyst keys (``OPERATOR_KEYS``) and the single shared/lab key
+        (``OPERATOR_API_KEY`` plus its rotation predecessor) are both accepted so
+        a deployment can move from one lab key to named identities without an
+        outage. Named keys take precedence; the shared key resolves to the
+        configured default identity. Every configured candidate is compared in
+        constant time without an early exit to avoid leaking which identity (if
+        any) matched.
+        """
+        named = app.config.get("OPERATOR_KEYS") or {}
+        shared = str(app.config.get("OPERATOR_API_KEY", ""))
+        if not named and not shared:
+            # Single-key lab mode with no key configured: open only when a test
+            # harness or the explicit development-only opt-in allows it.
+            if bool(app.config.get("TESTING")) or bool(app.config.get("ALLOW_UNAUTHENTICATED_OPERATOR")):
+                return _default_operator_identity()
+            return None
         supplied = request.headers.get("X-Aegis-Operator-Key", "")
         if not supplied:
-            return False
-        accepted = _secret_candidates([expected, app.config.get("OPERATOR_API_KEY_PREVIOUS", "")])
-        return any([hmac.compare_digest(candidate, supplied) for candidate in accepted])
+            return None
+        matched: str | None = None
+        for name, secret in named.items():
+            if any([hmac.compare_digest(candidate, supplied) for candidate in _secret_candidates(secret)]):
+                matched = matched or name
+        if matched is not None:
+            return matched
+        if shared:
+            accepted = _secret_candidates([shared, app.config.get("OPERATOR_API_KEY_PREVIOUS", "")])
+            if any([hmac.compare_digest(candidate, supplied) for candidate in accepted]):
+                return _default_operator_identity()
+        return None
+
+    def current_operator_identity() -> str | None:
+        return getattr(g, "operator_identity", None)
+
+    def operator_authorized() -> bool:
+        identity = resolve_operator_identity()
+        g.operator_identity = identity
+        return identity is not None
 
     @app.before_request
     def protect_trust_boundaries():
@@ -454,7 +537,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not limiter.allow(f"operator-status:{remote}", 60, 60):
             return jsonify({"error": "rate_limited"}), 429
         authenticated = operator_authorized()
-        operator_key_configured = bool(app.config.get("OPERATOR_API_KEY"))
+        named_operators = app.config.get("OPERATOR_KEYS") or {}
+        shared_key_configured = bool(app.config.get("OPERATOR_API_KEY"))
+        operator_key_configured = shared_key_configured or bool(named_operators)
         insecure_opt_in = bool(app.config.get("ALLOW_UNAUTHENTICATED_OPERATOR"))
         payload = {
             "required": operator_key_configured or not (bool(app.config.get("TESTING")) or insecure_opt_in),
@@ -463,6 +548,17 @@ def create_app(test_config: dict | None = None) -> Flask:
             "insecure_unauthenticated_opt_in": insecure_opt_in and not operator_key_configured,
         }
         if authenticated:
+            # Attribute the session to a named operator so later audit logging and
+            # case ownership (Cycle P/G) can record who acted. The roster itself is
+            # never exposed to unauthenticated callers.
+            if named_operators:
+                payload["operator_auth_mode"] = "named_identities"
+            elif shared_key_configured:
+                payload["operator_auth_mode"] = "shared_key"
+            else:
+                payload["operator_auth_mode"] = "unauthenticated_lab"
+            payload["operator"] = current_operator_identity() or _default_operator_identity()
+            payload["operator_identity_count"] = len(named_operators)
             sensor_keys = app.config.get("SENSOR_KEYS") or {}
             payload["sensor_auth_mode"] = "per_sensor_allowlist" if sensor_keys else (
                 "shared_key" if app.config.get("INGEST_API_KEY") else "unconfigured"
@@ -830,6 +926,11 @@ def create_app(test_config: dict | None = None) -> Flask:
                 str(app.config.get("INGEST_API_KEY_PREVIOUS") or ""),
                 str(app.config.get("OPERATOR_API_KEY") or ""),
                 str(app.config.get("OPERATOR_API_KEY_PREVIOUS") or ""),
+            ])
+            sensitive_values.extend([
+                secret
+                for value in (app.config.get("OPERATOR_KEYS") or {}).values()
+                for secret in _secret_candidates(value)
             ])
             shareable_indicators = sanitize_shareable_indicators(
                 indicator_reader(),

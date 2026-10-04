@@ -212,7 +212,7 @@ Apri:
 
 **http://127.0.0.1:8600**
 
-Quando richiesto inserisci il valore di `AEGIS_OPERATOR_API_KEY` presente nel file `.env`. Il browser lo conserva soltanto in `sessionStorage`; chiudendo la sessione o usando il pulsante di blocco viene rimosso.
+Quando richiesto inserisci il valore di `AEGIS_OPERATOR_API_KEY` presente nel file `.env`. Il browser lo conserva soltanto in `sessionStorage`; chiudendo la sessione o usando il pulsante di blocco viene rimosso. L'identità operatore autenticata è mostrata nell'intestazione della console. Per deployment multi-analista puoi emettere chiavi per analista tramite `AEGIS_OPERATOR_KEYS` insieme alla chiave lab singola — vedi [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 ## 🔌 Porte predefinite
 

@@ -41,9 +41,31 @@
     return headers;
   }
 
+  let lastOperatorStatus = null;
+
+  function renderOperatorIdentity(status) {
+    lastOperatorStatus = status;
+    const badge = $("operator-identity");
+    if (!badge) return;
+    const name = status && status.authenticated ? status.operator : "";
+    if (!name) {
+      badge.hidden = true;
+      badge.textContent = "";
+      badge.removeAttribute("title");
+      return;
+    }
+    // Operator names come from trusted deployment config, but render via
+    // textContent so the badge can never execute injected markup.
+    badge.textContent = t("auth.signedInAs").replace("{name}", String(name));
+    const mode = status.operator_auth_mode;
+    badge.title = mode ? t(`auth.mode.${mode}`) : "";
+    badge.hidden = false;
+  }
+
   function showOperatorGate(invalid = false) {
     $("operator-gate").hidden = false;
     $("operator-error").hidden = !invalid;
+    renderOperatorIdentity(null);
     window.setTimeout(() => $("operator-key").focus(), 0);
   }
 
@@ -2145,6 +2167,7 @@
       const status = await getJSON("/api/v1/operator/status");
       if (status.authenticated) {
         hideOperatorGate();
+        renderOperatorIdentity(status);
         await loadFilterOptions();
         await loadEnrichmentStatus();
         await loadOperationsStatus();
@@ -2167,6 +2190,7 @@
     state.lang = state.lang === "it" ? "en" : "it";
     localStorage.setItem("aegis-lang", state.lang);
     i18n();
+    renderOperatorIdentity(lastOperatorStatus);
     renderCaseList();
     renderAlertList();
     renderIocList();
@@ -2260,6 +2284,7 @@
         return;
       }
       hideOperatorGate();
+      renderOperatorIdentity(status);
       await loadFilterOptions();
       await loadEnrichmentStatus();
       await loadOperationsStatus();
