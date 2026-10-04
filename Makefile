@@ -1,4 +1,4 @@
-.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove
+.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity
 
 install:
 	python -m pip install -e '.[dev]'
@@ -28,6 +28,9 @@ logs:
 
 backup:
 	docker compose --profile ops run --rm backup
+
+verify-integrity:
+	python scripts/verify_integrity.py $(DB)
 
 egress-validate:
 	@bash scripts/egress_guard.sh validate

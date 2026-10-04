@@ -82,3 +82,17 @@ def test_offline_verifier_exit_codes(tmp_path):
     assert bad.returncode == 1
     missing = subprocess.run([sys.executable, script, str(tmp_path / "nope.db")], capture_output=True, text=True)
     assert missing.returncode == 2
+
+
+def test_offline_verifier_checks_backups(tmp_path):
+    import subprocess, sys
+    from pathlib import Path
+    from aegis_nexus.backup import backup_database
+    store, ids = _store(tmp_path)
+    backup = backup_database(Path(store.path), tmp_path / "bk", 3)
+    script = "scripts/verify_integrity.py"
+    assert subprocess.run([sys.executable, script, str(backup)], capture_output=True, text=True).returncode == 0
+    with sqlite3.connect(backup) as conn:
+        conn.execute("DELETE FROM events WHERE id=?", (ids[1],))
+    bad = subprocess.run([sys.executable, script, store.path, str(backup)], capture_output=True, text=True)
+    assert bad.returncode == 1
