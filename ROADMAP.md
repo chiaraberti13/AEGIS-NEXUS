@@ -142,7 +142,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add per-sensor monotonic sequence numbers to detect telemetry gaps as evidence loss
 - [x] Add a tamper-evident hash chain over stored events (`prev_hash` / `record_hash`)
 - [x] Add an offline integrity-verification command for the event hash chain and backups
-- [ ] Document zero-downtime rotation of sensor and operator secrets (overlapping keys)
+- [x] Document zero-downtime rotation of sensor and operator secrets (overlapping keys)
 
 ### Operator accountability
 - [ ] Support multiple named operator identities (per-analyst keys) while keeping the single-key lab mode

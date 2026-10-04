@@ -486,3 +486,46 @@ def test_ipv4_mapped_ipv6_sensor_source_matches_ipv4_management_cidr(tmp_path):
 
     stored = client.get(f"/api/v1/events/{payload['id']}").get_json()
     assert stored["observed"]["source_ip"] == "203.0.113.151"
+
+
+def test_sensor_key_rotation_accepts_overlapping_keys(tmp_path):
+    config = {
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "rotation.db"),
+        "SENSOR_KEYS": {"ssh-decoy-01": ["new-secret", "old-secret"]},
+        "REQUIRE_SENSOR_SIGNATURE": True,
+    }
+    client = create_app(config).test_client()
+    for secret in ("new-secret", "old-secret"):
+        payload = {"sensor_id": "ssh-decoy-01", "timestamp": datetime.now(timezone.utc).isoformat()}
+        body, headers = _signed_request(secret, "ssh-decoy-01", payload)
+        assert client.post("/api/v1/sensors/heartbeat", data=body, headers=headers).status_code == 202
+
+    retired = dict(config, SENSOR_KEYS={"ssh-decoy-01": ["new-secret"]})
+    client = create_app(retired).test_client()
+    payload = {"sensor_id": "ssh-decoy-01", "timestamp": datetime.now(timezone.utc).isoformat()}
+    body, headers = _signed_request("old-secret", "ssh-decoy-01", payload)
+    assert client.post("/api/v1/sensors/heartbeat", data=body, headers=headers).status_code == 401
+
+
+def test_sensor_key_list_is_validated(monkeypatch):
+    monkeypatch.setenv("AEGIS_SENSOR_KEYS", '{"ssh-decoy-01":["a","b","c","d","e"]}')
+    with pytest.raises(ValueError, match="secret list"):
+        create_app({"TESTING": True})
+    monkeypatch.setenv("AEGIS_SENSOR_KEYS", '{"ssh-decoy-01":[1]}')
+    with pytest.raises(ValueError, match="secret list"):
+        create_app({"TESTING": True})
+
+
+def test_operator_key_rotation_accepts_previous_key_until_cleared(tmp_path):
+    config = {
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "operator-rotation.db"),
+        "OPERATOR_API_KEY": "new-operator",
+        "OPERATOR_API_KEY_PREVIOUS": "old-operator",
+    }
+    client = create_app(config).test_client()
+    for key, expected in (("new-operator", 200), ("old-operator", 200), ("other", 401)):
+        assert client.get("/api/v1/events", headers={"X-Aegis-Operator-Key": key}).status_code == expected
+    cleared = create_app(dict(config, OPERATOR_API_KEY_PREVIOUS="")).test_client()
+    assert cleared.get("/api/v1/events", headers={"X-Aegis-Operator-Key": "old-operator"}).status_code == 401

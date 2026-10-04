@@ -46,7 +46,10 @@ from .time_integrity import EventClockError, utc_now_iso, validate_event_clock
 FILTER_KEYS = ("country", "asn", "destination_port", "protocol", "service", "honeypot", "severity", "source_ip", "session_id", "event_type")
 
 
-def _load_sensor_keys(raw: str) -> dict[str, str]:
+MAX_OVERLAPPING_KEYS = 4
+
+
+def _load_sensor_keys(raw: str) -> dict[str, str | list[str]]:
     if not raw:
         return {}
     try:
@@ -56,16 +59,34 @@ def _load_sensor_keys(raw: str) -> dict[str, str]:
     if not isinstance(parsed, dict):
         raise ValueError("AEGIS_SENSOR_KEYS must be a JSON object")
 
-    result: dict[str, str] = {}
+    result: dict[str, str | list[str]] = {}
     for sensor, key in list(parsed.items())[:128]:
         if not isinstance(sensor, str) or not sensor or len(sensor) > 96:
             raise ValueError("invalid sensor id in AEGIS_SENSOR_KEYS")
         if key in (None, ""):
             continue
+        if isinstance(key, list):
+            # Overlapping keys for zero-downtime rotation: the first entry is the
+            # current key, the others are still accepted until the rotation ends.
+            if len(key) > MAX_OVERLAPPING_KEYS or not all(isinstance(item, str) for item in key):
+                raise ValueError(f"invalid secret list for sensor {sensor}")
+            keys = [item[:512] for item in key if item]
+            if keys:
+                result[sensor] = keys
+            continue
         if not isinstance(key, str):
             raise ValueError(f"invalid secret for sensor {sensor}")
         result[sensor] = key[:512]
     return result
+
+
+def _secret_candidates(value) -> tuple[str, ...]:
+    """Normalize a configured secret (string or list) to the accepted keys."""
+    if not value:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    return tuple(str(item) for item in value if item)[:MAX_OVERLAPPING_KEYS]
 
 
 def _load_sensor_source_cidrs(raw: str) -> dict[str, ipaddress.IPv4Network | ipaddress.IPv6Network]:
@@ -128,6 +149,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         EVENT_MAX_BYTES=event_max_bytes,
         DATABASE_PATH=os.getenv("AEGIS_DATABASE_PATH", "./data/aegis.db"),
         INGEST_API_KEY=os.getenv("AEGIS_INGEST_API_KEY", ""),
+        INGEST_API_KEY_PREVIOUS=os.getenv("AEGIS_INGEST_API_KEY_PREVIOUS", ""),
         SENSOR_KEYS=_load_sensor_keys(os.getenv("AEGIS_SENSOR_KEYS", "")),
         SENSOR_SOURCE_CIDRS=_load_sensor_source_cidrs(os.getenv("AEGIS_SENSOR_SOURCE_CIDRS", "")),
         RETENTION_DAYS=int(os.getenv("AEGIS_RETENTION_DAYS", "30")),
@@ -141,6 +163,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         BACKUP_DIR=os.getenv("AEGIS_BACKUP_DIR", "./data/backups"),
         BACKUP_KEEP=int(os.getenv("AEGIS_BACKUP_KEEP", "14")),
         OPERATOR_API_KEY=os.getenv("AEGIS_OPERATOR_API_KEY", ""),
+        OPERATOR_API_KEY_PREVIOUS=os.getenv("AEGIS_OPERATOR_API_KEY_PREVIOUS", ""),
         ALLOW_UNAUTHENTICATED_OPERATOR=os.getenv("AEGIS_ALLOW_UNAUTHENTICATED_OPERATOR", "false").lower() in {"1", "true", "yes"},
         REQUIRE_SENSOR_SIGNATURE=os.getenv("AEGIS_REQUIRE_SENSOR_SIGNATURE", "false").lower() in {"1", "true", "yes"},
         SENSOR_SIGNATURE_MAX_SKEW=int(os.getenv("AEGIS_SENSOR_SIGNATURE_MAX_SKEW", "300")),
@@ -282,11 +305,14 @@ def create_app(test_config: dict | None = None) -> Flask:
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    def sensor_secret(sensor_id: str) -> str:
+    def sensor_secrets(sensor_id: str) -> tuple[str, ...]:
         sensor_keys = app.config.get("SENSOR_KEYS") or {}
         if sensor_keys:
-            return str(sensor_keys.get(sensor_id) or "")
-        return str(app.config.get("INGEST_API_KEY", ""))
+            return _secret_candidates(sensor_keys.get(sensor_id))
+        return _secret_candidates([
+            app.config.get("INGEST_API_KEY", ""),
+            app.config.get("INGEST_API_KEY_PREVIOUS", ""),
+        ])
 
     def remote_ip_address():
         try:
@@ -331,9 +357,15 @@ def create_app(test_config: dict | None = None) -> Flask:
             return "unauthorized"
         if not sensor_source_allowed(sensor_id):
             return "unauthorized"
-        expected = sensor_secret(sensor_id)
-        if not expected or not hmac.compare_digest(expected, supplied_key):
+        # Check every accepted key without early exit so timing does not reveal
+        # which one matched during an overlapping-key rotation.
+        matching = [
+            candidate for candidate in sensor_secrets(sensor_id)
+            if hmac.compare_digest(candidate, supplied_key)
+        ]
+        if not matching:
             return "unauthorized"
+        expected = matching[0]
         if app.config.get("REQUIRE_SENSOR_SIGNATURE"):
             nonce = request.headers.get("X-Aegis-Nonce", "")
             if not nonce:
@@ -368,7 +400,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not expected:
             return bool(app.config.get("TESTING")) or bool(app.config.get("ALLOW_UNAUTHENTICATED_OPERATOR"))
         supplied = request.headers.get("X-Aegis-Operator-Key", "")
-        return bool(supplied) and hmac.compare_digest(expected, supplied)
+        if not supplied:
+            return False
+        accepted = _secret_candidates([expected, app.config.get("OPERATOR_API_KEY_PREVIOUS", "")])
+        return any([hmac.compare_digest(candidate, supplied) for candidate in accepted])
 
     @app.before_request
     def protect_trust_boundaries():
@@ -785,10 +820,16 @@ def create_app(test_config: dict | None = None) -> Flask:
             or "threat-intelligence-provider"
         )[:256]
         try:
-            sensitive_values = list((app.config.get("SENSOR_KEYS") or {}).values())
+            sensitive_values = [
+                secret
+                for value in (app.config.get("SENSOR_KEYS") or {}).values()
+                for secret in _secret_candidates(value)
+            ]
             sensitive_values.extend([
                 str(app.config.get("INGEST_API_KEY") or ""),
+                str(app.config.get("INGEST_API_KEY_PREVIOUS") or ""),
                 str(app.config.get("OPERATOR_API_KEY") or ""),
+                str(app.config.get("OPERATOR_API_KEY_PREVIOUS") or ""),
             ])
             shareable_indicators = sanitize_shareable_indicators(
                 indicator_reader(),

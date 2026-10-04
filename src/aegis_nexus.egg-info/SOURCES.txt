@@ -71,6 +71,7 @@ tests/test_detection.py
 tests/test_detection_backtest.py
 tests/test_detection_suppression.py
 tests/test_enrichment.py
+tests/test_event_chain.py
 tests/test_fingerprints.py
 tests/test_frontend_safety.py
 tests/test_ioc.py

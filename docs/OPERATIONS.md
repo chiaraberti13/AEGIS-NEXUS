@@ -14,6 +14,26 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 The default Compose stack uses separate `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_SENSOR_API_KEY` and `AEGIS_LEGACY_SENSOR_API_KEY` values and builds the collector-side sensor allowlist from them. It also assigns explicit `AEGIS_*_MGMT_SUBNET` CIDRs and binds each built-in sensor identity to its expected source network; those networks are denied access to the operator/UI surface. Configure `AEGIS_SURICATA_SENSOR_API_KEY` when Suricata ingestion is enabled. `AEGIS_INGEST_API_KEY` is a legacy/shared fallback for direct deployments and should remain empty when the allowlist is in use. Keep `AEGIS_OPERATOR_API_KEY` independent from all sensor secrets and never commit the resulting `.env`.
 
+### Secret rotation without downtime
+
+Sensor and operator secrets can be rotated with an overlap window, so no sensor loses telemetry and no analyst is locked out. Only the collector ever holds more than one key; each sensor and each analyst uses a single key at a time.
+
+**Sensor key (per sensor, independent of the others)**
+
+1. Generate a new secret and give the collector both keys, new first. `AEGIS_SENSOR_KEYS` accepts a JSON list (max 4) instead of a string for any sensor, e.g. `{"ssh-decoy-01":["<new>","<old>"]}`. With the default Compose file, supply the whole `AEGIS_SENSOR_KEYS` value through a `docker-compose.override.yml`. Restart/reload only the collector; sensors keep signing with the old key and are still accepted.
+2. Update the sensor's `AEGIS_SENSOR_API_KEY` to the new secret and restart that sensor. Signed requests use the key that matched the `X-Aegis-Key` header, so old and new sensors can coexist.
+3. Verify the sensor reports through `/api/v1/operations/status` (fresh heartbeat/telemetry), then remove the old key from the list and restart the collector. Any request still using the old key now receives HTTP 401.
+
+**Operator key**
+
+1. Set `AEGIS_OPERATOR_API_KEY` to the new value and `AEGIS_OPERATOR_API_KEY_PREVIOUS` to the old one; restart the collector. Both keys are accepted.
+2. Distribute the new key to analysts and automation.
+3. Clear `AEGIS_OPERATOR_API_KEY_PREVIOUS` and restart the collector.
+
+For the legacy shared fallback the same pattern applies with `AEGIS_INGEST_API_KEY` and `AEGIS_INGEST_API_KEY_PREVIOUS` (only when `AEGIS_SENSOR_KEYS` is not used).
+
+Rules: keep the overlap as short as possible (it doubles the credential exposure for that sensor); after suspected compromise skip the overlap and replace the key immediately, accepting a short telemetry gap, which will be visible as a sequence gap; never reuse a retired key; a new key must never equal another sensor's or the operator's key. All accepted keys are treated as secrets and stripped from shareable exports. Nonce replay protection is unaffected by rotation.
+
 ### Signed telemetry
 
 Compose enables signed sensor requests by default. A sensor sends its ID, Unix timestamp, a cryptographically random URL-safe nonce and an HMAC-SHA256 signature over `timestamp + "." + nonce + "." + raw_body`. The collector rejects invalid/stale signatures, missing/malformed nonces and every nonce already accepted for that sensor inside the signature-skew window. Nonces are reserved atomically in SQLite, so the protection is shared by all Gunicorn workers and covers events, Suricata forwarding, heartbeats and quarantine uploads before application processing.
@@ -124,6 +144,26 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 Lo stack Compose predefinito usa valori distinti `AEGIS_SSH_SENSOR_API_KEY`, `AEGIS_WEB_SENSOR_API_KEY` e `AEGIS_LEGACY_SENSOR_API_KEY` e costruisce da questi l'allowlist del collector. Assegna inoltre CIDR esplicite `AEGIS_*_MGMT_SUBNET` e vincola ogni identità sensore built-in alla rete sorgente attesa; tali reti non possono accedere alla superficie operatore/UI. Configura `AEGIS_SURICATA_SENSOR_API_KEY` quando abiliti l'ingestione Suricata. `AEGIS_INGEST_API_KEY` è un fallback legacy/condiviso per deployment diretti e dovrebbe restare vuoto quando è attiva l'allowlist. Mantieni `AEGIS_OPERATOR_API_KEY` distinta da tutte le chiavi sensore e non committare mai il file `.env` risultante.
+
+### Rotazione dei segreti senza downtime
+
+I segreti di sensori e operatori si ruotano con una finestra di sovrapposizione, senza perdere telemetria né bloccare gli analisti. Solo il collector detiene più di una chiave; ogni sensore e ogni analista usa una sola chiave alla volta.
+
+**Chiave sensore (per sensore, indipendente dagli altri)**
+
+1. Genera un nuovo segreto e fornisci al collector entrambe le chiavi, la nuova per prima. `AEGIS_SENSOR_KEYS` accetta una lista JSON (max 4) al posto della stringa per qualunque sensore, ad es. `{"ssh-decoy-01":["<nuova>","<vecchia>"]}`. Con il Compose predefinito, fornisci l'intero valore di `AEGIS_SENSOR_KEYS` tramite un `docker-compose.override.yml`. Riavvia solo il collector; i sensori continuano a firmare con la vecchia chiave e vengono ancora accettati.
+2. Aggiorna `AEGIS_SENSOR_API_KEY` del sensore con il nuovo segreto e riavvia quel sensore. Le richieste firmate usano la chiave corrispondente all'header `X-Aegis-Key`, quindi vecchi e nuovi sensori possono coesistere.
+3. Verifica che il sensore riporti dati in `/api/v1/operations/status` (heartbeat/telemetria recenti), poi rimuovi la vecchia chiave dalla lista e riavvia il collector. Le richieste che usano ancora la vecchia chiave ricevono HTTP 401.
+
+**Chiave operatore**
+
+1. Imposta `AEGIS_OPERATOR_API_KEY` al nuovo valore e `AEGIS_OPERATOR_API_KEY_PREVIOUS` al vecchio; riavvia il collector. Entrambe le chiavi sono accettate.
+2. Distribuisci la nuova chiave ad analisti e automazioni.
+3. Svuota `AEGIS_OPERATOR_API_KEY_PREVIOUS` e riavvia il collector.
+
+Per il fallback condiviso legacy vale lo stesso schema con `AEGIS_INGEST_API_KEY` e `AEGIS_INGEST_API_KEY_PREVIOUS` (solo quando non si usa `AEGIS_SENSOR_KEYS`).
+
+Regole: mantieni la sovrapposizione il più breve possibile (raddoppia l'esposizione della credenziale per quel sensore); dopo un sospetto compromesso salta la sovrapposizione e sostituisci subito la chiave, accettando un breve buco di telemetria visibile come gap di sequenza; non riutilizzare mai una chiave ritirata; una nuova chiave non deve mai coincidere con quella di un altro sensore o dell'operatore. Tutte le chiavi accettate sono trattate come segreti e rimosse dagli export condivisibili. La protezione anti-replay dei nonce non è influenzata dalla rotazione.
 
 ### Telemetria firmata
 
