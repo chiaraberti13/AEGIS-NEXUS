@@ -362,6 +362,48 @@ def _sensor_sequences(conn: sqlite3.Connection) -> None:
     )
 
 
+def _operator_audit_log(conn: sqlite3.Connection) -> None:
+    # Append-only record of operator actions (alert lifecycle, case changes,
+    # exports, PCAP/artifact access). Rows are immutable: a BEFORE UPDATE trigger
+    # rejects any in-place edit so a logged action cannot be rewritten after the
+    # fact. The AUTOINCREMENT id is monotonic, so bounded oldest-first retention
+    # pruning (recorded as evidence loss) advances the minimum id transparently
+    # while any out-of-band deletion of a mid-sequence row leaves a visible gap.
+    _execute_statements(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS operator_audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            operator TEXT NOT NULL,
+            action TEXT NOT NULL,
+            target_type TEXT NOT NULL DEFAULT '',
+            target_id TEXT NOT NULL DEFAULT '',
+            outcome TEXT NOT NULL DEFAULT 'success',
+            source_ip TEXT,
+            detail TEXT NOT NULL DEFAULT '{}'
+        );
+        CREATE INDEX IF NOT EXISTS idx_operator_audit_log_recent
+        ON operator_audit_log(id DESC);
+        CREATE INDEX IF NOT EXISTS idx_operator_audit_log_operator
+        ON operator_audit_log(operator, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_operator_audit_log_target
+        ON operator_audit_log(target_type, target_id, id DESC)
+        """,
+    )
+    # Executed on its own because the trigger body contains statement separators
+    # that the naive single-statement splitter above cannot handle.
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS operator_audit_log_no_update
+        BEFORE UPDATE ON operator_audit_log
+        BEGIN
+            SELECT RAISE(ABORT, 'operator_audit_log is append-only');
+        END
+        """
+    )
+
+
 def _event_hash_chain(conn: sqlite3.Connection) -> None:
     # Existing rows stay unchained (NULL): their history cannot be vouched for
     # retroactively, and verification reports them as ``unchained_legacy``.
@@ -395,6 +437,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(4, "sensor_replay_nonces", _sensor_replay_nonces),
     Migration(5, "sensor_sequences", _sensor_sequences),
     Migration(6, "event_hash_chain", _event_hash_chain),
+    Migration(7, "operator_audit_log", _operator_audit_log),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version

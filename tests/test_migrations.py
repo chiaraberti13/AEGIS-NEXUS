@@ -17,6 +17,7 @@ from aegis_nexus.migrations import (
     schema_version,
     validate_migrations,
 )
+from aegis_nexus.operator_audit import OperatorAuditLog
 from aegis_nexus.pcap import PcapEvidenceStore
 from aegis_nexus.store import Store
 
@@ -41,6 +42,7 @@ EXPECTED_TABLES = {
     "sensor_replay_nonces",
     "sensor_sequence_streams",
     "sensor_sequence_ranges",
+    "operator_audit_log",
 }
 
 MIGRATION_SENTINEL_ID = "54000000-0000-4000-8000-000000000001"
@@ -52,6 +54,7 @@ RELEASED_MIGRATION_IDENTITIES = (
     (4, "sensor_replay_nonces"),
     (5, "sensor_sequences"),
     (6, "event_hash_chain"),
+    (7, "operator_audit_log"),
 )
 
 
@@ -186,7 +189,7 @@ def test_fresh_database_is_created_at_latest_version_with_ledger(tmp_path):
     assert ledger[0]["name"] == "baseline_unversioned_schema"
 
 
-@pytest.mark.parametrize("component", [AlertStore, CorrelationWorkspace, DetectionSuppressionStore])
+@pytest.mark.parametrize("component", [AlertStore, CorrelationWorkspace, DetectionSuppressionStore, OperatorAuditLog])
 def test_every_component_brings_shared_database_to_latest_version(tmp_path, component):
     path = tmp_path / "component.db"
     component(str(path))

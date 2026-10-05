@@ -30,6 +30,7 @@ from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .ioc import IOCWorkspace
 from .model import EventValidationError, normalize_event
+from .operator_audit import OperatorAuditLog
 from .pcap import DisabledPcapCaptureProvider, PcapEvidenceStore, PcapValidationError
 from .quarantine import QuarantineError, QuarantineStore
 from .pagination import CursorError
@@ -244,6 +245,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         QUARANTINE_DIR=os.getenv("AEGIS_QUARANTINE_DIR", ""),
         QUARANTINE_MAX_BYTES=int(os.getenv("AEGIS_QUARANTINE_MAX_BYTES", "262144")),
         QUARANTINE_MAX_FILES=int(os.getenv("AEGIS_QUARANTINE_MAX_FILES", "1000")),
+        AUDIT_LOG_RETENTION_DAYS=int(os.getenv("AEGIS_AUDIT_LOG_RETENTION_DAYS", "365")),
+        AUDIT_LOG_MAX_ROWS=int(os.getenv("AEGIS_AUDIT_LOG_MAX_ROWS", "1000000")),
     )
     if test_config:
         app.config.update(test_config)
@@ -287,6 +290,11 @@ def create_app(test_config: dict | None = None) -> Flask:
         max_files=int(app.config.get("QUARANTINE_MAX_FILES", 1000)),
     )
     pcap_capture_provider = app.config.get("PCAP_CAPTURE_PROVIDER") or DisabledPcapCaptureProvider()
+    audit_log = OperatorAuditLog(
+        app.config["DATABASE_PATH"],
+        retention_days=int(app.config.get("AUDIT_LOG_RETENTION_DAYS", 365)),
+        max_rows=int(app.config.get("AUDIT_LOG_MAX_ROWS", 1_000_000)),
+    )
     limiter = SlidingWindowLimiter()
     enricher = app.config.get("ENRICHER")
     if enricher is None:
@@ -321,6 +329,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_pcap_store"] = pcap_store
     app.extensions["aegis_pcap_capture_provider"] = pcap_capture_provider
     app.extensions["aegis_quarantine_store"] = quarantine_store
+    app.extensions["aegis_audit_log"] = audit_log
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
     app.extensions["aegis_threat_context"] = threat_context
@@ -483,6 +492,34 @@ def create_app(test_config: dict | None = None) -> Flask:
     def current_operator_identity() -> str | None:
         return getattr(g, "operator_identity", None)
 
+    def record_audit(
+        action: str,
+        *,
+        target_type: str = "",
+        target_id: str = "",
+        detail: dict | None = None,
+        outcome: str = "success",
+    ) -> None:
+        """Append an operator action to the audit log, attributed to the caller.
+
+        Auditing must never break the operation it records: the authenticated
+        request already succeeded by the time this runs, so a logging failure is
+        swallowed (and surfaced in the application log) rather than turned into a
+        5xx that would hide the action without preventing it.
+        """
+        try:
+            audit_log.record(
+                current_operator_identity() or _default_operator_identity(),
+                action,
+                target_type=target_type,
+                target_id=target_id,
+                detail=detail,
+                source_ip=request.remote_addr,
+                outcome=outcome,
+            )
+        except Exception:  # pragma: no cover - defensive; audit must not 500 a request
+            app.logger.exception("operator audit logging failed for action %s", action)
+
     def operator_authorized() -> bool:
         identity = resolve_operator_identity()
         g.operator_identity = identity
@@ -586,6 +623,20 @@ def create_app(test_config: dict | None = None) -> Flask:
                 heartbeat_stale_seconds=int(app.config.get("SENSOR_HEARTBEAT_STALE_SECONDS", 180)),
             )
         return jsonify({"collector": health, "telemetry": telemetry})
+
+    @app.get("/api/v1/audit")
+    def operator_audit():
+        return jsonify({
+            "retention_days": audit_log.retention_days,
+            "max_rows": audit_log.max_rows,
+            "items": audit_log.list(
+                limit=request.args.get("limit", 200, type=int),
+                operator=request.args.get("operator", type=str),
+                action=request.args.get("action", type=str),
+                target_type=request.args.get("target_type", type=str),
+                target_id=request.args.get("target_id", type=str),
+            ),
+        })
 
     @app.post("/api/v1/sensors/heartbeat")
     def sensor_heartbeat():
@@ -763,6 +814,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             metadata = pcap_store.save(session_id, data, capture_provider="operator_upload")
         except PcapValidationError as exc:
             return jsonify({"error": "pcap_validation_error", "detail": str(exc)}), 422
+        record_audit(
+            "pcap.upload",
+            target_type="pcap",
+            target_id=str(metadata.get("id") or "")[:128],
+            detail={"session_id": session_id, "size_bytes": metadata.get("size_bytes")},
+        )
         return jsonify(metadata), 201
 
     @app.post("/api/v1/pcap/capture")
@@ -782,6 +839,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             )
         except PcapValidationError as exc:
             return jsonify({"error": "pcap_capture_unavailable", "detail": str(exc)}), 409
+        record_audit(
+            "pcap.capture",
+            target_type="pcap",
+            target_id=str(metadata.get("id") or "")[:128],
+            detail={"session_id": session_id, "size_bytes": metadata.get("size_bytes")},
+        )
         return jsonify(metadata), 201
 
     @app.get("/api/v1/pcap/<evidence_id>/download")
@@ -792,6 +855,15 @@ def create_app(test_config: dict | None = None) -> Flask:
             status = 404 if "not found" in str(exc) else 409
             return jsonify({"error": "pcap_unavailable", "detail": str(exc)}), status
         extension = "pcapng" if metadata.get("format") == "pcapng" else "pcap"
+        record_audit(
+            "pcap.download",
+            target_type="pcap",
+            target_id=str(metadata.get("id") or "")[:128],
+            detail={
+                "session_id": str(metadata.get("session_id") or "")[:128],
+                "sha256": str(metadata.get("sha256") or ""),
+            },
+        )
         return Response(
             data,
             mimetype="application/octet-stream",
@@ -946,6 +1018,15 @@ def create_app(test_config: dict | None = None) -> Flask:
         except ValueError:
             return jsonify({"error": "invalid_cti_export_tlp"}), 503
         payload = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
+        record_audit(
+            "export.stix",
+            target_type="threat_context",
+            detail={
+                "format": "stix",
+                "tlp": str(app.config.get("CTI_EXPORT_TLP") or "TLP:AMBER+STRICT"),
+                "objects": len(bundle.get("objects") or []) if isinstance(bundle, dict) else None,
+            },
+        )
         return Response(
             payload,
             mimetype="application/stix+json",
@@ -1072,7 +1153,20 @@ def create_app(test_config: dict | None = None) -> Flask:
             item = alert_store.update(alert_id[:128], status=status, tags=tags)
         except ValueError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        detail: dict = {}
+        if status is not None:
+            detail["status"] = item.get("status")
+        if tags is not None:
+            detail["tag_count"] = len(item.get("tags") or [])
+        record_audit(
+            "alert.update",
+            target_type="alert",
+            target_id=alert_id[:128],
+            detail=detail,
+        )
+        return jsonify(item), 200
 
     @app.post("/api/v1/alerts/<alert_id>/notes")
     def add_alert_note(alert_id: str):
@@ -1084,7 +1178,17 @@ def create_app(test_config: dict | None = None) -> Flask:
             item = alert_store.add_note(alert_id[:128], body or "")
         except ValueError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
-        return (jsonify(item), 201) if item else (jsonify({"error": "not_found"}), 404)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        # Attribution and length only: the note body is operator free text and is
+        # not copied into the audit trail.
+        record_audit(
+            "alert.note_add",
+            target_type="alert",
+            target_id=alert_id[:128],
+            detail={"body_length": len(body or "")},
+        )
+        return jsonify(item), 201
 
     @app.get("/api/v1/iocs")
     def iocs():
@@ -1124,6 +1228,11 @@ def create_app(test_config: dict | None = None) -> Flask:
                 _csv_safe(item.get("provenance")),
                 _csv_safe(item.get("classification")),
             ])
+        record_audit(
+            "export.ioc_csv",
+            target_type="ioc",
+            detail={"format": "csv", "rows": len(data["items"])},
+        )
         return Response(
             output.getvalue(),
             mimetype="text/csv; charset=utf-8",
@@ -1160,6 +1269,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             if str(exc) == "case_capacity":
                 return jsonify({"error": "case_capacity"}), 409
             raise
+        record_audit(
+            "case.create",
+            target_type="case",
+            target_id=str(item.get("id") or "")[:128],
+            detail={"status": item.get("status"), "severity": item.get("severity")},
+        )
         return jsonify(item), 201
 
     @app.get("/api/v1/cases/<case_id>")
@@ -1174,6 +1289,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "not_found"}), 404
         if result == "case_not_closed":
             return jsonify({"error": "case_not_closed"}), 409
+        record_audit("case.delete", target_type="case", target_id=case_id[:128])
         return ("", 204)
 
     @app.patch("/api/v1/cases/<case_id>")
@@ -1184,7 +1300,15 @@ def create_app(test_config: dict | None = None) -> Flask:
             item = store.update_case(case_id[:128], normalize_case_update(request.get_json()))
         except CaseValidationError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        record_audit(
+            "case.update",
+            target_type="case",
+            target_id=case_id[:128],
+            detail={"status": item.get("status"), "severity": item.get("severity")},
+        )
+        return jsonify(item), 200
 
     @app.post("/api/v1/cases/<case_id>/evidence")
     def add_case_evidence(case_id: str):
@@ -1201,7 +1325,15 @@ def create_app(test_config: dict | None = None) -> Flask:
             if str(exc) == "case_evidence_limit":
                 return jsonify({"error": "case_evidence_limit"}), 422
             raise
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        record_audit(
+            "case.evidence_add",
+            target_type="case",
+            target_id=case_id[:128],
+            detail={"evidence_type": evidence["type"], "evidence_id": evidence["id"]},
+        )
+        return jsonify(item), 200
 
     @app.delete("/api/v1/cases/<case_id>/evidence/<int:evidence_row_id>")
     def remove_case_evidence(case_id: str, evidence_row_id: int):
@@ -1211,7 +1343,15 @@ def create_app(test_config: dict | None = None) -> Flask:
             if str(exc) == "evidence_not_found":
                 return jsonify({"error": "evidence_not_found"}), 404
             raise
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        record_audit(
+            "case.evidence_remove",
+            target_type="case",
+            target_id=case_id[:128],
+            detail={"evidence_row_id": int(evidence_row_id)},
+        )
+        return jsonify(item), 200
 
     @app.post("/api/v1/cases/<case_id>/notes")
     def add_case_note(case_id: str):
@@ -1225,7 +1365,11 @@ def create_app(test_config: dict | None = None) -> Flask:
             if str(exc) == "case_note_limit":
                 return jsonify({"error": "case_note_limit"}), 422
             raise
-        return (jsonify(item), 201) if item else (jsonify({"error": "not_found"}), 404)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        # The note body is operator free text and is intentionally not stored.
+        record_audit("case.note_add", target_type="case", target_id=case_id[:128])
+        return jsonify(item), 201
 
     @app.get("/api/v1/reports/case/<case_id>")
     def case_report(case_id: str):
@@ -1239,6 +1383,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "not_found"}), 404
         body = case_markdown(item, request.args.get("lang", "it")[:8])
         filename = f"aegis-{case_id[:64]}.md"
+        record_audit(
+            "export.case_report",
+            target_type="case",
+            target_id=case_id[:128],
+            detail={"format": "markdown"},
+        )
         return Response(
             body,
             content_type="text/markdown; charset=utf-8",
@@ -1276,6 +1426,12 @@ def create_app(test_config: dict | None = None) -> Flask:
                 _csv_safe(evidence["added_at"]),
             ])
         filename = f"aegis-{case_id[:64]}.csv"
+        record_audit(
+            "export.case_report",
+            target_type="case",
+            target_id=case_id[:128],
+            detail={"format": "csv"},
+        )
         return Response(
             output.getvalue(),
             mimetype="text/csv; charset=utf-8",
@@ -1294,6 +1450,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "not_found"}), 404
         body = session_markdown(item, request.args.get("lang", "it")[:8])
         filename = f"aegis-{session_id[:64]}.md"
+        record_audit(
+            "export.session_report",
+            target_type="session",
+            target_id=session_id[:128],
+            detail={"format": "markdown"},
+        )
         return Response(
             body,
             content_type="text/markdown; charset=utf-8",
@@ -1344,6 +1506,12 @@ def create_app(test_config: dict | None = None) -> Flask:
                 _csv_safe(alert.get("signature")),
             ])
         filename = f"aegis-{session_id[:64]}.csv"
+        record_audit(
+            "export.session_report",
+            target_type="session",
+            target_id=session_id[:128],
+            detail={"format": "csv"},
+        )
         return Response(
             output.getvalue(),
             mimetype="text/csv; charset=utf-8",
