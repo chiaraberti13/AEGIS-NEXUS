@@ -26,6 +26,7 @@ src/aegis_nexus/ioc.py
 src/aegis_nexus/migrations.py
 src/aegis_nexus/model.py
 src/aegis_nexus/network_evidence.py
+src/aegis_nexus/operator_audit.py
 src/aegis_nexus/pagination.py
 src/aegis_nexus/pcap.py
 src/aegis_nexus/quarantine.py
@@ -79,6 +80,7 @@ tests/test_migrations.py
 tests/test_model.py
 tests/test_network_evidence.py
 tests/test_operations.py
+tests/test_operator_audit.py
 tests/test_operator_identity.py
 tests/test_pagination.py
 tests/test_pcap.py

@@ -67,6 +67,10 @@ Identity names are bounded to `[A-Za-z0-9._@-]` (max 64 characters) and at most 
 
 The authenticated identity is reported by `GET /api/v1/operator/status` (as `operator`, with `operator_auth_mode` one of `named_identities`, `shared_key` or `unauthenticated_lab`) and shown in the console header. The identity is attached to the request so later audit logging and case ownership can attribute actions to a named operator. The roster is never exposed to unauthenticated callers, and operator keys are stripped from shareable CTI exports. All configured keys are compared in constant time without an early exit.
 
+#### Operator audit log
+
+Alert-lifecycle changes, case changes, exports and PCAP/artifact access are recorded in an append-only audit log attributed to the authenticated operator identity and the request source IP. Rows are immutable (a `BEFORE UPDATE` trigger rejects edits) and read back via `GET /api/v1/audit` (filters: `operator`, `action`, `target_type`, `target_id`, `limit`). Retention is bounded by `AEGIS_AUDIT_LOG_RETENTION_DAYS` (default 365) and `AEGIS_AUDIT_LOG_MAX_ROWS` (default 1000000), with oldest-first pruning logged as evidence loss. See [`AUDIT_LOG.md`](AUDIT_LOG.md).
+
 ### Rate limits and analytics bounds
 
 Application-level request limits protect sensor ingestion and operator APIs, but they are per process. For an Internet-facing deployment, keep an independent firewall/reverse-proxy rate limit as well.
@@ -209,6 +213,10 @@ AEGIS_OPERATOR_KEYS={"alice":"segreto-casuale-lungo-alice","bob":["bob-nuova","b
 I nomi delle identità sono limitati a `[A-Za-z0-9._@-]` (massimo 64 caratteri) e ad al massimo 64 identità. Le chiavi nominali sono accettate **insieme** alla chiave singola, così puoi introdurre chiavi per analista senza interruzioni e ritirare la chiave condivisa in seguito. Se non è configurata alcuna identità nominale, la chiave singola/condivisa viene associata all'identità in `AEGIS_OPERATOR_IDENTITY` (predefinita `operator`).
 
 L'identità autenticata è riportata da `GET /api/v1/operator/status` (come `operator`, con `operator_auth_mode` tra `named_identities`, `shared_key` o `unauthenticated_lab`) ed è mostrata nell'intestazione della console. L'identità è associata alla richiesta così che il futuro audit log e l'ownership dei casi possano attribuire le azioni a un operatore nominale. L'elenco non è mai esposto a chiamanti non autenticati e le chiavi operatore sono rimosse dagli export CTI condivisibili. Tutte le chiavi configurate sono confrontate a tempo costante senza uscita anticipata.
+
+#### Registro di audit dell'operatore
+
+I cambi di ciclo di vita degli alert, le modifiche ai casi, gli export e gli accessi a PCAP/artifact sono registrati in un registro di audit in sola aggiunta, attribuito all'identità operatore autenticata e all'IP sorgente della richiesta. Le righe sono immutabili (un trigger `BEFORE UPDATE` rifiuta le modifiche) e si rileggono via `GET /api/v1/audit` (filtri: `operator`, `action`, `target_type`, `target_id`, `limit`). La retention è limitata da `AEGIS_AUDIT_LOG_RETENTION_DAYS` (default 365) e `AEGIS_AUDIT_LOG_MAX_ROWS` (default 1000000), con potatura dei più vecchi registrata come perdita di evidenza. Vedi [`AUDIT_LOG.md`](AUDIT_LOG.md).
 
 ### Rate limit e limiti analitici
 

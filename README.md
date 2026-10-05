@@ -212,7 +212,7 @@ Open:
 
 **http://127.0.0.1:8600**
 
-When prompted, enter the value of `AEGIS_OPERATOR_API_KEY` from your `.env`. The browser stores it only in `sessionStorage`; closing the session or using the lock button removes it. The authenticated operator identity is shown in the console header. For multi-analyst deployments you can issue per-analyst keys via `AEGIS_OPERATOR_KEYS` alongside the single lab key — see [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+When prompted, enter the value of `AEGIS_OPERATOR_API_KEY` from your `.env`. The browser stores it only in `sessionStorage`; closing the session or using the lock button removes it. The authenticated operator identity is shown in the console header. For multi-analyst deployments you can issue per-analyst keys via `AEGIS_OPERATOR_KEYS` alongside the single lab key — see [`docs/OPERATIONS.md`](docs/OPERATIONS.md). Alert-lifecycle changes, case changes, exports and PCAP/artifact access are recorded in an append-only operator audit log attributed to that identity — see [`docs/AUDIT_LOG.md`](docs/AUDIT_LOG.md).
 
 ## 🔌 Default ports
 
