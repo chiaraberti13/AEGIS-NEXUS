@@ -790,7 +790,7 @@ def test_detection_context_is_anchored_to_event_time_and_matches_fingerprint_onl
     assert all(item["timestamp"].startswith("2020-01-01") for item in context)
 
 
-def test_sensor_heartbeat_distinguishes_silent_healthy_stale_and_never(tmp_path):
+def test_sensor_heartbeat_reports_stale_threshold_and_interpretation(tmp_path):
     store = Store(str(tmp_path / "heartbeat.db"))
     now = datetime.now(timezone.utc)
     store.record_sensor_heartbeat(
