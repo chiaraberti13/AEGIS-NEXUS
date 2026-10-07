@@ -129,7 +129,7 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** close integrity, trust and maintainability gaps that later cycles depend on (new columns, new sensors, per-analyst workflow) before the data model grows further.
 
-**Why first:** new schema fields, new sensors and Cycle G analyst identity all build on this cycle. Schema changes now go through versioned migrations (`src/aegis_nexus/migrations.py`); signed sensor requests now carry single-use nonces and per-stream sequence numbers that expose telemetry gaps, and named per-analyst operator identities are now accepted alongside the single-key lab mode, and an append-only operator audit log (`src/aegis_nexus/operator_audit.py`) records alert-lifecycle changes, case changes, exports and PCAP/artifact access, leaving its UI/report surfacing as the remaining accountability item.
+**Why first:** new schema fields, new sensors and Cycle G analyst identity all build on this cycle. Schema changes now go through versioned migrations (`src/aegis_nexus/migrations.py`); signed sensor requests now carry single-use nonces and per-stream sequence numbers that expose telemetry gaps, and named per-analyst operator identities are now accepted alongside the single-key lab mode, and an append-only operator audit log (`src/aegis_nexus/operator_audit.py`) records alert-lifecycle changes, case changes, exports and PCAP/artifact access, and is now surfaced to operators in a read-only dashboard Audit view and, case-scoped, inside JSON/Markdown case reports. Operator accountability is complete; the remaining Cycle P work is the supply-chain & CI security hardening below.
 
 ### Schema & data lifecycle
 - [x] Add versioned, forward-only SQLite schema migrations (`PRAGMA user_version`)
@@ -147,7 +147,7 @@ These are deliberate design boundaries, not missing features:
 ### Operator accountability
 - [x] Support multiple named operator identities (per-analyst keys) while keeping the single-key lab mode
 - [x] Add an append-only operator audit log (alert lifecycle, case changes, exports, PCAP/artifact access)
-- [ ] Surface the audit log in the UI and in case reports
+- [x] Surface the audit log in the UI and in case reports
 
 ### Supply chain & CI security
 - [ ] Add lint/format checks to CI (e.g. `ruff`)

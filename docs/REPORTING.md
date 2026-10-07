@@ -19,7 +19,8 @@ Markdown is generated only from the already export-sanitized session/case report
 - commands, payloads and structured hostile data are rendered as HTML-escaped indented code blocks;
 - the session event appendix is limited to 200 events to bound generated file size;
 - Markdown export does not execute payloads, resolve URLs, enrich data or infer attribution;
-- case Markdown contains evidence references, not copied source telemetry.
+- case Markdown contains evidence references, not copied source telemetry;
+- case JSON and Markdown reports include an `operator_audit` section (the append-only operator audit log scoped to that case) for a complete accountability record; see [`AUDIT_LOG.md`](AUDIT_LOG.md).
 
 The report language follows the console language when downloaded from the UI. The API accepts `?lang=it` or `?lang=en`.
 
@@ -44,6 +45,7 @@ Il Markdown viene generato esclusivamente dalle strutture di report sessione/cas
 - comandi, payload e dati ostili strutturati sono rappresentati come blocchi di codice indentati e HTML-escaped;
 - l'appendice eventi della sessione è limitata a 200 eventi per contenere la dimensione del file;
 - l'export Markdown non esegue payload, non risolve URL, non effettua enrichment e non deduce attribuzione;
-- il Markdown dei casi contiene riferimenti alle evidenze, non copie della telemetria sorgente.
+- il Markdown dei casi contiene riferimenti alle evidenze, non copie della telemetria sorgente;
+- i report dei casi JSON e Markdown includono una sezione `operator_audit` (il registro di audit append-only dell'operatore limitato a quel caso) per un record di accountability completo; vedi [`AUDIT_LOG.md`](AUDIT_LOG.md).
 
 Dall'interfaccia il report usa la lingua attiva della console. L'API accetta `?lang=it` oppure `?lang=en`.

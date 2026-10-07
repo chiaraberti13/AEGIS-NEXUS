@@ -59,6 +59,20 @@ does **not** defend against an attacker who rewrites the whole database.
 newest first, with optional `operator`, `action`, `target_type`, `target_id`
 and `limit` filters, plus the configured `retention_days` and `max_rows`.
 
+The log is surfaced in two operator-facing places:
+
+- **Dashboard → Audit view.** A dedicated workspace lists the entries in a
+  table (timestamp, operator, action, target, outcome, source IP, detail) with
+  the same operator/action/target filters and the retention summary. Every
+  field is rendered as text, never HTML, so operator-supplied target IDs and
+  detail values cannot inject markup.
+- **Case reports.** A case JSON, Markdown case report carries an
+  `operator_audit` section scoped to that case (`target_type=case`,
+  `target_id=<case id>`): who created, changed, linked/removed evidence for,
+  annotated or exported the case, attributed to the authenticated operator.
+  This complements the case's own history so a report is a complete
+  accountability record. (CSV stays a flat evidence table.)
+
 ### Configuration
 
 | Variable | Default | Meaning |
@@ -132,6 +146,20 @@ eventi **non** difende da un attaccante che riscrive l'intero database.
 recenti, dalla più nuova, con filtri opzionali `operator`, `action`,
 `target_type`, `target_id` e `limit`, oltre a `retention_days` e `max_rows`
 configurati.
+
+Il registro è esposto in due punti per l'operatore:
+
+- **Dashboard → vista Audit.** Un workspace dedicato elenca le voci in una
+  tabella (timestamp, operatore, azione, target, esito, IP sorgente, dettaglio)
+  con gli stessi filtri operatore/azione/target e il riepilogo di conservazione.
+  Ogni campo è reso come testo, mai come HTML, così gli ID target e i valori di
+  dettaglio forniti dall'operatore non possono iniettare markup.
+- **Report del caso.** Il report del caso in JSON e Markdown include una sezione
+  `operator_audit` limitata a quel caso (`target_type=case`,
+  `target_id=<id caso>`): chi ha creato, modificato, collegato/rimosso evidenze,
+  annotato o esportato il caso, attribuito all'operatore autenticato. Completa
+  la history del caso così che il report sia un record di accountability
+  completo. (Il CSV resta una tabella piatta di evidenze.)
 
 ### Configurazione
 

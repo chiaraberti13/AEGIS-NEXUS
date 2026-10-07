@@ -1,5 +1,5 @@
 from aegis_nexus.app import create_app
-from aegis_nexus.reporting import MAX_MARKDOWN_EVENTS, session_markdown
+from aegis_nexus.reporting import MAX_MARKDOWN_EVENTS, case_markdown, session_markdown
 
 
 def test_session_markdown_redacts_raw_password_and_escapes_hostile_markup(tmp_path, monkeypatch):
@@ -120,6 +120,98 @@ def test_case_markdown_escapes_analyst_markup_and_keeps_reference_only_evidence(
     assert "<script>" not in body
     assert event_id in body
     assert "source-telemetry-secret" not in body
+
+
+def test_case_report_surfaces_operator_audit_log(tmp_path):
+    app = create_app({
+        "TESTING": True,
+        "DATABASE_PATH": str(tmp_path / "aegis.db"),
+        "INGEST_API_KEY": "sensor-secret",
+        "OPERATOR_API_KEY": "operator-secret",
+    })
+    client = app.test_client()
+    operator = {"X-Aegis-Operator-Key": "operator-secret"}
+
+    case = client.post(
+        "/api/v1/cases",
+        headers=operator,
+        json={"title": "Audit surfacing", "severity": "low"},
+    )
+    assert case.status_code == 201
+    case_id = case.get_json()["id"]
+    # A lifecycle change produces a case.update operator-audit entry.
+    assert client.patch(
+        f"/api/v1/cases/{case_id}",
+        headers=operator,
+        json={"status": "investigating"},
+    ).status_code == 200
+
+    report = client.get(f"/api/v1/reports/case/{case_id}", headers=operator)
+    assert report.status_code == 200
+    payload = report.get_json()
+    assert "operator_audit" in payload
+    actions = {entry["action"] for entry in payload["operator_audit"]}
+    assert "case.create" in actions
+    assert "case.update" in actions
+    # Every entry is attributed to the authenticated operator identity.
+    assert all(entry["operator"] for entry in payload["operator_audit"])
+    assert all(entry["target_id"] == case_id for entry in payload["operator_audit"])
+
+    markdown = client.get(f"/api/v1/reports/case/{case_id}.md?lang=en", headers=operator)
+    assert markdown.status_code == 200
+    body = markdown.get_data(as_text=True)
+    assert "Operator audit log" in body
+    assert "case.create" in body
+    assert "case.update" in body
+
+    markdown_it = client.get(f"/api/v1/reports/case/{case_id}.md?lang=it", headers=operator)
+    assert "Registro operatori" in markdown_it.get_data(as_text=True)
+
+
+def test_case_markdown_operator_audit_empty_section_renders():
+    report = {
+        "report_type": "investigation_case",
+        "generated_at": "2026-10-07T10:00:00+00:00",
+        "case": {"id": "c1", "title": "Empty"},
+        "evidence": [],
+        "notes": [],
+        "history": [],
+        "operator_audit": [],
+        "statistics": {},
+        "limitations": [],
+    }
+    body = case_markdown(report, "en")
+    assert "Operator audit log" in body
+    assert "No operator actions recorded for this case." in body
+
+
+def test_case_markdown_escapes_hostile_operator_audit_fields():
+    report = {
+        "report_type": "investigation_case",
+        "generated_at": "2026-10-07T10:00:00+00:00",
+        "case": {"id": "c1", "title": "Hostile"},
+        "evidence": [],
+        "notes": [],
+        "history": [],
+        "operator_audit": [
+            {
+                "timestamp": "2026-10-07T10:00:00+00:00",
+                "operator": "analyst",
+                "action": "export.case_report",
+                "target_type": "case",
+                "target_id": "<img src=x onerror=alert(1)>",
+                "outcome": "success",
+                "source_ip": "203.0.113.5",
+                "detail": {"format": "<script>alert(2)</script>"},
+            }
+        ],
+        "statistics": {},
+        "limitations": [],
+    }
+    body = case_markdown(report, "en")
+    assert "&lt;img src=x onerror=alert(1)&gt;" in body
+    assert "&lt;script&gt;alert(2)&lt;/script&gt;" in body
+    assert "<script>" not in body
 
 
 def test_session_markdown_event_appendix_is_bounded():

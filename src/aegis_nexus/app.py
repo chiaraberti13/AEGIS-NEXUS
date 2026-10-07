@@ -520,6 +520,22 @@ def create_app(test_config: dict | None = None) -> Flask:
         except Exception:  # pragma: no cover - defensive; audit must not 500 a request
             app.logger.exception("operator audit logging failed for action %s", action)
 
+    def case_operator_audit(case_id: str) -> list[dict]:
+        """Operator audit entries scoped to a single case for its report.
+
+        Surfacing the append-only operator audit log (Cycle P) alongside the
+        case's own history makes a case report a complete accountability record:
+        who changed the case, linked or removed evidence, added notes or exported
+        it, attributed to the authenticated operator. Reading the log must never
+        break report generation, so a failure degrades to an empty list that the
+        report still renders (and is surfaced in the application log).
+        """
+        try:
+            return audit_log.list(target_type="case", target_id=case_id, limit=500)
+        except Exception:  # pragma: no cover - defensive; report must not 500
+            app.logger.exception("reading case operator audit failed for %s", case_id)
+            return []
+
     def operator_authorized() -> bool:
         identity = resolve_operator_identity()
         g.operator_identity = identity
@@ -1374,13 +1390,17 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/v1/reports/case/<case_id>")
     def case_report(case_id: str):
         item = store.case_report(case_id[:128])
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        item["operator_audit"] = case_operator_audit(case_id[:128])
+        return jsonify(item), 200
 
     @app.get("/api/v1/reports/case/<case_id>.md")
     def case_report_markdown(case_id: str):
         item = store.case_report(case_id[:128])
         if not item:
             return jsonify({"error": "not_found"}), 404
+        item["operator_audit"] = case_operator_audit(case_id[:128])
         body = case_markdown(item, request.args.get("lang", "it")[:8])
         filename = f"aegis-{case_id[:64]}.md"
         record_audit(

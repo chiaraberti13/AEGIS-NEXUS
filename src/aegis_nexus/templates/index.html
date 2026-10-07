@@ -31,6 +31,7 @@
       <button class="nav-item" data-view-target="investigate" data-i18n="nav.investigate"></button>
       <button class="nav-item" data-view-target="cases" data-i18n="nav.cases"></button>
       <button class="nav-item" data-view-target="relations" data-i18n="nav.relations"></button>
+      <button class="nav-item" data-view-target="audit" data-i18n="nav.audit"></button>
       <button class="nav-item" data-view-target="study" data-i18n="nav.study"></button>
     </nav>
     <div class="sidebar-note"><span id="collector-status-dot" class="status-dot"></span><span id="collector-status" data-i18n="status.collectorUnknown"></span></div>
@@ -501,6 +502,35 @@
           </aside>
         </div>
         <p class="panel-note" data-i18n="relations.limit"></p>
+      </article>
+    </section>
+
+    <section class="workspace" data-view="audit">
+      <article class="panel">
+        <div class="panel-head">
+          <div><span class="eyebrow" data-i18n="audit.eyebrow"></span><h2 data-i18n="audit.title"></h2></div>
+          <span id="audit-count" class="badge">0</span>
+        </div>
+        <div class="alert-filters audit-filters">
+          <input id="audit-filter-operator" type="search" maxlength="64" data-i18n-placeholder="audit.filter.operator" autocomplete="off">
+          <input id="audit-filter-action" type="search" maxlength="64" data-i18n-placeholder="audit.filter.action" autocomplete="off">
+          <input id="audit-filter-target-type" type="search" maxlength="64" data-i18n-placeholder="audit.filter.targetType" autocomplete="off">
+          <input id="audit-filter-target-id" type="search" maxlength="128" data-i18n-placeholder="audit.filter.targetId" autocomplete="off">
+          <button id="audit-reset" class="compact" type="button" data-i18n="audit.reset"></button>
+        </div>
+        <p id="audit-retention" class="audit-retention"></p>
+        <div class="table-wrap">
+          <table><thead><tr>
+            <th data-i18n="audit.col.time"></th>
+            <th data-i18n="audit.col.operator"></th>
+            <th data-i18n="audit.col.action"></th>
+            <th data-i18n="audit.col.target"></th>
+            <th data-i18n="audit.col.outcome"></th>
+            <th data-i18n="audit.col.source"></th>
+            <th data-i18n="audit.col.detail"></th>
+          </tr></thead><tbody id="audit-list"></tbody></table>
+        </div>
+        <p class="panel-note" data-i18n="audit.note"></p>
       </article>
     </section>
 

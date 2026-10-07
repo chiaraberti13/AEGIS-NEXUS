@@ -286,12 +286,46 @@ def case_markdown(report: dict[str, Any], lang: str = "it") -> str:
         lines.extend(["- " + ("Nessuna voce di audit." if it else "No audit entries."), ""])
 
     lines.extend([
+        "## " + ("Registro operatori" if it else "Operator audit log"),
+        "",
+        "> " + (
+            "Azioni operatore attribuite tramite il registro append-only (chi, cosa, quando, da dove). Non copia note o payload."
+            if it else
+            "Operator actions attributed via the append-only audit log (who, what, when, from where). It does not copy notes or payloads."
+        ),
+        "",
+    ])
+    operator_audit = report.get("operator_audit") or []
+    if operator_audit:
+        for entry in operator_audit:
+            target = " · ".join(
+                part for part in (entry.get("target_type"), entry.get("target_id")) if part
+            )
+            lines.extend([
+                _bullet("Timestamp", entry.get("timestamp")),
+                _bullet("Operatore" if it else "Operator", entry.get("operator")),
+                _bullet("Azione" if it else "Action", entry.get("action")),
+                _bullet("Target", target),
+                _bullet("Esito" if it else "Outcome", entry.get("outcome")),
+                _bullet("IP sorgente" if it else "Source IP", entry.get("source_ip")),
+                "",
+                _code(entry.get("detail") or {}),
+                "",
+            ])
+    else:
+        lines.extend([
+            "- " + ("Nessuna azione operatore registrata per questo caso." if it else "No operator actions recorded for this case."),
+            "",
+        ])
+
+    lines.extend([
         "## " + ("Statistiche caso" if it else "Case statistics"),
         "",
         _bullet("Riferimenti evidenza" if it else "Evidence references", stats.get("evidence_references")),
         _bullet("Riferimenti disponibili" if it else "Available references", stats.get("available_references")),
         _bullet("Riferimenti non disponibili" if it else "Unavailable references", stats.get("unavailable_references")),
         _bullet("Note", stats.get("notes")),
+        _bullet("Azioni operatore registrate" if it else "Recorded operator actions", len(operator_audit)),
         "",
         "## " + ("Limiti analitici" if it else "Analytical limitations"),
         "",

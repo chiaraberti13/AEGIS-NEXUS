@@ -356,6 +356,14 @@ pre{
 @media(max-width:1200px){.alert-grid{grid-template-columns:1fr}.alert-browser,.alert-detail{min-height:auto}}
 @media(max-width:620px){.alert-filters{grid-template-columns:1fr}}
 
+/* Operator audit log workspace */
+.audit-filters{grid-template-columns:repeat(4,1fr) auto}
+.audit-filters input{min-width:0}
+.audit-retention{font-size:11px;color:#647d8f;margin:0 0 10px;overflow-wrap:anywhere}
+td.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;overflow-wrap:anywhere;max-width:360px}
+@media(max-width:900px){.audit-filters{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.audit-filters{grid-template-columns:1fr}}
+
 
 /* IOC investigation workspace */
 .ioc-grid{grid-template-columns:minmax(320px,.72fr) minmax(560px,1.28fr)}
