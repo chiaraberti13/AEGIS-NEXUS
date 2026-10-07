@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/category-HONEYPOT%20%2B%20SOC-22D3EE?style=flat-square" alt="Honeypot e SOC">
   <img src="https://img.shields.io/badge/stack-Python%20%2B%20Flask-8B949E?style=flat-square" alt="Python e Flask">
   <img src="https://img.shields.io/badge/languages-EN%20%7C%20IT-8B5CF6?style=flat-square" alt="Inglese e italiano">
-  <img src="https://img.shields.io/badge/licence-MIT-2EA043?style=flat-square" alt="MIT">
+  <img src="https://img.shields.io/badge/licence-GPL--3.0-2EA043?style=flat-square" alt="GPL-3.0">
 </p>
 
 > Una piattaforma bilingue evidence-first per honeypot e analisi SOC, pensata per monitoraggio degli attacchi, investigazione, threat research e apprendimento della cybersecurity.
@@ -402,7 +402,7 @@ Prima di esporre i decoy a Internet leggi [Sicurezza](SECURITY.md), [Threat mode
 
 ## 📄 Licenza e uso responsabile
 
-Distribuito con [licenza MIT](LICENSE). Usa AEGIS-NEXUS esclusivamente su infrastrutture di tua proprietà o per le quali possiedi un’autorizzazione esplicita. Non usarlo per contro-attaccare, accedere a sistemi di terzi o pubblicare credential/dati personali raccolti.
+Distribuito con [licenza GNU GPL-3.0](LICENSE). Usa AEGIS-NEXUS esclusivamente su infrastrutture di tua proprietà o per le quali possiedi un’autorizzazione esplicita. Non usarlo per contro-attaccare, accedere a sistemi di terzi o pubblicare credential/dati personali raccolti.
 
 ---
 
