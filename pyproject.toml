@@ -9,7 +9,7 @@ description = "Honeypot telemetry, SOC analysis and study lab"
 requires-python = ">=3.12"
 dependencies = [
   "Flask>=3.1,<4",
-  "gunicorn>=23,<24",
+  "gunicorn>=23,<27",
   "geoip2>=5.3,<6",
   "paramiko>=3.5,<5",
 ]
