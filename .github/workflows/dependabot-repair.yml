@@ -1,0 +1,65 @@
+name: Dependabot failed-check auto repair
+
+on:
+  workflow_run:
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  request-repair:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: "open",
+              head: owner + ":" + run.head_branch,
+              per_page: 100
+            });
+            const pr = prs.find(item =>
+              item.user.login === "dependabot[bot]" &&
+              item.head.sha === run.head_sha &&
+              item.base.ref === run.pull_requests?.[0]?.base?.ref
+            ) || prs.find(item =>
+              item.user.login === "dependabot[bot]" &&
+              item.head.sha === run.head_sha
+            );
+            if (!pr) {
+              core.notice("No open Dependabot pull request matches this failed run.");
+              return;
+            }
+
+            const marker = "<!-- dependabot-auto-repair:" + run.head_sha + " -->";
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: pr.number, per_page: 100
+            });
+            if (comments.some(comment => comment.body?.includes(marker))) {
+              core.notice("A repair request already exists for this commit.");
+              return;
+            }
+
+            const checks = await github.rest.checks.listForRef({
+              owner, repo, ref: run.head_sha, per_page: 100
+            });
+            const failed = checks.data.check_runs
+              .filter(check => check.conclusion === "failure")
+              .map(check => check.name);
+            const details = failed.length ? failed.join(", ") : run.name;
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: pr.number,
+              body: marker + "\n@copilot Please diagnose and fix these failed checks immediately on this Dependabot pull request: " +
+                details + ". Make only targeted corrections on this PR branch, do not disable or bypass checks, and rerun the affected checks."
+            });
+            core.notice("Asked Copilot to repair the failed Dependabot checks.");
