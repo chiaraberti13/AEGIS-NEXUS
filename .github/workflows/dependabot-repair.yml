@@ -45,7 +45,76 @@ jobs:
 
             await github.rest.issues.createComment({
               owner, repo, issue_number: pr.number,
-              body: marker + "\n@copilot Please diagnose and fix the failed check \"" +
-                check.name + "\" immediately on this Dependabot pull request. Make only a targeted correction on this PR branch, do not disable or bypass checks, and rerun the affected checks."
+              body: marker + "\n@copilot Please diagnose and fix the failed check " +
+                check.name + " immediately on this Dependabot pull request. Make only a targeted correction on this PR branch, do not disable or bypass checks, and rerun the affected checks."
             });
             core.notice("Asked Copilot to repair the failed Dependabot check.");
+
+  merge:
+    if: >-
+      github.event.check_run.conclusion == 'success' &&
+      github.event.check_run.name != 'request-repair' &&
+      github.event.check_run.name != 'merge' &&
+      github.event.check_run.name != 'Request repair' &&
+      github.event.check_run.name != 'Merge'
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      statuses: read
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const check = context.payload.check_run;
+            const { owner, repo } = context.repo;
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: "open", per_page: 100
+            });
+            const pr = prs.find(item =>
+              item.user.login === "dependabot[bot]" &&
+              item.head.sha === check.head_sha
+            );
+            if (!pr) {
+              core.notice("No open Dependabot pull request matches this successful check.");
+              return;
+            }
+
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner, repo, pull_number: pr.number, per_page: 100
+            });
+            if (commits.some(commit => commit.author?.login !== "dependabot[bot]")) {
+              core.notice("The pull request contains a commit from someone else; leaving it for review.");
+              return;
+            }
+
+            const [checkResponse, statusResponse] = await Promise.all([
+              github.rest.checks.listForRef({ owner, repo, ref: check.head_sha, per_page: 100 }),
+              github.rest.repos.listCommitStatusesForRef({ owner, repo, ref: check.head_sha, per_page: 100 })
+            ]);
+            const checks = checkResponse.data.check_runs.filter(item =>
+              item.name !== "request-repair" && item.name !== "merge" &&
+              item.name !== "Request repair" && item.name !== "Merge"
+            );
+            const accepted = new Set(["success", "neutral", "skipped"]);
+            const allChecksGreen = checks.length > 0 &&
+              checks.every(item => item.status === "completed" && accepted.has(item.conclusion));
+            const allStatusesGreen = statusResponse.data.every(item => item.state === "success");
+            if (!allChecksGreen || !allStatusesGreen) {
+              core.notice("Checks are still pending or one has failed; leaving the pull request open.");
+              return;
+            }
+
+            const current = await github.rest.pulls.get({
+              owner, repo, pull_number: pr.number
+            });
+            if (current.data.state !== "open" || current.data.head.sha !== check.head_sha) {
+              core.notice("The pull request changed; no merge was attempted.");
+              return;
+            }
+
+            await github.rest.pulls.merge({
+              owner, repo, pull_number: pr.number,
+              sha: check.head_sha, merge_method: "squash"
+            });
+            core.notice("All checks passed; merged the Dependabot pull request.");
