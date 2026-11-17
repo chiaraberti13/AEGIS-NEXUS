@@ -15,13 +15,16 @@ Thank you for contributing. The goal is to keep changes reviewable, reproducible
 
 ### Local setup
 ```bash
-python -m pip install -e ".[dev]"\ncp .env.example .env
+python -m pip install -e ".[dev]"
+cp .env.example .env
 ```
 
 ### Quality checks
 Run the relevant checks before submitting:
 ```bash
-pytest\npython -m ruff check .\npython -m mypy src
+pytest
+python -m ruff check .
+python -m mypy src
 ```
 If a command does not apply to the files you changed, explain that explicitly in the pull request.
 
@@ -55,13 +58,16 @@ Grazie per il contributo. L'obiettivo è mantenere le modifiche verificabili, ri
 
 ### Configurazione locale
 ```bash
-python -m pip install -e ".[dev]"\ncp .env.example .env
+python -m pip install -e ".[dev]"
+cp .env.example .env
 ```
 
 ### Controlli qualità
 Esegui i controlli pertinenti prima della pull request:
 ```bash
-pytest\npython -m ruff check .\npython -m mypy src
+pytest
+python -m ruff check .
+python -m mypy src
 ```
 Se un controllo non è applicabile alla modifica, dichiaralo nella pull request.
 
@@ -76,3 +82,13 @@ Se un controllo non è applicabile alla modifica, dichiaralo nella pull request.
 
 ### Pull request e review
 Descrivi **cosa cambia**, **perché**, **impatto sicurezza/privacy**, **test eseguiti** ed eventuali implicazioni di compatibilità o migrazione. I contributi possono essere revisionati o rifiutati se non sicuri, fuori perimetro, non testati o legalmente poco chiari. Si applica `CODE_OF_CONDUCT.md`.
+
+## Segnalazioni e verifica dei contributi
+
+Piattaforma honeypot e SOC per raccolta, correlazione e analisi delle evidenze.
+
+Usa i [modelli di segnalazione](https://github.com/chiaraberti13/AEGIS-NEXUS/issues/new/choose) per bug, miglioramenti e barriere di accessibilità. Prima di aprire una nuova segnalazione verifica se ne esiste già una equivalente. Contesto utile: Versione Python, sensore o vista SOC, browser e telemetria sintetica priva di dati reali.
+
+Per le modifiche, compila il modello di pull request e indica verifiche eseguite, esito e verifiche non eseguite con il motivo. Mantieni le istruzioni specifiche di questo progetto e la parità delle lingue già disponibili. Non allegare dati di produzione, credenziali o dati personali; usa esempi sintetici.
+
+Consulta [il codice di condotta](CODE_OF_CONDUCT.md), [la policy di sicurezza](SECURITY.md) e [le indicazioni di accessibilità](ACCESSIBILITY.md). Le vulnerabilità seguono esclusivamente il percorso descritto nella policy di sicurezza.

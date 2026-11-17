@@ -411,3 +411,12 @@ Distribuito con [licenza GNU GPL-3.0](LICENSE). Usa AEGIS-NEXUS esclusivamente s
 </p>
 
 ---
+
+## Comunità e collaborazione
+
+- [Come contribuire](CONTRIBUTING.md)
+- [Codice di condotta](CODE_OF_CONDUCT.md)
+- [Segnalazioni di sicurezza](SECURITY.md)
+- [Accessibilità e limiti delle verifiche](ACCESSIBILITY.md)
+- [Segnalare un problema o proporre un miglioramento](https://github.com/chiaraberti13/AEGIS-NEXUS/issues/new/choose)
+- [Licenza del progetto](LICENSE)

@@ -45,3 +45,9 @@ Non pubblicare credenziali, dati personali, informazioni di clienti, segreti di 
 
 ### Applicazione
 I maintainer possono modificare o rimuovere contenuti, rifiutare contributi, limitare la partecipazione o escludere utenti quando necessario. Le segnalazioni devono contenere il contesto sufficiente e vanno effettuate privatamente se includono informazioni sensibili.
+
+## Segnalazioni e gestione
+
+La manutentrice del repository, [Chiara Berti](https://github.com/chiaraberti13), gestisce le segnalazioni relative alla partecipazione al progetto. Usa le funzioni di segnalazione di GitHub sul contenuto interessato per abusi sulla piattaforma; per il confronto con la manutentrice usa un contatto privato già verificato. Se non disponi di un contatto, puoi chiedere soltanto come raggiungerla tramite una issue, senza descrivere pubblicamente persone, accuse o informazioni riservate.
+
+Le segnalazioni vengono valutate nel contesto, limitando la diffusione delle informazioni alle persone necessarie. Le misure possono comprendere una richiesta di modifica, la rimozione del contenuto o limitazioni alla partecipazione, proporzionate al comportamento. È possibile chiedere un riesame fornendo elementi aggiuntivi. Per vulnerabilità tecniche consulta [SECURITY.md](SECURITY.md).
