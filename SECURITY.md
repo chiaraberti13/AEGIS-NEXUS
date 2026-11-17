@@ -1,60 +1,30 @@
 # Security Policy
 
-<p align="center"><a href="#english">🇬🇧 English</a> · <a href="#italiano">🇮🇹 Italiano</a></p>
-
-## English
-
-### Supported versions
+## Supported versions
 Security fixes target the latest revision on the repository's default branch unless a release is explicitly documented as supported. Older commits, forks, unofficial builds and locally modified deployments are not supported by default.
 
-### Scope
+## Scope
 This policy covers the collector, decoys, SOC console, ingestion paths, container/deployment configuration, evidence handling and bundled tooling. Reports involving sensor authentication, isolation bypass, unauthorized data exposure, command execution, SSRF, injection, provenance corruption or secret leakage are especially important.
 
-### Reporting a vulnerability
+## Reporting a vulnerability
 Do **not** open a public issue for an unpatched vulnerability. Use GitHub's private security reporting / Security Advisories for this repository when available. Include the affected version or commit, impact, reproducible steps or a minimal proof of concept, environmental assumptions, and possible mitigations. Remove credentials, personal data and unrelated confidential information from evidence.
 
-### Responsible testing
+## Responsible testing
 Test only systems, devices, data and signals you own or are explicitly authorized to assess. Do not perform denial-of-service testing, destructive actions, persistence, social engineering, unauthorized interception, or access to third-party data. A repository's educational or security purpose is not authorization to test external infrastructure.
 
-### Secrets and data
+## Secrets and data
 Never commit real secrets, tokens, credentials, private keys, customer/production data or sensitive exports. Rotate any secret that may have been exposed and remove it from active history where appropriate.
 
-### Dependency and supply-chain security
+## Dependency and supply-chain security
 Review dependency changes, lockfiles, third-party source, build scripts and CI permissions. Prefer pinned/reproducible dependencies and the repository's existing automated checks. For Internet-facing honeypot deployments, verify network segmentation, management-network isolation, egress controls and retention settings before exposure.
 
-### Disclosure
+## Disclosure
 Allow reasonable time for investigation and remediation before public disclosure. Coordinate publication of technical details when premature disclosure could increase risk.
 
 ---
 
-## Italiano
+## Private reporting process
 
-### Versioni supportate
-Le correzioni di sicurezza riguardano la revisione più recente del branch predefinito, salvo release esplicitamente dichiarate supportate. Commit precedenti, fork, build non ufficiali e installazioni modificate localmente non sono supportati per impostazione predefinita.
+Use **Report a vulnerability** in the repository Security tab if private reporting is available. Otherwise use a verified private contact published by the repository owner. If no private contact is available, open a public issue asking only for a private contact, without vulnerability details. Do not publish exploit details, credentials, personal data or sensitive logs in public issues.
 
-### Ambito
-This policy covers the collector, decoys, SOC console, ingestion paths, container/deployment configuration, evidence handling and bundled tooling. Reports involving sensor authentication, isolation bypass, unauthorized data exposure, command execution, SSRF, injection, provenance corruption or secret leakage are especially important.
-
-### Segnalazione di una vulnerabilità
-Non aprire issue pubbliche per vulnerabilità non corrette. Usa la segnalazione privata / GitHub Security Advisories del repository quando disponibile. Includi versione o commit interessato, impatto, passaggi riproducibili o PoC minimo, assunzioni ambientali e possibili mitigazioni. Rimuovi credenziali, dati personali e informazioni riservate non necessarie dalle evidenze.
-
-### Test responsabili
-Esegui test solo su sistemi, dispositivi, dati e segnali propri o esplicitamente autorizzati. Sono esclusi DoS, azioni distruttive, persistenza, social engineering, intercettazione non autorizzata e accesso a dati di terzi. La finalità didattica o di sicurezza del repository non costituisce autorizzazione verso infrastrutture esterne.
-
-### Segreti e dati
-Non committare segreti reali, token, credenziali, chiavi private, dati di clienti/produzione o export sensibili. Ruota qualsiasi segreto potenzialmente esposto e rimuovilo dalla cronologia attiva quando opportuno.
-
-### Dipendenze e supply chain
-Valuta modifiche alle dipendenze, lockfile, sorgenti di terze parti, script di build e permessi CI. Preferisci dipendenze riproducibili/pinnate e i controlli automatici già previsti. For Internet-facing honeypot deployments, verify network segmentation, management-network isolation, egress controls and retention settings before exposure.
-
-### Divulgazione
-Concedi un tempo ragionevole per analisi e correzione prima della divulgazione pubblica e coordina la pubblicazione dei dettagli quando una disclosure prematura aumenterebbe il rischio.
-
-## Percorso operativo di segnalazione
-
-1. Consulta [la sezione sicurezza del repository](https://github.com/chiaraberti13/AEGIS-NEXUS/security) e usa la funzione di segnalazione privata se disponibile. La presenza di questo documento non implica che tale funzione sia abilitata.
-2. Se la funzione non è disponibile, usa un canale privato già verificato con la manutentrice. In assenza di un contatto, chiedi soltanto l'attivazione di un canale riservato in una issue, senza dettagli tecnici, nomi di soggetti coinvolti o allegati sensibili. Se le issue sono disabilitate, usa un contatto verificato già disponibile; attendi un canale riservato prima di condividere dettagli.
-3. Nel canale riservato indica versione o commit, componente, impatto, prerequisiti, riproduzione minima con dati sintetici ed eventuale mitigazione.
-4. Concorda la pubblicazione dei dettagli dopo la valutazione e la correzione. Restano valide le eventuali tempistiche specifiche già indicate sopra; questa integrazione non introduce nuove garanzie sui tempi.
-
-I bug ordinari e le richieste di accessibilità possono usare i modelli delle issue. Non allegare credenziali, dati di produzione o dati personali, neppure ai report tecnici quando non necessari.
+Include the affected revision, environment, impact and minimal synthetic reproduction. Coordinate disclosure with the maintainer. Acknowledgement and remediation depend on availability and severity; no fixed response deadline is guaranteed.
