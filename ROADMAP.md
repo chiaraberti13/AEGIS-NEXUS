@@ -315,7 +315,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Track per-rule hit counts and analyst closure outcomes (true/false positive rates)
 - [x] Add evidence-backed MITRE ATT&CK coverage view (only techniques supported by implemented rules) — `GET /api/v1/detections/coverage`
 - [ ] Evaluate Sigma-compatible rule export _(evaluate)_
-- [ ] Document field mapping to ECS and/or OCSF
+- [x] Document field mapping to ECS and/or OCSF — `docs/SIEM_INTEROP.md`
 - [ ] Add alert/event forwarding via syslog (RFC 5424) and signed JSON webhook from the collector only
 - [ ] Keep forwarding bounded (queue limits, retries, back-pressure) and never block ingestion
 - [ ] Ensure forwarded payloads carry provenance and Evidence Integrity metadata
