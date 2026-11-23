@@ -150,6 +150,16 @@ These are deliberate design boundaries, not missing features:
 - [x] Surface the audit log in the UI and in case reports
 
 ### Supply chain & CI security
+
+> **Local tooling in place (CI wiring deferred).** The repository currently
+> ships no GitHub Actions workflow, so these items — which require "CI green" per
+> the Definition of Done — stay unchecked. The reproducible **local** equivalents
+> now exist and are documented in `docs/SUPPLY_CHAIN.md`: a dependency-free
+> CycloneDX SBOM generator (`make sbom`), a reviewed bandit baseline
+> (`.bandit-baseline.json`, `make sast`) and a `pip-audit` target (`make audit`).
+> Wiring them into a CI workflow is a maintainer decision pending the reinstated
+> pipeline.
+
 - [ ] Add lint/format checks to CI (e.g. `ruff`)
 - [ ] Add dependency vulnerability scanning to CI (e.g. `pip-audit`)
 - [ ] Add Python SAST to CI (e.g. `bandit`) with a reviewed baseline

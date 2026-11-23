@@ -1,4 +1,4 @@
-.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity
+.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity sbom sast audit
 
 install:
 	python -m pip install -e '.[dev]'
@@ -31,6 +31,17 @@ backup:
 
 verify-integrity:
 	python scripts/verify_integrity.py $(DB)
+
+sbom:
+	python scripts/generate_sbom.py $(if $(OUT),--output $(OUT),)
+
+sast:
+	@command -v bandit >/dev/null || (echo "bandit not installed (pip install bandit)"; exit 1)
+	bandit -r src --baseline .bandit-baseline.json
+
+audit:
+	@command -v pip-audit >/dev/null || (echo "pip-audit not installed (pip install pip-audit)"; exit 1)
+	pip-audit
 
 egress-validate:
 	@bash scripts/egress_guard.sh validate
