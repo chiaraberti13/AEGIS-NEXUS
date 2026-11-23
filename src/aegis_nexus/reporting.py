@@ -271,7 +271,7 @@ def case_markdown(report: dict[str, Any], lang: str = "it") -> str:
     else:
         lines.extend(["- " + ("Nessuna nota analista." if it else "No analyst notes."), ""])
 
-    lines.extend(["## " + ("Audit trail" if it else "Audit trail"), ""])
+    lines.extend(["## " + ("Traccia di audit" if it else "Audit trail"), ""])
     history = report.get("history") or []
     if history:
         for entry in history:

@@ -2,6 +2,18 @@ from aegis_nexus.app import create_app
 from aegis_nexus.reporting import MAX_MARKDOWN_EVENTS, case_markdown, session_markdown
 
 
+def test_case_report_audit_trail_heading_is_localized():
+    # Regression: the case-report "Audit trail" heading was emitted in English
+    # for both languages, breaking the IT/EN parity invariant. The Italian
+    # report must localize the heading and must not leak the English one.
+    italian = case_markdown({}, lang="it")
+    english = case_markdown({}, lang="en")
+    assert "## Traccia di audit" in italian
+    assert "## Audit trail" not in italian
+    assert "## Audit trail" in english
+    assert "## Traccia di audit" not in english
+
+
 def test_session_markdown_redacts_raw_password_and_escapes_hostile_markup(tmp_path, monkeypatch):
     monkeypatch.setenv("AEGIS_STORE_CREDENTIAL_SECRETS", "true")
     app = create_app({
