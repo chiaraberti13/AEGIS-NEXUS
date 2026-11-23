@@ -24,6 +24,15 @@ Alerts are stored separately from source events. Detection processing never rewr
 
 Analyst tags and notes are explicitly analyst-authored context. Closing an alert does not delete its evidence references. A later matching event may create a new alert after the previous alert has been closed.
 
+An alert also carries an optional **disposition** — `true_positive`,
+`false_positive` or `benign` — set by the analyst (default: unset). The
+disposition is a derived analyst verdict, not observed telemetry or ground
+truth, and setting it is recorded in the operator audit log.
+`GET /api/v1/detections/stats` (operator-authenticated) aggregates per-rule hit
+counts, open/closed totals and disposition counts, and reports a
+`false_positive_rate` computed only over dispositioned alerts — it reflects
+triage decisions, not detector accuracy in the abstract.
+
 ### Deduplication
 
 Open alerts are aggregated only when rule ID/version, source IP and session ID match. Each matching event remains a distinct evidence reference and increments the occurrence count.
@@ -120,6 +129,15 @@ Gli alert sono memorizzati separatamente dagli eventi sorgente. Il processing de
 `new → acknowledged → investigating → closed`
 
 Tag e note sono contesto esplicitamente aggiunto dall'analista. La chiusura di un alert non elimina i riferimenti alle evidenze. Un evento successivo può creare un nuovo alert se quello precedente è già chiuso.
+
+Un alert porta anche una **disposition** opzionale — `true_positive`,
+`false_positive` o `benign` — impostata dall'analista (default: non classificata).
+La disposition è un verdetto derivato dell'analista, non telemetria osservata né
+verità assoluta, e la sua impostazione è registrata nel log di audit operatore.
+`GET /api/v1/detections/stats` (autenticato operatore) aggrega per regola gli
+hit count, i totali aperti/chiusi e i conteggi di disposition, e riporta un
+`false_positive_rate` calcolato solo sugli alert con disposition — riflette le
+decisioni di triage, non l'accuratezza del detector in astratto.
 
 ### Deduplicazione
 

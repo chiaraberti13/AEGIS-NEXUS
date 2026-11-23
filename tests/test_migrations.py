@@ -55,6 +55,7 @@ RELEASED_MIGRATION_IDENTITIES = (
     (5, "sensor_sequences"),
     (6, "event_hash_chain"),
     (7, "operator_audit_log"),
+    (8, "alert_disposition"),
 )
 
 

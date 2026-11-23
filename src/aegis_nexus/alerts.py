@@ -11,6 +11,10 @@ from .migrations import apply_migrations, enable_wal
 
 
 ALERT_STATUSES = {"new", "acknowledged", "investigating", "closed"}
+# Analyst closure outcomes. NULL/absent means "not yet dispositioned"; these are
+# derived analyst verdicts, never observed telemetry or ground truth.
+ALERT_DISPOSITIONS = {"true_positive", "false_positive", "benign"}
+STATISTICS_SCHEMA_VERSION = "1.0"
 
 
 class AlertStore:
@@ -170,15 +174,29 @@ class AlertStore:
             ).fetchall()
             return [self._hydrate(conn, row) for row in rows]
 
-    def update(self, alert_id: str, *, status: str | None = None, tags: list[str] | None = None) -> dict[str, Any] | None:
+    def update(
+        self,
+        alert_id: str,
+        *,
+        status: str | None = None,
+        tags: list[str] | None = None,
+        disposition: str | None = None,
+    ) -> dict[str, Any] | None:
         if status is not None and status not in ALERT_STATUSES:
             raise ValueError("invalid_alert_status")
+        if disposition is not None and disposition not in ALERT_DISPOSITIONS:
+            raise ValueError("invalid_alert_disposition")
         now = self._now()
         with self.connect() as conn:
             if not conn.execute("SELECT 1 FROM alerts WHERE id=?", (alert_id[:128],)).fetchone():
                 return None
             if status is not None:
                 conn.execute("UPDATE alerts SET status=?,updated_at=? WHERE id=?", (status, now, alert_id[:128]))
+            if disposition is not None:
+                conn.execute(
+                    "UPDATE alerts SET disposition=?,updated_at=? WHERE id=?",
+                    (disposition, now, alert_id[:128]),
+                )
             if tags is not None:
                 conn.execute("DELETE FROM alert_tags WHERE alert_id=?", (alert_id[:128],))
                 for tag in tags[:32]:
@@ -187,6 +205,70 @@ class AlertStore:
                         conn.execute("INSERT OR IGNORE INTO alert_tags(alert_id,tag) VALUES(?,?)", (alert_id[:128], clean))
                 conn.execute("UPDATE alerts SET updated_at=? WHERE id=?", (now, alert_id[:128]))
         return self.get(alert_id)
+
+    def statistics(self) -> dict[str, Any]:
+        """Per-rule alert hit counts and analyst closure outcomes.
+
+        Outcomes are analyst-assigned dispositions (derived context), not ground
+        truth; the false-positive rate reflects triage decisions over the alerts
+        that have been dispositioned, not detector accuracy in the abstract.
+        """
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT rule_id, rule_version, status, disposition,
+                       COUNT(*) AS alerts, SUM(occurrence_count) AS occurrences
+                FROM alerts
+                GROUP BY rule_id, rule_version, status, disposition
+                """
+            ).fetchall()
+
+        rules: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            key = str(row["rule_id"])
+            entry = rules.setdefault(
+                key,
+                {
+                    "rule_id": key,
+                    "rule_versions": set(),
+                    "alerts": 0,
+                    "occurrences": 0,
+                    "open": 0,
+                    "closed": 0,
+                    "dispositions": {"true_positive": 0, "false_positive": 0, "benign": 0, "unset": 0},
+                },
+            )
+            entry["rule_versions"].add(str(row["rule_version"]))
+            count = int(row["alerts"] or 0)
+            entry["alerts"] += count
+            entry["occurrences"] += int(row["occurrences"] or 0)
+            if row["status"] == "closed":
+                entry["closed"] += count
+            else:
+                entry["open"] += count
+            disposition = row["disposition"] if row["disposition"] in ALERT_DISPOSITIONS else "unset"
+            entry["dispositions"][disposition] += count
+
+        result = []
+        for entry in rules.values():
+            tp = entry["dispositions"]["true_positive"]
+            fp = entry["dispositions"]["false_positive"]
+            dispositioned = tp + fp
+            entry["rule_versions"] = sorted(entry["rule_versions"])
+            entry["false_positive_rate"] = round(fp / dispositioned, 4) if dispositioned else None
+            result.append(entry)
+        result.sort(key=lambda item: (-item["alerts"], item["rule_id"]))
+
+        return {
+            "schema_version": STATISTICS_SCHEMA_VERSION,
+            "caveat": (
+                "Hit counts are observed alert volume; dispositions are analyst "
+                "verdicts (derived), not ground truth. The false-positive rate is "
+                "computed only over dispositioned alerts and does not establish "
+                "detector accuracy or attribution."
+            ),
+            "rules": result,
+        }
 
     def add_note(self, alert_id: str, body: str) -> dict[str, Any] | None:
         clean = str(body).strip()

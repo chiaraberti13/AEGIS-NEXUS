@@ -971,6 +971,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     def detection_coverage_view():
         return jsonify(mitre_coverage(detection_config))
 
+    @app.get("/api/v1/detections/stats")
+    def detection_statistics():
+        return jsonify(alert_store.statistics())
+
     @app.get("/api/v1/analytics/events/<event_id>")
     def event_behavioral_analytics(event_id: str):
         event = store.get_event(event_id[:128])
@@ -1168,10 +1172,13 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "validation_error"}), 422
         status = payload.get("status")
         tags = payload.get("tags")
+        disposition = payload.get("disposition")
         if tags is not None and (not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags)):
             return jsonify({"error": "validation_error", "detail": "tags must be a list of strings"}), 422
+        if disposition is not None and not isinstance(disposition, str):
+            return jsonify({"error": "validation_error", "detail": "disposition must be a string"}), 422
         try:
-            item = alert_store.update(alert_id[:128], status=status, tags=tags)
+            item = alert_store.update(alert_id[:128], status=status, tags=tags, disposition=disposition)
         except ValueError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         if not item:
@@ -1181,6 +1188,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             detail["status"] = item.get("status")
         if tags is not None:
             detail["tag_count"] = len(item.get("tags") or [])
+        if disposition is not None:
+            detail["disposition"] = item.get("disposition")
         record_audit(
             "alert.update",
             target_type="alert",

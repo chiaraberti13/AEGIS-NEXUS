@@ -311,8 +311,8 @@ These are deliberate design boundaries, not missing features:
 
 - [x] Add per-rule enable/disable and threshold configuration with validation
 - [x] Add time-bounded, audited suppression/allowlist entries (with owner, reason and expiry)
-- [ ] Add detection backtesting against stored history and the Cycle P replay corpus
-- [ ] Track per-rule hit counts and analyst closure outcomes (true/false positive rates)
+- [x] Add detection backtesting against stored history and the Cycle P replay corpus
+- [x] Track per-rule hit counts and analyst closure outcomes (true/false positive rates) — `GET /api/v1/detections/stats`
 - [x] Add evidence-backed MITRE ATT&CK coverage view (only techniques supported by implemented rules) — `GET /api/v1/detections/coverage`
 - [ ] Evaluate Sigma-compatible rule export _(evaluate)_
 - [x] Document field mapping to ECS and/or OCSF — `docs/SIEM_INTEROP.md`
@@ -339,7 +339,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Add unified case timeline
 - [ ] Separate analyst hypotheses from evidence
 - [ ] Add case conclusion field
-- [ ] Add False Positive closure state
+- [x] Add False Positive closure state (alert disposition: true_positive/false_positive/benign)
 - [ ] Track time-to-acknowledge and time-to-close metrics (MTTA/MTTR)
 - [ ] Add 24h SOC Summary Report
 - [ ] Add 7d SOC Summary Report

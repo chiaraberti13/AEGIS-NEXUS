@@ -428,6 +428,19 @@ def _event_hash_chain(conn: sqlite3.Connection) -> None:
     )
 
 
+def _alert_disposition(conn: sqlite3.Connection) -> None:
+    # Analyst closure outcome for a detection alert: true/false positive or
+    # benign. NULL means "not yet dispositioned" — existing alerts stay NULL so
+    # no retroactive verdict is invented. This is analyst-assigned context
+    # (derived), never observed telemetry.
+    if "disposition" not in _column_names(conn, "alerts"):
+        conn.execute("ALTER TABLE alerts ADD COLUMN disposition TEXT")
+    _execute_statements(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_alerts_rule_disposition ON alerts(rule_id, disposition)",
+    )
+
+
 # Append new migrations at the end with the next integer version. Never edit or
 # reorder a migration that has been released: deployed databases already recorded it.
 MIGRATIONS: tuple[Migration, ...] = (
@@ -438,6 +451,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(5, "sensor_sequences", _sensor_sequences),
     Migration(6, "event_hash_chain", _event_hash_chain),
     Migration(7, "operator_audit_log", _operator_audit_log),
+    Migration(8, "alert_disposition", _alert_disposition),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version

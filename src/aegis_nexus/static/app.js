@@ -1902,6 +1902,7 @@
     $("alert-session").textContent = item.session_id || "—";
     $("alert-description").textContent = item.description || "";
     $("alert-status").value = item.status || "new";
+    $("alert-disposition").value = item.disposition || "";
     $("alert-tags").value = (item.tags || []).join(", ");
     renderAlertEvidence(item.evidence || []);
     renderAlertIocs(item.related_iocs || []);
@@ -1935,6 +1936,7 @@
         "PATCH",
         {
           status: $("alert-status").value,
+          disposition: $("alert-disposition").value || null,
           tags: $("alert-tags").value.split(",").map((item) => item.trim()).filter(Boolean),
         }
       );
