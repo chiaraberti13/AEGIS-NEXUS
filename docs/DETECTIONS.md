@@ -70,11 +70,36 @@ A released corpus directory is immutable. Fixes or intentional expectation chang
 
 Alert detail exposes the retained event references, related session IDs and IOC already derived from those events. IOC remain `derived` evidence and are not promoted to threat intelligence. An alert can be referenced by an investigation case together with its source events and sessions; the case remains analyst-authored context.
 
+### MITRE ATT&CK coverage view
+
+`GET /api/v1/detections/coverage` (operator-authenticated) returns the ATT&CK
+techniques the **implemented** detection rules are designed to surface. Each
+technique lists its contributing rules, whether each rule is currently enabled,
+and a per-rule `rationale` tied to that rule's deterministic matcher. The view
+is explicitly scoped to implemented rules and never invents techniques: a rule
+with no defensible, evidence-backed mapping (for example the severity-only
+Suricata passthrough) is reported under `unmapped_rules`, not forced onto a
+technique. The response carries a standing caveat that coverage describes rule
+intent — it is neither a detection guarantee nor actor attribution.
+
 ---
 
 ## Italiano
 
 Le detection di AEGIS-NEXUS sono risultati deterministici, supportati da evidenze e generati dalla telemetria conservata. Una detection **non è attribuzione** e non identifica una persona, organizzazione, malware family o campagna, salvo che tale contesto provenga separatamente da una fonte con provenance esplicita.
+
+### Vista di coverage MITRE ATT&CK
+
+`GET /api/v1/detections/coverage` (autenticato operatore) restituisce le tecniche
+ATT&CK che le regole di detection **implementate** sono progettate per far
+emergere. Ogni tecnica elenca le regole che vi contribuiscono, se ciascuna è
+attualmente abilitata e un `rationale` per regola legato al matcher
+deterministico di quella regola. La vista è limitata alle regole implementate e
+non inventa tecniche: una regola priva di un mapping difendibile e supportato da
+evidenze (ad esempio il passthrough Suricata basato solo sulla severità) è
+riportata sotto `unmapped_rules`, mai forzata su una tecnica. La risposta include
+un caveat permanente: la coverage descrive l'intento delle regole — non è una
+garanzia di detection né attribuzione dell'attaccante.
 
 ### Contratto versionato delle regole
 

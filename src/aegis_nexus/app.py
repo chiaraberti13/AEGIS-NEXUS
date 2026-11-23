@@ -25,6 +25,7 @@ from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
 from .detection_backtest import DetectionBacktester
 from .detection_config import DetectionConfig
+from .detection_coverage import mitre_coverage
 from .detection_suppression import DetectionSuppressionStore, SuppressionValidationError
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
@@ -965,6 +966,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/v1/detections/config")
     def detection_config_status():
         return jsonify(detection_config.public())
+
+    @app.get("/api/v1/detections/coverage")
+    def detection_coverage_view():
+        return jsonify(mitre_coverage(detection_config))
 
     @app.get("/api/v1/analytics/events/<event_id>")
     def event_behavioral_analytics(event_id: str):

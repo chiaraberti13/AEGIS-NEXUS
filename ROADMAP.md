@@ -313,7 +313,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add time-bounded, audited suppression/allowlist entries (with owner, reason and expiry)
 - [ ] Add detection backtesting against stored history and the Cycle P replay corpus
 - [ ] Track per-rule hit counts and analyst closure outcomes (true/false positive rates)
-- [ ] Add evidence-backed MITRE ATT&CK coverage view (only techniques supported by implemented rules)
+- [x] Add evidence-backed MITRE ATT&CK coverage view (only techniques supported by implemented rules) — `GET /api/v1/detections/coverage`
 - [ ] Evaluate Sigma-compatible rule export _(evaluate)_
 - [ ] Document field mapping to ECS and/or OCSF
 - [ ] Add alert/event forwarding via syslog (RFC 5424) and signed JSON webhook from the collector only
