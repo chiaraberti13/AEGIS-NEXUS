@@ -201,7 +201,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add PCAP retention limits
 - [x] Hash retained PCAP evidence with SHA-256
 - [x] Associate PCAP evidence with session IDs
-- [ ] Serve PCAP only as authenticated, audited attachment downloads (never parsed or rendered in the browser)
+- [x] Serve PCAP only as authenticated, audited attachment downloads (never parsed or rendered in the browser)
 - [x] Add Network Evidence investigation panel
 - [x] Add network-evidence security/privacy documentation
 - [x] Add bounded-capture and hostile-input tests

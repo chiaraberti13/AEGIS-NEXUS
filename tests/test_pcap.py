@@ -81,6 +81,15 @@ def test_pcap_upload_is_operator_only_bounded_hashed_and_session_linked(tmp_path
     assert download.data == PCAP_FIXTURE
     assert download.headers["X-Aegis-SHA256"] == item["sha256"]
     assert "../../fixture.pcap" not in download.headers["Content-Disposition"]
+    # PCAP is served as an opaque attachment, never parsed or rendered in the
+    # browser: octet-stream + attachment disposition, no inline content type.
+    assert download.headers["Content-Disposition"].startswith("attachment;")
+    assert download.mimetype == "application/octet-stream"
+    # The download is an audited evidence-access event (chain of custody).
+    audit = client.get("/api/v1/audit", headers=operator).get_json()
+    downloads = [e for e in audit["items"] if e["action"] == "pcap.download"]
+    assert downloads, "pcap.download must be recorded in the operator audit log"
+    assert downloads[0]["target_id"] == item["id"]
 
 
 def test_pcap_upload_rejects_unknown_session_invalid_format_and_size(tmp_path):
