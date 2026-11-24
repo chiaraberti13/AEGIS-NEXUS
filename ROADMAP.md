@@ -155,8 +155,10 @@ These are deliberate design boundaries, not missing features:
 > the Definition of Done — stay unchecked. The reproducible **local** equivalents
 > now exist and are documented in `docs/SUPPLY_CHAIN.md`: a dependency-free
 > CycloneDX SBOM generator (`make sbom`), a reviewed bandit baseline
-> (`.bandit-baseline.json`, `make sast`) and a `pip-audit` target (`make audit`).
-> Wiring them into a CI workflow is a maintainer decision pending the reinstated
+> (`.bandit-baseline.json`, `make sast`), a `pip-audit` target (`make audit`), a
+> high-signal `ruff` lint gate (`make lint`, enforced by `tests/test_lint.py`)
+> and a `mypy` type gate (`make typecheck`, `tests/test_typecheck.py`). Wiring
+> them into a CI workflow is a maintainer decision pending the reinstated
 > pipeline.
 
 - [ ] Add lint/format checks to CI (e.g. `ruff`)

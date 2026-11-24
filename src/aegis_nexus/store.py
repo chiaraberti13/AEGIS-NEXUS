@@ -218,7 +218,7 @@ class Store:
             stored = conn.execute(
                 f"SELECT {', '.join(HASHED_COLUMNS)} FROM events WHERE id=?", (event["id"],)
             ).fetchone()
-            append_record(conn, dict(zip(HASHED_COLUMNS, tuple(stored))))
+            append_record(conn, dict(zip(HASHED_COLUMNS, tuple(stored), strict=False)))
             sequence = observed.get(SEQUENCE_FIELD)
             if isinstance(sequence, dict):
                 # Same transaction as the event row: a sequence counts as received
@@ -1538,7 +1538,7 @@ class Store:
 
         with self.connect() as conn:
             sequences = sequence_summary(conn)
-        for sensor_id, sequence in sequences.items():
+        for sensor_id in sequences:
             observed.setdefault(
                 sensor_id,
                 {

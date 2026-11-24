@@ -490,7 +490,7 @@ def test_case_capacity_and_closed_case_retention(tmp_path):
             "severity": "info",
             "tags": [],
         })
-        assert False, "expected case_capacity"
+        raise AssertionError("expected case_capacity")
     except ValueError as exc:
         assert str(exc) == "case_capacity"
 

@@ -3,7 +3,6 @@ import io
 import sqlite3
 
 from aegis_nexus.app import create_app
-from aegis_nexus.pcap import PcapCaptureProvider
 
 
 PCAP_FIXTURE = b"\xd4\xc3\xb2\xa1" + b"\x00" * 20

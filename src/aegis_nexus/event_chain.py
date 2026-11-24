@@ -83,7 +83,7 @@ def verify_chain(conn: sqlite3.Connection, *, max_problems: int = 20) -> dict[st
     for row in cursor:
         seq = int(row[0])
         stored_prev, stored_hash = row[1], row[2]
-        values = dict(zip(HASHED_COLUMNS, row[3:]))
+        values = dict(zip(HASHED_COLUMNS, row[3:], strict=False))
         if first_seq is None:
             first_seq = seq  # anchor: older records may have been pruned by retention
         else:

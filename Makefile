@@ -1,4 +1,4 @@
-.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity verify-restore sbom sast audit typecheck
+.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity verify-restore sbom sast audit typecheck lint
 
 install:
 	python -m pip install -e '.[dev]'
@@ -49,6 +49,10 @@ audit:
 typecheck:
 	@command -v mypy >/dev/null || (echo "mypy not installed (pip install mypy)"; exit 1)
 	mypy
+
+lint:
+	@command -v ruff >/dev/null || (echo "ruff not installed (pip install ruff)"; exit 1)
+	ruff check src tests scripts
 
 egress-validate:
 	@bash scripts/egress_guard.sh validate

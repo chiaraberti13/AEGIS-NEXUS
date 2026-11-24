@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 SENSOR_PLUGIN_SCHEMA_VERSION = "1.0"
 INTERACTION_MODES = {"emulated", "banner_only", "telemetry_only"}

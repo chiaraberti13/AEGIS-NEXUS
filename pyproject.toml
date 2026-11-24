@@ -24,6 +24,15 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 
+# Lint gate: high-signal correctness rules (pyflakes, syntax, bugbear) over the
+# whole tree. Stylistic rules (line length etc.) are intentionally not enforced.
+# Run with `ruff check` or `make lint`.
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["F", "E9", "B"]
+
 # Static type-checking gate. Introduced over a curated set of core modules that
 # already type-check cleanly; the set is expanded as more modules are annotated.
 # Run with `mypy` (no args) or `make typecheck`.
