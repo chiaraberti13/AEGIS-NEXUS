@@ -130,7 +130,7 @@ def test_suricata_tls_and_dns_evidence_remains_observed_and_exact(tmp_path):
     assert tls_event["derived"] == {}
 
 
-def test_filters_ti_session_study_and_csv_report(tmp_path):
+def test_filters_ti_session_and_csv_report(tmp_path):
     app = create_app({"TESTING": True, "DATABASE_PATH": str(tmp_path / "aegis.db"), "INGEST_API_KEY": "secret"})
     client = app.test_client()
     payload = {
@@ -171,10 +171,6 @@ def test_filters_ti_session_study_and_csv_report(tmp_path):
     assert ti["items"][0]["source"] == "fixture-provider"
     assert ti["items"][0]["provenance"] == "external_enrichment"
 
-    study = client.get(f"/api/v1/study/session/{session_id}?lang=it").get_json()
-    assert study["facts"]
-    assert study["next_steps"]
-
     csv_report = client.get(f"/api/v1/reports/session/{session_id}.csv")
     assert csv_report.status_code == 200
     assert csv_report.mimetype == "text/csv"
@@ -200,7 +196,6 @@ def test_frontend_shell_exposes_soc_workspace(tmp_path):
         'id="ioc-pivots"',
         'data-view="investigate"',
         'data-view="relations"',
-        'data-view="study"',
         'id="map-zoom-in"',
         'id="event-feed"',
         'id="network-evidence-list"',
@@ -213,7 +208,6 @@ def test_frontend_shell_exposes_soc_workspace(tmp_path):
         'id="graph-path-from"',
         'id="graph-path-to"',
         'id="graph-find-path"',
-        'id="session-study"',
         'id="detail-collector"',
         'id="quality-lossy"',
         'id="quality-truncated"',

@@ -59,7 +59,6 @@ These are deliberate design boundaries, not missing features:
 - [x] Case management
 - [x] JSON/CSV/Markdown reporting
 - [x] Bilingual IT/EN interface
-- [x] Study Mode
 - [x] Security, privacy, provenance, isolation and operations documentation
 - [x] CI regression/security tests and Docker build validation
 
@@ -420,30 +419,15 @@ These are deliberate design boundaries, not missing features:
 
 ---
 
-## Cycle J — Study Mode 2.0
+## Cycle J — Study Mode (removed)
 
-**Goal:** make real captured evidence usable as a structured SOC learning environment.
-
-- [ ] Add event-type-specific learning explanations
-- [ ] Add alert-specific learning explanations
-- [ ] Explain why a detection fired
-- [ ] Explain observed vs enrichment vs derived vs hypothesis
-- [ ] Explain explicit vs heuristic correlation
-- [ ] Explain evidence completeness/truncation limitations
-- [ ] Add session investigation walkthroughs
-- [ ] Add Suricata-focused walkthroughs
-- [ ] Add credential-attack walkthroughs
-- [ ] Add command/payload investigation walkthroughs
-- [ ] Add network-evidence walkthroughs
-- [ ] Add evidence-based quiz mode
-- [ ] Generate questions only from stored evidence/context
-- [ ] Explain every quiz answer
-- [ ] Add offline Lab Mode seeded from the synthetic replay corpus (no live exposure required)
-- [ ] Add CTF-style guided exercises with verifiable answers from stored evidence
-- [ ] Add pseudonymized study/classroom exports (hide real source IPs and usernames)
-- [ ] Add IT/EN parity tests for Study Mode content
-
-**Done when:** a learner can investigate a real AEGIS event/session and understand both the technical evidence and the SOC reasoning process.
+**Removed by product decision.** Study Mode (the per-event/session learning
+explanations and planned quiz/walkthrough/lab content) has been dropped: the
+`study.py` module, the `/api/v1/study/*` endpoints, the console Study view and
+its tests and strings were removed. AEGIS-NEXUS keeps its focus on SOC
+analysis, evidence and threat research rather than a built-in learning mode. If
+a learning layer is wanted later it should be reintroduced as a separate,
+clearly-scoped effort.
 
 ---
 
@@ -512,7 +496,6 @@ These requirements apply to **every** roadmap cycle.
 7. **Cycle G — Cases, Reporting & SOC Workflow**
 8. **Cycle H — Platform Health & Storage**
 9. **Cycle I — Backend Architecture & Maintainability**
-10. **Cycle J — Study Mode 2.0**
 11. **Cycle L — Geospatial Attack Visualization** (UX enhancement; can be pulled forward independently)
 
 > Cycle I work may be pulled forward opportunistically: when a cycle touches `store.py`, `app.py` or `app.js`, extract the touched domain into its own module instead of growing the monolith.
@@ -530,7 +513,6 @@ These requirements apply to **every** roadmap cycle.
 | G | P (operator identities); K (closure outcomes) |
 | H | P (gap/replay metrics); D (heartbeats) |
 | I | P (lint/type tooling) |
-| J | P (replay corpus); A–G content to explain |
 | L | Foundation (GeoIP/ASN enrichment, Attack Map); optionally C (network evidence for richer tooltips) |
 
 ---
@@ -551,7 +533,7 @@ These requirements apply to **every** roadmap cycle.
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
 | H — Platform Health & Storage | 🟨 19/22 · PostgreSQL backend deferred (ADR 0002) |
 | I — Backend Architecture & Maintainability | 🟨 7/17 · monolith splits incremental (ADR 0003) |
-| J — Study Mode 2.0 | ⬜ Planned |
+| J — Study Mode | ❌ Removed |
 | L — Geospatial Attack Visualization | ✅ Completed |
 
 ---

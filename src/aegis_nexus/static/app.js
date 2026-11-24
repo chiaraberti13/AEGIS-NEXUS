@@ -6,8 +6,6 @@
     selected: null,
     session: null,
     ipProfile: null,
-    eventStudy: null,
-    sessionStudy: null,
     behavioralAnalytics: null,
     dashboard: null,
     enrichmentStatus: null,
@@ -935,63 +933,6 @@
     });
   }
 
-  function renderStudySection(root, title, values) {
-    if (!values?.length) return;
-    const section = document.createElement("section");
-    const heading = document.createElement("h3");
-    heading.textContent = title;
-    const list = document.createElement("ul");
-    values.forEach((value) => {
-      const item = document.createElement("li");
-      item.textContent = String(value);
-      list.append(item);
-    });
-    section.append(heading, list);
-    root.append(section);
-  }
-
-  function renderEventStudy(data) {
-    const root = $("event-study");
-    root.replaceChildren();
-    if (!data) {
-      const empty = document.createElement("p");
-      empty.className = "empty";
-      empty.textContent = t("study.selectEvent");
-      root.append(empty);
-      return;
-    }
-    const heading = document.createElement("h3");
-    heading.textContent = data.title || "";
-    const whyTitle = document.createElement("span");
-    whyTitle.className = "provenance study";
-    whyTitle.textContent = t("study.why");
-    const why = document.createElement("p");
-    why.textContent = data.why_interesting || "";
-    root.append(heading, whyTitle, why);
-    renderStudySection(root, t("study.checklist"), data.soc_checklist);
-    renderStudySection(root, t("study.questions"), data.questions);
-    renderStudySection(root, t("study.limitations"), data.limitations);
-  }
-
-  function renderSessionStudy(data) {
-    const root = $("session-study");
-    root.replaceChildren();
-    if (!data) {
-      const empty = document.createElement("p");
-      empty.className = "empty";
-      empty.textContent = t("study.selectEvent");
-      root.append(empty);
-      return;
-    }
-    const heading = document.createElement("h3");
-    heading.textContent = data.title || "";
-    root.append(heading);
-    renderStudySection(root, t("study.facts"), data.facts);
-    renderStudySection(root, t("study.focus"), data.focus);
-    renderStudySection(root, t("study.next"), data.next_steps);
-    renderStudySection(root, t("study.limitations"), data.limitations);
-  }
-
   function graphKindLabel(kind) {
     const key = "relations.kind." + String(kind || "unknown");
     const label = t(key);
@@ -1353,22 +1294,16 @@
 
     const ip = event.source_ip;
     const sessionId = event.session_id;
-    const [eventStudy, session, profile, ti, sessionStudy, pcapData, behavioral] = await Promise.all([
-      safeGet("/api/v1/study/" + encodeURIComponent(event.id) + "?lang=" + encodeURIComponent(state.lang)),
+    const [session, profile, ti, pcapData, behavioral] = await Promise.all([
       sessionId ? safeGet("/api/v1/sessions/" + encodeURIComponent(sessionId)) : Promise.resolve(null),
       ip ? safeGet("/api/v1/ips/" + encodeURIComponent(ip)) : Promise.resolve(null),
       ip ? safeGet("/api/v1/ips/" + encodeURIComponent(ip) + "/threat-intelligence") : Promise.resolve(null),
-      sessionId ? safeGet("/api/v1/study/session/" + encodeURIComponent(sessionId) + "?lang=" + encodeURIComponent(state.lang)) : Promise.resolve(null),
       sessionId ? safeGet("/api/v1/pcap?session_id=" + encodeURIComponent(sessionId)) : Promise.resolve(null),
       safeGet("/api/v1/analytics/events/" + encodeURIComponent(event.id)),
     ]);
 
-    state.eventStudy = eventStudy;
     state.session = session;
     state.ipProfile = profile;
-    state.sessionStudy = sessionStudy;
-    renderEventStudy(eventStudy);
-    renderSessionStudy(sessionStudy);
     renderIp(profile);
     renderSession(session);
     renderNetworkEvidence(session, pcapData);
@@ -2537,7 +2472,6 @@
     showView("relations");
     if (state.selected?.session_id) relations(state.selected.session_id);
   });
-  $("open-study").addEventListener("click", () => showView("study"));
   $("report-json").addEventListener("click", downloadReportJSON);
   $("report-csv").addEventListener("click", downloadReportCSV);
   $("report-markdown").addEventListener("click", downloadReportMarkdown);

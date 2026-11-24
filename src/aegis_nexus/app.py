@@ -49,7 +49,6 @@ from .soc_summary import NAMED_WINDOWS, build_soc_summary
 from .security import SlidingWindowLimiter, verify_signed_payload
 from .sensor_sequence import SensorSequenceError, validate_heartbeat_sequence
 from .store import Store
-from .study import explain, explain_session
 from .suricata import SuricataValidationError, normalize_eve_event
 from .threat_context import LocalThreatContextEnricher
 from .threat_intelligence import validate_provider
@@ -1827,20 +1826,6 @@ def create_app(test_config: dict | None = None) -> Flask:
             min_score=request.args.get("min_score", 0.50, type=float),
         )
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
-
-    @app.get("/api/v1/study/<event_id>")
-    def study(event_id: str):
-        item = store.get_event(event_id)
-        if not item:
-            return jsonify({"error": "not_found"}), 404
-        return jsonify(explain(item, request.args.get("lang", "it")))
-
-    @app.get("/api/v1/study/session/<session_id>")
-    def study_session(session_id: str):
-        item = store.get_session(session_id)
-        if not item:
-            return jsonify({"error": "not_found"}), 404
-        return jsonify(explain_session(item, request.args.get("lang", "it")))
 
     return app
 

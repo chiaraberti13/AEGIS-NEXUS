@@ -42,7 +42,7 @@ of growing the monolith."*
 
 **Frontend boundaries review:** `static/app.js` is a single IIFE with a central
 `state` object and clear internal sections by view (api/i18n helpers, feed,
-dashboard, alerts, iocs, cases, relations, audit, study, health, map). The
+dashboard, alerts, iocs, cases, relations, audit, health, map). The
 boundaries are already view-oriented. Splitting into native ES modules
 (`<script type="module">` with relative imports, no build step) is feasible but
 would require threading the shared `state`/helpers across modules and re-testing

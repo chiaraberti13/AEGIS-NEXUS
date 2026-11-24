@@ -35,7 +35,7 @@ La regola centrale è la provenienza: **dati osservati, enrichment esterni, anal
 - Correlazione delle sessioni tramite ID espliciti delle connessioni o flow Suricata quando disponibili, con fallback temporale.
 - Dashboard SOC con ricerca e filtri globali, Live Feed, attacks over time, IP unici, paesi, ASN, porte, protocolli, servizi, honeypot, credential, comandi, payload, alert IDS, IOC, MITRE/CVE e heatmap temporali.
 - Attack Map interattiva basata esclusivamente su enrichment geografici memorizzati.
-- Flusso evento → IP → sessione → timeline → evidenze → enrichment → relazioni → caso → report → Study Mode.
+- Flusso evento → IP → sessione → timeline → evidenze → enrichment → relazioni → caso → report.
 - Gestione casi SOC evidence-preserving con note analista, tag, audit trail e report JSON/CSV/Markdown.
 - Enrichment GeoIP/ASN offline da file MMDB MaxMind forniti dall’operatore.
 - Threat context offline a match esatto da feed JSON locale; gli indicatori raccolti non vengono inviati a servizi di terze parti.
@@ -86,7 +86,7 @@ flowchart LR
         dashboard["Dashboard · Live Feed · Attack Map"]
         investigation["Evento · IP · Sessione · Timeline"]
         analysis["IOC · Threat Context · MITRE/CVE · Relazioni"]
-        cases["Casi · Report · Study Mode"]
+        cases["Casi · Report"]
     end
 
     traffic --> sx --> ssh
@@ -134,7 +134,7 @@ AEGIS mantiene distinte quattro classi di provenienza:
 
 Il normale flusso dell’analista è:
 
-`Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relazioni → caso → report → Study Mode`
+`Dashboard → evento → IP → sessione → timeline → credential/comandi/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relazioni → caso → report`
 
 Consulta [Flusso investigativo](docs/INVESTIGATION.md) per il modello completo delle evidenze.
 
@@ -254,7 +254,7 @@ printf "USER demo\r\nPASS demo\r\nQUIT\r\n" | nc 127.0.0.1 2121
 printf "demo\r\ndemo\r\n" | nc 127.0.0.1 2323
 ```
 
-Gli eventi risultanti compaiono nel Live Feed e diventano disponibili per ricerca, correlazione delle sessioni, grafo delle relazioni, casi, report e Study Mode.
+Gli eventi risultanti compaiono nel Live Feed e diventano disponibili per ricerca, correlazione delle sessioni, grafo delle relazioni, casi e report.
 
 ### Investiga un evento
 
@@ -265,7 +265,7 @@ Gli eventi risultanti compaiono nel Live Feed e diventano disponibili per ricerc
 5. Esamina timeline, credential, comandi, payload, alert IDS, IOC, contesto Threat Intelligence e mapping MITRE/CVE supportati da evidenza.
 6. Apri **Relazioni** per analizzare i collegamenti tra eventi, sessioni, IP, porte, ASN, credential, payload, IOC e mapping.
 7. Crea o aggiorna un **Caso**, collega le evidenze evento/sessione e aggiungi note analista.
-8. Esporta report JSON/CSV/Markdown oppure apri **Study Mode** per una lettura didattica basata sulle evidenze.
+8. Esporta report JSON/CSV/Markdown/PDF (con profili di redazione interno/condivisibile).
 
 ### Investigazione storica
 
@@ -383,7 +383,6 @@ AEGIS-NEXUS/
 │   ├── enrichment.py                   GeoIP/ASN locale
 │   ├── threat_context.py               threat context locale a match esatto
 │   ├── reporting.py                    report investigativi sicuri
-│   ├── study.py                        Study Mode IT/EN
 │   ├── sensors/                        decoy SSH, web, FTP/Telnet
 │   ├── static/                         JS dashboard, i18n e CSS
 │   └── templates/                      template console SOC

@@ -4,7 +4,7 @@
 
 AEGIS-NEXUS is evidence-first. The operator workflow is:
 
-`Dashboard → Alerts / IOC → event → IP → session → timeline → evidence pivots → relationships → case → report → Study Mode`
+`Dashboard → Alerts / IOC → event → IP → session → timeline → evidence pivots → relationships → case → report`
 
 ### Dashboard
 
@@ -61,7 +61,7 @@ Session listing APIs use the same keyset approach with `last_seen` plus session 
 
 ### Large-session analysis bounds
 
-A single correlated session can be attacker-amplified. `AEGIS_SESSION_MAX_EVENTS` therefore bounds how many session events are loaded into one timeline, relationship graph, report or Study Mode request. If the retained session is larger, AEGIS uses the latest bounded subset and returns explicit `analysis.truncated`, `event_limit` and scope metadata. The console and generated analysis surface that limitation; a truncated view must not be described as the complete session.
+A single correlated session can be attacker-amplified. `AEGIS_SESSION_MAX_EVENTS` therefore bounds how many session events are loaded into one timeline, relationship graph or report request. If the retained session is larger, AEGIS uses the latest bounded subset and returns explicit `analysis.truncated`, `event_limit` and scope metadata. The console and generated analysis surface that limitation; a truncated view must not be described as the complete session.
 
 ### Case management
 
@@ -71,17 +71,13 @@ Cases let an operator preserve the investigation context without duplicating hos
 
 JSON reports preserve the complete evidence model. CSV reports provide a flat event timeline for analysis/export. Markdown reports provide a bilingual human-readable SOC handoff while preserving provenance sections and escaping hostile content. JSON, CSV and Markdown credential exports deliberately omit cleartext passwords. Dashboard statistics can also be exported as JSON. See [Investigation reporting](REPORTING.md).
 
-### Study Mode
-
-Event Study Mode explains why the selected evidence matters, what a SOC analyst should check next and which questions remain open. Session Study Mode works on the full correlated sequence and explicitly states analytical limitations.
-
 ---
 
 ## Italiano
 
 AEGIS-NEXUS segue un approccio evidence-first. Il flusso operativo è:
 
-`Dashboard → Alert / IOC → evento → IP → sessione → timeline → pivot di evidenza → relazioni → caso → report → Study Mode`
+`Dashboard → Alert / IOC → evento → IP → sessione → timeline → pivot di evidenza → relazioni → caso → report`
 
 ### Dashboard
 
@@ -138,7 +134,7 @@ Le API delle sessioni usano lo stesso approccio keyset con `last_seen` più ID s
 
 ### Limiti per sessioni molto grandi
 
-Una singola sessione correlata può essere amplificata dall'attaccante. `AEGIS_SESSION_MAX_EVENTS` limita quindi il numero di eventi caricati in una singola richiesta di timeline, grafo relazionale, report o Study Mode. Se la sessione conservata è più grande, AEGIS usa il sottoinsieme più recente entro il limite e restituisce metadata espliciti `analysis.truncated`, `event_limit` e scope. Console e analisi generate mostrano questa limitazione; una vista troncata non deve essere descritta come sessione completa.
+Una singola sessione correlata può essere amplificata dall'attaccante. `AEGIS_SESSION_MAX_EVENTS` limita quindi il numero di eventi caricati in una singola richiesta di timeline, grafo relazionale o report. Se la sessione conservata è più grande, AEGIS usa il sottoinsieme più recente entro il limite e restituisce metadata espliciti `analysis.truncated`, `event_limit` e scope. Console e analisi generate mostrano questa limitazione; una vista troncata non deve essere descritta come sessione completa.
 
 ### Gestione casi
 
@@ -147,7 +143,3 @@ I casi permettono di conservare il contesto investigativo senza duplicare la tel
 ### Reporting
 
 I report JSON preservano il modello completo delle evidenze. I report CSV forniscono una timeline piatta utile per analisi/esportazione e omettono deliberatamente le password in chiaro. Anche le statistiche della dashboard possono essere esportate in JSON.
-
-### Study Mode
-
-Lo Study Mode dell'evento spiega perché l'evidenza selezionata è interessante, cosa dovrebbe controllare un SOC Analyst e quali domande restano aperte. Lo Study Mode della sessione lavora sull'intera sequenza correlata e rende espliciti i limiti dell'analisi.

@@ -35,7 +35,7 @@ The central design rule is provenance: **observed data, external enrichment, der
 - Session correlation using explicit decoy connection IDs or Suricata flow identity when available, with temporal fallback.
 - SOC dashboard with global search and filters, Live Feed, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, payloads, IDS alerts, IOC, MITRE/CVE and temporal heatmaps.
 - Interactive Attack Map based only on stored geolocation enrichment.
-- Event → IP → session → timeline → evidence → enrichment → relations → case → report → Study Mode investigation flow.
+- Event → IP → session → timeline → evidence → enrichment → relations → case → report investigation flow.
 - Evidence-preserving SOC case management with analyst notes, tags, audit trail and JSON/CSV/Markdown reports.
 - Offline GeoIP/ASN enrichment from operator-supplied MaxMind MMDB files.
 - Offline exact-match threat context from an operator-supplied JSON feed; captured indicators are never sent to third-party services.
@@ -86,7 +86,7 @@ flowchart LR
         dashboard["Dashboard · Live Feed · Attack Map"]
         investigation["Event · IP · Session · Timeline"]
         analysis["IOC · Threat Context · MITRE/CVE · Relations"]
-        cases["Cases · Reports · Study Mode"]
+        cases["Cases · Reports"]
     end
 
     traffic --> sx --> ssh
@@ -134,7 +134,7 @@ AEGIS keeps four provenance classes distinct:
 
 The normal analyst flow is:
 
-`Dashboard → event → IP → session → timeline → credentials/commands/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relations → case → report → Study Mode`
+`Dashboard → event → IP → session → timeline → credentials/commands/payload → Threat Intelligence/enrichment → MITRE/CVE/IOC → relations → case → report`
 
 See [Investigation workflow](docs/INVESTIGATION.md) for the complete evidence model.
 
@@ -254,7 +254,7 @@ printf "USER demo\r\nPASS demo\r\nQUIT\r\n" | nc 127.0.0.1 2121
 printf "demo\r\ndemo\r\n" | nc 127.0.0.1 2323
 ```
 
-The resulting events appear in the Live Feed and become available to search, session correlation, the relationship graph, cases, reports and Study Mode.
+The resulting events appear in the Live Feed and become available to search, session correlation, the relationship graph, cases and reports.
 
 ### Investigate an event
 
@@ -265,7 +265,7 @@ The resulting events appear in the Live Feed and become available to search, ses
 5. Review timeline, credentials, commands, payloads, IDS alerts, IOC, Threat Intelligence context and evidence-backed MITRE/CVE mappings.
 6. Open **Relations** to inspect connections among events, sessions, IPs, ports, ASN, credentials, payloads, IOC and mappings.
 7. Create or update a **Case**, attach event/session evidence and add analyst notes.
-8. Export JSON/CSV/Markdown reports or open **Study Mode** for an evidence-based learning walkthrough.
+8. Export JSON/CSV/Markdown/PDF reports (with internal/shareable redaction profiles).
 
 ### Historical investigation
 
@@ -383,7 +383,6 @@ AEGIS-NEXUS/
 │   ├── enrichment.py                   local GeoIP/ASN
 │   ├── threat_context.py               local exact-match threat context
 │   ├── reporting.py                    safe investigation reports
-│   ├── study.py                        IT/EN Study Mode
 │   ├── sensors/                        SSH, web, FTP/Telnet decoys
 │   ├── static/                         dashboard JS, i18n and CSS
 │   └── templates/                      SOC console template
