@@ -314,7 +314,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add detection backtesting against stored history and the Cycle P replay corpus
 - [x] Track per-rule hit counts and analyst closure outcomes (true/false positive rates) — `GET /api/v1/detections/stats`
 - [x] Add evidence-backed MITRE ATT&CK coverage view (only techniques supported by implemented rules) — `GET /api/v1/detections/coverage`
-- [ ] Evaluate Sigma-compatible rule export _(evaluate)_
+- [x] Evaluate Sigma-compatible rule export _(evaluate)_ — see `docs/adr/0001-sigma-rule-export.md` (deferred)
 - [x] Document field mapping to ECS and/or OCSF — `docs/SIEM_INTEROP.md`
 - [x] Add alert/event forwarding via syslog (RFC 5424) and signed JSON webhook from the collector only
 - [x] Keep forwarding bounded (queue limits, retries, back-pressure) and never block ingestion
@@ -543,7 +543,7 @@ These requirements apply to **every** roadmap cycle.
 | D — Sensor Platform & Honeypot Expansion | 🟨 In progress |
 | E — Threat Intelligence & CTI | ⬜ Planned |
 | F — Behavioral Analytics | ⬜ Planned |
-| K — Detection Engineering & SIEM Interoperability | ⬜ Planned |
+| K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ⬜ Planned |
 | H — Platform Health & Storage | ⬜ Planned |
 | I — Backend Architecture & Maintainability | ⬜ Planned |
