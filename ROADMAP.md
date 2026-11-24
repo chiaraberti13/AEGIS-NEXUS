@@ -409,7 +409,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add static type checking (e.g. `mypy`) for core modules — gate in `pyproject.toml`, `make typecheck`
 - [ ] Review frontend module boundaries
 - [ ] Split `static/app.js` into ES modules by view without adding a mandatory build step
-- [ ] Add browser smoke tests (Playwright) including hostile-content XSS fixtures
+- [x] Add browser smoke tests (Playwright) including hostile-content XSS fixtures
 - [x] Document internal architecture — `docs/ARCHITECTURE.md`
 
 > Lint and dependency/security scanning in CI were moved to Cycle P.
