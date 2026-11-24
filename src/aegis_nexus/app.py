@@ -37,6 +37,8 @@ from .operator_audit import OperatorAuditLog
 from .pcap import DisabledPcapCaptureProvider, PcapEvidenceStore, PcapValidationError
 from .quarantine import QuarantineError, QuarantineStore
 from .pagination import CursorError
+from .metrics import CONTENT_TYPE as PROMETHEUS_CONTENT_TYPE
+from .metrics import render_prometheus
 from .pdf import text_to_pdf
 from .redaction import REDACTION_PROFILES, redact_report
 from .reporting import case_markdown, session_markdown, soc_summary_markdown
@@ -659,6 +661,19 @@ def create_app(test_config: dict | None = None) -> Flask:
                 heartbeat_stale_seconds=int(app.config.get("SENSOR_HEARTBEAT_STALE_SECONDS", 180)),
             )
         return jsonify({"collector": health, "telemetry": telemetry})
+
+    @app.get("/api/v1/metrics")
+    def platform_metrics():
+        health = store.operational_health(int(app.config.get("MIN_FREE_BYTES", 67_108_864)))
+        telemetry: dict = {}
+        if health["database_ready"]:
+            sensor_keys = app.config.get("SENSOR_KEYS") or {}
+            telemetry = store.sensor_telemetry_observation(
+                configured_sensor_ids=list(sensor_keys),
+                recent_hours=24,
+                heartbeat_stale_seconds=int(app.config.get("SENSOR_HEARTBEAT_STALE_SECONDS", 180)),
+            )
+        return Response(render_prometheus(health, telemetry), content_type=PROMETHEUS_CONTENT_TYPE)
 
     @app.get("/api/v1/audit")
     def operator_audit():

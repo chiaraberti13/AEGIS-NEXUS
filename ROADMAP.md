@@ -369,11 +369,11 @@ These are deliberate design boundaries, not missing features:
 - [ ] Track invalid/rejected sensor events
 - [ ] Track signature/authentication failures
 - [ ] Track normalization/evidence-loss metrics
-- [ ] Track database size
-- [ ] Track storage/retention status
-- [ ] Add Healthy / Degraded / Critical platform states
+- [x] Track database size
+- [x] Track storage/retention status
+- [x] Add Healthy / Degraded / Critical platform states
 - [ ] Add Operations/Health dashboard
-- [ ] Expose operator-authenticated metrics endpoint (Prometheus text format)
+- [x] Expose operator-authenticated metrics endpoint (Prometheus text format) — `GET /api/v1/metrics`
 - [ ] Add structured JSON application logs without attacker-controlled log injection
 - [ ] Define explicit load-shedding behavior under disk/ingest pressure and record it as evidence loss
 - [ ] Add automated backup restore verification

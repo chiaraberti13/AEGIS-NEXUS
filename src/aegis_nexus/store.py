@@ -1346,8 +1346,40 @@ class Store:
             storage_free_bytes = None
         storage_ready = storage_free_bytes is not None and storage_free_bytes >= threshold
 
+        # On-disk footprint: main DB plus WAL/SHM sidecars when present.
+        database_size_bytes = 0
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                database_size_bytes += Path(self.path + suffix).stat().st_size
+            except OSError:
+                pass
+
+        event_count: int | None = None
+        if database_ready:
+            try:
+                with self.connect() as conn:
+                    event_count = int(conn.execute("SELECT COUNT(*) FROM events").fetchone()[0])
+            except sqlite3.Error:
+                event_count = None
+
+        capacity_used = (
+            event_count / self.max_events if event_count is not None and self.max_events else None
+        )
+        # Deterministic platform state. Critical: cannot operate safely.
+        # Degraded: operational but a bound is close. Healthy: otherwise.
+        if not (database_ready and schema_current and storage_ready):
+            state = "critical"
+        elif (
+            (storage_free_bytes is not None and storage_free_bytes < threshold * 2)
+            or (capacity_used is not None and capacity_used >= 0.9)
+        ):
+            state = "degraded"
+        else:
+            state = "healthy"
+
         return {
             "ready": database_ready and schema_current and storage_ready,
+            "state": state,
             "database_ready": database_ready,
             "database_schema": {
                 "version": database_schema_version,
@@ -1358,6 +1390,13 @@ class Store:
             "storage_ready": storage_ready,
             "storage_free_bytes": storage_free_bytes,
             "min_free_bytes": threshold,
+            "storage": {
+                "database_size_bytes": database_size_bytes,
+                "event_count": event_count,
+                "max_events": self.max_events,
+                "capacity_used_fraction": round(capacity_used, 4) if capacity_used is not None else None,
+                "retention_days": self.retention_days,
+            },
         }
 
     def record_sensor_heartbeat(

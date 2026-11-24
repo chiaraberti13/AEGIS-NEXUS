@@ -83,6 +83,10 @@ Dashboard analysis is explicitly capped by `AEGIS_ANALYTICS_MAX_EVENTS`. Single-
 
 Authenticated operators can use `GET /api/v1/operations/status`. It includes database/storage readiness and per-sensor **telemetry receipt** information based on collector-side `received_at`.
 
+`collector` also reports a deterministic platform `state` — `healthy`, `degraded` or `critical` — and a `storage` block (`database_size_bytes` including WAL/SHM, `event_count`, `max_events`, `capacity_used_fraction`, `retention_days`). `critical` means the collector cannot operate safely (database unreachable, schema not current, or free disk below the minimum); `degraded` means free disk is below twice the minimum or stored events are at ≥90% of capacity; otherwise `healthy`.
+
+`GET /api/v1/metrics` (operator-authenticated) exposes the same signals in **Prometheus text exposition format** for scraping: `aegis_platform_state{state=...}`, `aegis_ready`, `aegis_database_ready`, `aegis_schema_current`, `aegis_storage_ready`, `aegis_storage_free_bytes`, `aegis_database_size_bytes`, `aegis_events_total`/`_max`/`_capacity_used_fraction`, `aegis_retention_days`, and sensor aggregates (`aegis_sensors_*`, `aegis_missing_sequenced_events`). Only fixed metric names and a fixed set of state labels are emitted — no attacker-controlled value becomes a metric name or label.
+
 `timestamp` and `received_at` have different meanings:
 
 - `timestamp`: event time reported by the sensor/IDS and used for investigation timelines;
@@ -229,6 +233,10 @@ L'analisi della dashboard è limitata esplicitamente da `AEGIS_ANALYTICS_MAX_EVE
 `GET /health` è un endpoint di readiness volutamente minimale. Restituisce soltanto `{"status":"ok"}` quando il database SQLite è raggiungibile e lo spazio libero è almeno `AEGIS_MIN_FREE_BYTES`; in caso contrario restituisce HTTP 503 con `{"status":"degraded"}`. I valori dettagliati del filesystem non vengono esposti pubblicamente.
 
 Gli operatori autenticati possono usare `GET /api/v1/operations/status`. La risposta include readiness di database/storage e informazioni di **ricezione telemetria** per sensore basate su `received_at` generato dal collector.
+
+`collector` riporta anche uno `state` deterministico della piattaforma — `healthy`, `degraded` o `critical` — e un blocco `storage` (`database_size_bytes` inclusi WAL/SHM, `event_count`, `max_events`, `capacity_used_fraction`, `retention_days`). `critical` significa che il collector non può operare in sicurezza (database irraggiungibile, schema non aggiornato, o disco libero sotto il minimo); `degraded` significa disco libero sotto il doppio del minimo oppure eventi memorizzati ≥90% della capacità; altrimenti `healthy`.
+
+`GET /api/v1/metrics` (autenticato operatore) espone gli stessi segnali in **formato testo Prometheus** per lo scraping: `aegis_platform_state{state=...}`, `aegis_ready`, `aegis_database_ready`, `aegis_schema_current`, `aegis_storage_ready`, `aegis_storage_free_bytes`, `aegis_database_size_bytes`, `aegis_events_total`/`_max`/`_capacity_used_fraction`, `aegis_retention_days` e gli aggregati sensore (`aegis_sensors_*`, `aegis_missing_sequenced_events`). Vengono emessi solo nomi di metrica fissi e un set fisso di label di stato — nessun valore controllato dall'attaccante diventa nome o label di metrica.
 
 `timestamp` e `received_at` hanno significati distinti:
 
