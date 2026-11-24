@@ -1,0 +1,67 @@
+# ADR 0002 — StorageBackend abstraction and optional PostgreSQL backend
+
+- Status: **Accepted** (defer implementation; revisit on a concrete multi-node need)
+- Date: 2026-11-24
+- Context: ROADMAP Cycle H — "Define StorageBackend interface", "Refactor SQLite
+  backend behind StorageBackend", "Add optional PostgreSQL backend", "Extend the
+  Cycle P migration strategy to PostgreSQL", "Add backend compatibility tests",
+  "Document SQLite vs PostgreSQL deployment profiles".
+
+## Context
+
+AEGIS-NEXUS deliberately uses raw SQLite (WAL, no ORM) as a single-node,
+file-based store. The Cycle H items propose abstracting storage behind a
+`StorageBackend` interface and adding an optional PostgreSQL backend for larger,
+multi-node deployments.
+
+Several properties of the current design are tightly coupled to SQLite and would
+need careful re-expression on PostgreSQL without changing investigation
+semantics:
+
+- the forward-only migration framework keyed on `PRAGMA user_version`, each
+  migration in its own `BEGIN IMMEDIATE` with a pre-migration file backup and a
+  refusal to open a database written by a newer release;
+- the event hash chain and `PRAGMA`-based integrity (`quick_check`,
+  `integrity_check`, `secure_delete`, WAL) used by backup and restore
+  verification;
+- WAL-specific operations (checkpoint/truncate) in maintenance and the
+  file-copy backup/restore path;
+- bounded, parameterized raw SQL throughout `store.py`.
+
+## Decision
+
+**Defer the StorageBackend abstraction and the PostgreSQL backend.** They are
+not implemented in this cycle. Reasons:
+
+- No current deployment requires multi-node/concurrent-writer storage; the
+  honeypot collector is a single-node service and SQLite-WAL meets its bounds.
+  Introducing an abstraction now would be speculative generality.
+- A PostgreSQL backend cannot be built and verified in this project's test and
+  CI environment without provisioning a PostgreSQL service and a parallel
+  migration/integrity story, which is out of scope here. Shipping an
+  unverifiable second backend would violate the project rule against declaring
+  something correct without verification.
+- The investigation semantics and evidence-first guarantees must be identical
+  across backends; proving that needs a backend-parity test suite that only has
+  value once a second backend actually exists.
+
+## Consequences
+
+- The six Cycle H storage-backend items stay unchecked and are tracked by this
+  ADR rather than being marked done.
+- Observability work that does **not** depend on a storage abstraction was
+  completed instead (platform state, Prometheus metrics, JSON logging, sensor
+  health, restore verification, evidence-loss metrics).
+- When a concrete multi-node need appears, a superseding ADR should define the
+  `StorageBackend` interface first (events, sessions, alerts, cases, analytics,
+  relationships, migrations, integrity), keep the SQLite backend as the
+  reference implementation, add a PostgreSQL backend behind it, port the
+  migration strategy (a transactional schema-version ledger in place of
+  `PRAGMA user_version`), and add a backend-parity test suite asserting
+  identical investigation results. Only then should these items be checked.
+
+## Notes
+
+This supersedes nothing; it records why the Cycle H storage-backend cluster is
+intentionally deferred. See ADR 0001 for the first ADR and the ADR convention
+(`docs/adr/NNNN-title.md`).

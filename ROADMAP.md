@@ -384,6 +384,8 @@ These are deliberate design boundaries, not missing features:
 - [ ] Add backend compatibility tests
 - [ ] Document SQLite vs PostgreSQL deployment profiles
 
+> **Storage-backend cluster deferred** (see `docs/adr/0002-storage-backend-postgresql.md`). The six items above stay unchecked: no deployment currently needs multi-node storage, and a PostgreSQL backend cannot be verified in this environment. The ADR records what a future superseding effort must do (interface first, SQLite as reference, migration-strategy port, backend-parity tests). The observability items in this cycle were completed instead.
+
 **Done when:** operators can identify degraded sensors/platform components and choose SQLite or PostgreSQL without changing investigation semantics.
 
 ---
