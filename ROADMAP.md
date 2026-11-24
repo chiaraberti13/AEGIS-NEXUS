@@ -341,17 +341,17 @@ These are deliberate design boundaries, not missing features:
 - [x] Add case conclusion field
 - [x] Add False Positive closure state (alert disposition: true_positive/false_positive/benign)
 - [x] Track time-to-acknowledge and time-to-close metrics (MTTA/MTTR) — `GET /api/v1/alerts/metrics`
-- [ ] Add 24h SOC Summary Report
-- [ ] Add 7d SOC Summary Report
-- [ ] Add 30d SOC Summary Report
-- [ ] Add custom-range SOC Summary Report
-- [ ] Include Evidence Integrity warnings in summary reports
-- [ ] Include detections, IOC and MITRE statistics
+- [x] Add 24h SOC Summary Report
+- [x] Add 7d SOC Summary Report
+- [x] Add 30d SOC Summary Report
+- [x] Add custom-range SOC Summary Report
+- [x] Include Evidence Integrity warnings in summary reports
+- [x] Include detections, IOC and MITRE statistics
 - [ ] Add report redaction profiles (internal vs shareable)
 - [ ] Add evidence bundle export with a SHA-256 manifest (chain-of-custody)
 - [ ] Add safe PDF report export
 - [ ] Generate PDFs without rendering attacker-controlled HTML/JS (no headless-browser rendering of raw evidence)
-- [ ] Add report-generation regression tests
+- [x] Add report-generation regression tests
 
 **Done when:** an investigation can start from an alert, become a case and finish with a reproducible evidence-backed report.
 

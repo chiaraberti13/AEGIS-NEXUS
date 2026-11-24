@@ -10,6 +10,21 @@ AEGIS-NEXUS provides three investigation export formats:
 
 Markdown reports preserve the evidence model rather than flattening everything into a single narrative. Session reports separate observed credentials, commands and payloads from external enrichment and derived IOC/MITRE/CVE context. Case reports explicitly label case fields and notes as analyst-owned classifications or annotations.
 
+### SOC summary report
+
+`GET /api/v1/reports/soc-summary` (operator-authenticated) produces a windowed
+roll-up as JSON, and `…/soc-summary.md` as an audited Markdown download. The
+window is a named preset — `?range=24h|7d|30d` — or an explicit `?hours=<n>`
+custom range. The summary composes, over the window: observed event volume (by
+severity, top enrichment countries/ASNs), detection statistics (per-rule hit
+counts, open/closed, dispositions) and MTTA/MTTR response metrics, observed
+evidence-backed MITRE techniques and the rule-coverage view, and derived IOC
+artifacts. It always carries an explicit `evidence_integrity_warnings` list
+(lossy normalization, credential redaction, a capped analytics window): an empty
+list is disclosed as *no warnings in the window*, never as a completeness
+guarantee. Geolocation/ASN stay enrichment and MITRE/IOC stay evidence-backed —
+the summary asserts no attribution.
+
 ### Safety boundaries
 
 Markdown is generated only from the already export-sanitized session/case report structures.
@@ -35,6 +50,21 @@ AEGIS-NEXUS fornisce tre formati di export investigativo:
 - **Markdown** per handoff SOC, note e documentazione leggibile.
 
 I report Markdown mantengono il modello di evidenza invece di fondere tutto in un'unica narrazione. I report di sessione separano credential, comandi e payload osservati da enrichment esterni e contesto derivato IOC/MITRE/CVE. I report dei casi marcano esplicitamente campi e note come classificazioni o annotazioni dell'analista.
+
+### Riepilogo SOC
+
+`GET /api/v1/reports/soc-summary` (autenticato operatore) produce un riepilogo
+sulla finestra in JSON, e `…/soc-summary.md` come download Markdown auditato. La
+finestra è un preset — `?range=24h|7d|30d` — oppure un intervallo personalizzato
+`?hours=<n>`. Il riepilogo compone, sulla finestra: volume di eventi osservati
+(per severità, top paesi/ASN di enrichment), statistiche di detection (hit count
+per regola, aperti/chiusi, disposition) e metriche MTTA/MTTR, tecniche MITRE
+osservate (evidence-backed) e la vista di coverage delle regole, e gli artefatti
+IOC derivati. Porta sempre una lista esplicita `evidence_integrity_warnings`
+(normalizzazione lossy, redazione credenziali, finestra analitica limitata): una
+lista vuota è dichiarata come *nessun avviso nella finestra*, mai come garanzia
+di completezza. Geolocalizzazione/ASN restano enrichment e MITRE/IOC restano
+evidence-backed — il riepilogo non asserisce attribuzione.
 
 ### Confini di sicurezza
 

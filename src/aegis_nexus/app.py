@@ -36,7 +36,8 @@ from .operator_audit import OperatorAuditLog
 from .pcap import DisabledPcapCaptureProvider, PcapEvidenceStore, PcapValidationError
 from .quarantine import QuarantineError, QuarantineStore
 from .pagination import CursorError
-from .reporting import case_markdown, session_markdown
+from .reporting import case_markdown, session_markdown, soc_summary_markdown
+from .soc_summary import NAMED_WINDOWS, build_soc_summary
 from .security import SlidingWindowLimiter, verify_signed_payload
 from .sensor_sequence import SensorSequenceError, validate_heartbeat_sequence
 from .store import Store
@@ -1456,6 +1457,34 @@ def create_app(test_config: dict | None = None) -> Flask:
             body,
             content_type="text/markdown; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    def _soc_summary_hours() -> int:
+        # Named presets (24h/7d/30d) or an explicit custom `hours` window.
+        named = (request.args.get("range") or "").strip().lower()
+        if named in NAMED_WINDOWS:
+            return NAMED_WINDOWS[named]
+        return request.args.get("hours", 24, type=int)
+
+    @app.get("/api/v1/reports/soc-summary")
+    def soc_summary_report():
+        summary = build_soc_summary(store, alert_store, detection_config, hours=_soc_summary_hours())
+        return jsonify(summary)
+
+    @app.get("/api/v1/reports/soc-summary.md")
+    def soc_summary_report_markdown():
+        summary = build_soc_summary(store, alert_store, detection_config, hours=_soc_summary_hours())
+        body = soc_summary_markdown(summary, request.args.get("lang", "it")[:8])
+        record_audit(
+            "export.soc_summary",
+            target_type="report",
+            target_id="soc_summary",
+            detail={"format": "markdown", "window_hours": summary["window_hours"]},
+        )
+        return Response(
+            body,
+            content_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="aegis-soc-summary.md"'},
         )
 
     @app.get("/api/v1/reports/case/<case_id>.csv")

@@ -219,21 +219,29 @@ class AlertStore:
                 conn.execute("UPDATE alerts SET updated_at=? WHERE id=?", (now, alert_id[:128]))
         return self.get(alert_id)
 
-    def statistics(self) -> dict[str, Any]:
+    def statistics(self, hours: int | None = None) -> dict[str, Any]:
         """Per-rule alert hit counts and analyst closure outcomes.
 
         Outcomes are analyst-assigned dispositions (derived context), not ground
         truth; the false-positive rate reflects triage decisions over the alerts
         that have been dispositioned, not detector accuracy in the abstract.
+        When ``hours`` is given, only alerts created in that window are counted.
         """
+        where = ""
+        params: list[Any] = []
+        if hours is not None:
+            since = (datetime.now(timezone.utc) - timedelta(hours=max(1, min(int(hours), 8760)))).isoformat()
+            where = " WHERE created_at >= ?"
+            params.append(since)
         with self.connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT rule_id, rule_version, status, disposition,
                        COUNT(*) AS alerts, SUM(occurrence_count) AS occurrences
-                FROM alerts
+                FROM alerts{where}
                 GROUP BY rule_id, rule_version, status, disposition
-                """
+                """,
+                params,
             ).fetchall()
 
         rules: dict[str, dict[str, Any]] = {}

@@ -340,3 +340,74 @@ def case_markdown(report: dict[str, Any], lang: str = "it") -> str:
         lines.append("- " + _inline(limitation))
     lines.append("")
     return "\n".join(lines)
+
+
+def _labelled_items(items: Any, limit: int = 10) -> str:
+    rows = []
+    for item in (items or [])[:limit]:
+        if isinstance(item, dict):
+            rows.append(f"{_inline(item.get('label'))} ({_inline(item.get('value'))})")
+    return ", ".join(rows) if rows else "—"
+
+
+def soc_summary_markdown(summary: dict[str, Any], lang: str = "it") -> str:
+    it = _it(lang)
+    events = summary.get("events") or {}
+    detections = summary.get("detections") or {}
+    response = detections.get("response") or {}
+    mitre = summary.get("mitre") or {}
+    warnings = summary.get("evidence_integrity_warnings") or []
+    tta = response.get("time_to_acknowledge") or {}
+    ttr = response.get("time_to_close") or {}
+
+    lines: list[str] = [
+        "# AEGIS-NEXUS — " + ("Riepilogo SOC" if it else "SOC summary"),
+        "",
+        _bullet("Generato" if it else "Generated", summary.get("generated_at")),
+        _bullet("Finestra (ore)" if it else "Window (hours)", summary.get("window_hours")),
+        "",
+        "## " + ("Eventi osservati" if it else "Observed events"),
+        "",
+        _bullet("Totale eventi" if it else "Total events", events.get("total")),
+        _bullet("IP sorgente unici" if it else "Unique source IPs", events.get("unique_source_ip")),
+        _bullet("Sessioni" if it else "Sessions", events.get("sessions")),
+        _bullet("Critici" if it else "Critical", events.get("critical")),
+        _bullet("Per severità" if it else "By severity", _labelled_items(events.get("by_severity"))),
+        _bullet("Paesi (enrichment)" if it else "Countries (enrichment)", _labelled_items(events.get("top_countries"))),
+        _bullet("ASN (enrichment)" if it else "ASNs (enrichment)", _labelled_items(events.get("top_asns"))),
+        "",
+        "## " + ("Detection" if it else "Detections"),
+        "",
+        _bullet("Alert totali" if it else "Total alerts", detections.get("alert_total")),
+        _bullet("Alert aperti" if it else "Open alerts", detections.get("alert_open")),
+        _bullet("MTTA media (s)" if it else "MTTA mean (s)", tta.get("mean_seconds")),
+        _bullet("MTTR media (s)" if it else "MTTR mean (s)", ttr.get("mean_seconds")),
+        "",
+        "## " + ("MITRE ATT&CK" if it else "MITRE ATT&CK"),
+        "",
+        _bullet("Tecniche osservate (evidence-backed)" if it else "Observed techniques (evidence-backed)", _labelled_items(mitre.get("observed"))),
+        _bullet("Tecniche coperte dalle regole" if it else "Techniques covered by rules", len(mitre.get("rule_coverage") or [])),
+        "",
+        "## " + ("IOC / artefatti" if it else "IOC / artifacts"),
+        "",
+        _bullet("IOC osservati" if it else "Observed IOC", _labelled_items(summary.get("iocs"))),
+        "",
+        "## " + ("Avvisi di integrità delle evidenze" if it else "Evidence integrity warnings"),
+        "",
+    ]
+    if warnings:
+        for warning in warnings:
+            detail = warning.get("detail")
+            value = detail if detail is not None else warning.get("count")
+            lines.append(_bullet(str(warning.get("kind")), value))
+    else:
+        lines.append("- " + ("Nessun avviso di integrità nella finestra." if it else "No integrity warnings in the window."))
+    lines.extend([
+        "",
+        "## " + ("Limiti analitici" if it else "Analytical limitations"),
+        "",
+    ])
+    for caveat in summary.get("caveats") or []:
+        lines.append("- " + _inline(caveat))
+    lines.append("")
+    return "\n".join(lines)
