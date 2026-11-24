@@ -37,6 +37,7 @@ from .operator_audit import OperatorAuditLog
 from .pcap import DisabledPcapCaptureProvider, PcapEvidenceStore, PcapValidationError
 from .quarantine import QuarantineError, QuarantineStore
 from .pagination import CursorError
+from .pdf import text_to_pdf
 from .redaction import REDACTION_PROFILES, redact_report
 from .reporting import case_markdown, session_markdown, soc_summary_markdown
 from .soc_summary import NAMED_WINDOWS, build_soc_summary
@@ -1511,6 +1512,29 @@ def create_app(test_config: dict | None = None) -> Flask:
             headers={"Content-Disposition": 'attachment; filename="aegis-soc-summary.md"'},
         )
 
+    @app.get("/api/v1/reports/case/<case_id>.pdf")
+    def case_report_pdf(case_id: str):
+        item = store.case_report(case_id[:128])
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        item["operator_audit"] = case_operator_audit(case_id[:128])
+        profile = _report_profile()
+        item = redact_report(item, profile)
+        lang = request.args.get("lang", "it")[:8]
+        body = _markdown_redaction_banner(item, lang.lower().startswith("it")) + case_markdown(item, lang)
+        pdf = text_to_pdf(f"AEGIS-NEXUS case {case_id[:64]}", body)
+        record_audit(
+            "export.case_report",
+            target_type="case",
+            target_id=case_id[:128],
+            detail={"format": "pdf", "redaction_profile": profile},
+        )
+        return Response(
+            pdf,
+            content_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="aegis-{case_id[:64]}.pdf"'},
+        )
+
     @app.get("/api/v1/reports/case/<case_id>/bundle.zip")
     def case_evidence_bundle(case_id: str):
         report = store.case_report(case_id[:128])
@@ -1627,6 +1651,28 @@ def create_app(test_config: dict | None = None) -> Flask:
             body,
             content_type="text/markdown; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get("/api/v1/reports/session/<session_id>.pdf")
+    def session_report_pdf(session_id: str):
+        item = store.report(session_id)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        profile = _report_profile()
+        item = redact_report(item, profile)
+        lang = request.args.get("lang", "it")[:8]
+        body = _markdown_redaction_banner(item, lang.lower().startswith("it")) + session_markdown(item, lang)
+        pdf = text_to_pdf(f"AEGIS-NEXUS session {session_id[:64]}", body)
+        record_audit(
+            "export.session_report",
+            target_type="session",
+            target_id=session_id[:128],
+            detail={"format": "pdf", "redaction_profile": profile},
+        )
+        return Response(
+            pdf,
+            content_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="aegis-{session_id[:64]}.pdf"'},
         )
 
     @app.get("/api/v1/reports/session/<session_id>.csv")

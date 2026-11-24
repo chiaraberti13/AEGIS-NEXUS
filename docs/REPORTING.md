@@ -49,6 +49,16 @@ commands/payloads are left intact for review, and the Markdown export carries a
 visible redaction banner. The chosen profile is recorded in the export audit
 entry.
 
+### Safe PDF export
+
+Session and case reports can also be exported as PDF (`…/<id>.pdf`,
+operator-authenticated and audited, honouring `?profile=` and `?lang=`). The PDF
+is produced by a **pure-Python, text-only** writer: it uses no headless browser
+and never renders HTML/CSS/JavaScript, so attacker-controlled report content
+cannot execute or trigger fetches during export. Text is escaped for PDF
+strings and encoded to Latin-1 (attacker bytes become inert glyphs). It is a
+plain text rendering, not typeset layout.
+
 ### Safety boundaries
 
 Markdown is generated only from the already export-sanitized session/case report structures.
@@ -115,6 +125,16 @@ dell'analista e gli identificatori inseriti dall'attaccante dentro
 comandi/payload restano intatti per revisione, e l'export Markdown porta un
 banner di redazione visibile. Il profilo scelto è registrato nella voce di audit
 dell'export.
+
+### Export PDF sicuro
+
+Session e case report sono esportabili anche in PDF (`…/<id>.pdf`,
+operatore-autenticato e auditato, con `?profile=` e `?lang=`). Il PDF è generato
+da un writer **puro-Python di solo testo**: non usa alcun headless browser e non
+rende MAI HTML/CSS/JavaScript, quindi il contenuto controllato dall'attaccante
+non può eseguire né innescare fetch durante l'export. Il testo è escapato per le
+stringhe PDF e codificato in Latin-1 (i byte dell'attaccante diventano glifi
+inerti). È un rendering testuale semplice, non tipografico.
 
 ### Confini di sicurezza
 

@@ -349,8 +349,8 @@ These are deliberate design boundaries, not missing features:
 - [x] Include detections, IOC and MITRE statistics
 - [x] Add report redaction profiles (internal vs shareable) — `?profile=shareable`
 - [x] Add evidence bundle export with a SHA-256 manifest (chain-of-custody) — `GET /api/v1/reports/case/<id>/bundle.zip`
-- [ ] Add safe PDF report export
-- [ ] Generate PDFs without rendering attacker-controlled HTML/JS (no headless-browser rendering of raw evidence)
+- [x] Add safe PDF report export — `…/<id>.pdf` (pure-Python, text-only)
+- [x] Generate PDFs without rendering attacker-controlled HTML/JS (no headless-browser rendering of raw evidence)
 - [x] Add report-generation regression tests
 
 **Done when:** an investigation can start from an alert, become a case and finish with a reproducible evidence-backed report.
@@ -544,7 +544,7 @@ These requirements apply to **every** roadmap cycle.
 | E — Threat Intelligence & CTI | ⬜ Planned |
 | F — Behavioral Analytics | ⬜ Planned |
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
-| G — Cases, Reporting & SOC Workflow | ⬜ Planned |
+| G — Cases, Reporting & SOC Workflow | ✅ Completed |
 | H — Platform Health & Storage | ⬜ Planned |
 | I — Backend Architecture & Maintainability | ⬜ Planned |
 | J — Study Mode 2.0 | ⬜ Planned |
