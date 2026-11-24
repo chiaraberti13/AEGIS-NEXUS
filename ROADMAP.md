@@ -406,7 +406,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Keep public API behavior backward compatible where practical
 - [ ] Add schema/migration tests
 - [ ] Add API contract tests
-- [ ] Add static type checking (e.g. `mypy`) for core modules
+- [x] Add static type checking (e.g. `mypy`) for core modules — gate in `pyproject.toml`, `make typecheck`
 - [ ] Review frontend module boundaries
 - [ ] Split `static/app.js` into ES modules by view without adding a mandatory build step
 - [ ] Add browser smoke tests (Playwright) including hostile-content XSS fixtures

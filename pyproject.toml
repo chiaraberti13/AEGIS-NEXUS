@@ -23,3 +23,35 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+# Static type-checking gate. Introduced over a curated set of core modules that
+# already type-check cleanly; the set is expanded as more modules are annotated.
+# Run with `mypy` (no args) or `make typecheck`.
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+ignore_missing_imports = true
+warn_unused_ignores = true
+no_implicit_optional = true
+files = [
+  "src/aegis_nexus/storage_backend.py",
+  "src/aegis_nexus/metrics.py",
+  "src/aegis_nexus/redaction.py",
+  "src/aegis_nexus/evidence_bundle.py",
+  "src/aegis_nexus/soc_summary.py",
+  "src/aegis_nexus/detection_coverage.py",
+  "src/aegis_nexus/pdf.py",
+  "src/aegis_nexus/logging_config.py",
+  "src/aegis_nexus/pagination.py",
+  "src/aegis_nexus/time_integrity.py",
+  "src/aegis_nexus/security.py",
+  "src/aegis_nexus/detection.py",
+  "src/aegis_nexus/detection_config.py",
+  "src/aegis_nexus/detection_backtest.py",
+  "src/aegis_nexus/event_chain.py",
+  "src/aegis_nexus/sensor_sequence.py",
+  "src/aegis_nexus/casework.py",
+  "src/aegis_nexus/ioc.py",
+  "src/aegis_nexus/derivation.py",
+  "src/aegis_nexus/honeytokens.py",
+]

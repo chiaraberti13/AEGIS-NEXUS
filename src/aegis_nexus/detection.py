@@ -90,7 +90,7 @@ def _destination_port(event: dict[str, Any]) -> int | None:
     if value is None:
         value = _observed(event).get("destination_port")
     try:
-        port = int(value)
+        port = int(value)  # type: ignore[arg-type]  # unknown input; TypeError/ValueError caught
     except (TypeError, ValueError):
         return None
     return port if 1 <= port <= 65535 else None
@@ -186,7 +186,7 @@ def _is_high_suricata(event: dict[str, Any]) -> bool:
     if not isinstance(alert, dict):
         return False
     try:
-        return int(alert.get("severity")) <= 2
+        return int(alert.get("severity")) <= 2  # type: ignore[arg-type]  # unknown input; guarded
     except (TypeError, ValueError):
         return False
 
