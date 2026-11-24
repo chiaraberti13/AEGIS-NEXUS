@@ -23,7 +23,11 @@ def _gauge(lines: list[str], name: str, value: Any, help_text: str) -> None:
     lines.append(f"{name} {value}")
 
 
-def render_prometheus(health: dict[str, Any], telemetry: dict[str, Any]) -> str:
+def render_prometheus(
+    health: dict[str, Any],
+    telemetry: dict[str, Any],
+    evidence_loss: dict[str, Any] | None = None,
+) -> str:
     lines: list[str] = []
     storage = health.get("storage") or {}
 
@@ -60,5 +64,13 @@ def render_prometheus(health: dict[str, Any], telemetry: dict[str, Any]) -> str:
            "Events a sensor numbered but the collector never stored (evidence loss).")
     _gauge(lines, "aegis_sensors_silent", telemetry.get("silent_sensors_count"),
            "Configured sensors that are silent (no recent telemetry and a stale/absent heartbeat).")
+
+    if evidence_loss:
+        counts = evidence_loss.get("counts") or {}
+        _gauge(lines, "aegis_evidence_loss_events_considered", evidence_loss.get("events_considered"),
+               "Recent events scanned for evidence-loss counting (bounded window).")
+        for key, value in sorted(counts.items()):
+            _gauge(lines, f"aegis_evidence_{key}", value,
+                   "Disclosed normalization/evidence-loss counter over the recent window.")
 
     return "\n".join(lines) + "\n"

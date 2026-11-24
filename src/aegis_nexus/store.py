@@ -1631,6 +1631,51 @@ class Store:
             ),
         }
 
+    def evidence_loss_summary(self, hours: int = 24) -> dict[str, Any]:
+        """Normalization/evidence-loss counts over a bounded recent window.
+
+        Single pass over the ``collector`` column of recent events (bounded by
+        the analytics cap), summing the same disclosed loss counters the
+        dashboard surfaces. Evidence loss is observed from stored provenance,
+        never inferred.
+        """
+        bounded = max(1, min(int(hours), 720))
+        since = (datetime.now(timezone.utc) - timedelta(hours=bounded)).isoformat()
+        counts: Counter[str] = Counter()
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT collector FROM events WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?",
+                (since, self.analytics_max_events),
+            ).fetchall()
+        for row in rows:
+            try:
+                collector = json.loads(row["collector"] or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            normalization = collector.get("normalization") if isinstance(collector, dict) else None
+            if not isinstance(normalization, dict):
+                continue
+            sub = normalization.get("counts")
+            sub = sub if isinstance(sub, dict) else {}
+            for key in ("truncated_strings", "truncated_collections", "dropped_keys",
+                        "coerced_values", "credential_secrets_redacted"):
+                try:
+                    counts[key] += max(0, int(sub.get(key) or 0))
+                except (TypeError, ValueError):
+                    continue
+            if normalization.get("truncated"):
+                counts["events_with_truncation"] += 1
+            if normalization.get("lossy"):
+                counts["events_with_lossy_normalization"] += 1
+            if normalization.get("redacted"):
+                counts["events_with_credential_redaction"] += 1
+        return {
+            "window_hours": bounded,
+            "events_considered": len(rows),
+            "truncated_at_limit": len(rows) >= self.analytics_max_events,
+            "counts": {key: int(counts[key]) for key in sorted(counts)},
+        }
+
     def filter_options(self, hours: int = 720) -> dict[str, list[str]]:
         bounded_hours = max(1, min(hours, 720))
         since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()

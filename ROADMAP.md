@@ -368,7 +368,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Track sensor event rate
 - [ ] Track invalid/rejected sensor events
 - [ ] Track signature/authentication failures
-- [ ] Track normalization/evidence-loss metrics
+- [x] Track normalization/evidence-loss metrics — dashboard `data_quality`, SOC summary, `aegis_evidence_*` metrics
 - [x] Track database size
 - [x] Track storage/retention status
 - [x] Add Healthy / Degraded / Critical platform states

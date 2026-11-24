@@ -679,10 +679,16 @@ def create_app(test_config: dict | None = None) -> Flask:
     def platform_metrics():
         health = store.operational_health(int(app.config.get("MIN_FREE_BYTES", 67_108_864)))
         telemetry: dict = {}
+        evidence_loss: dict | None = None
         snapshot = _sensor_health_snapshot(health["database_ready"])
         if snapshot:
             telemetry = {**snapshot["observation"], "silent_sensors_count": snapshot["silent_count"]}
-        return Response(render_prometheus(health, telemetry), content_type=PROMETHEUS_CONTENT_TYPE)
+        if health["database_ready"]:
+            evidence_loss = store.evidence_loss_summary(hours=24)
+        return Response(
+            render_prometheus(health, telemetry, evidence_loss),
+            content_type=PROMETHEUS_CONTENT_TYPE,
+        )
 
     @app.get("/api/v1/sensors/health")
     def sensors_health():
