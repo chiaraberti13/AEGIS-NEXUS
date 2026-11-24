@@ -403,14 +403,14 @@ These are deliberate design boundaries, not missing features:
 - [ ] Separate relationship queries
 - [ ] Split API routes by domain
 - [ ] Introduce explicit service layer where useful
-- [ ] Keep public API behavior backward compatible where practical
-- [ ] Add schema/migration tests
-- [ ] Add API contract tests
+- [x] Keep public API behavior backward compatible where practical — guarded by contract tests
+- [x] Add schema/migration tests
+- [x] Add API contract tests — `tests/test_api_contract.py`
 - [x] Add static type checking (e.g. `mypy`) for core modules — gate in `pyproject.toml`, `make typecheck`
 - [ ] Review frontend module boundaries
 - [ ] Split `static/app.js` into ES modules by view without adding a mandatory build step
 - [ ] Add browser smoke tests (Playwright) including hostile-content XSS fixtures
-- [ ] Document internal architecture
+- [x] Document internal architecture — `docs/ARCHITECTURE.md`
 
 > Lint and dependency/security scanning in CI were moved to Cycle P.
 
