@@ -550,7 +550,7 @@ These requirements apply to **every** roadmap cycle.
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
 | H — Platform Health & Storage | 🟨 19/22 · PostgreSQL backend deferred (ADR 0002) |
-| I — Backend Architecture & Maintainability | ⬜ Planned |
+| I — Backend Architecture & Maintainability | 🟨 7/17 · monolith splits incremental (ADR 0003) |
 | J — Study Mode 2.0 | ⬜ Planned |
 | L — Geospatial Attack Visualization | ✅ Completed |
 
