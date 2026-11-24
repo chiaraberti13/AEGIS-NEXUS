@@ -37,6 +37,18 @@ inert data served as an attachment — it is not rendered and executes nothing.
 Because it may embed full events (source IPs, usernames, payloads) and the
 case's operator audit trail, treat the download as sensitive.
 
+### Redaction profiles
+
+Session and case reports (JSON and Markdown) accept `?profile=internal`
+(default, full detail) or `?profile=shareable`. The shareable profile masks
+structured network identifiers (source IPs to their /24 or /48 network prefix),
+removes usernames and operator/owner identities, and keeps SHA-256 fingerprints,
+detection structure and evidence-backed MITRE/IOC context. It is **not** full
+anonymization: free-text analyst fields and attacker-embedded identifiers inside
+commands/payloads are left intact for review, and the Markdown export carries a
+visible redaction banner. The chosen profile is recorded in the export audit
+entry.
+
 ### Safety boundaries
 
 Markdown is generated only from the already export-sanitized session/case report structures.
@@ -90,6 +102,19 @@ bundle identico byte-per-byte. Il bundle è dato inerte servito come attachment 
 non viene renderizzato e non esegue nulla. Poiché può includere eventi completi
 (IP sorgente, username, payload) e la traccia di audit operatore del caso, il
 download va trattato come sensibile.
+
+### Profili di redazione
+
+I report di sessione e caso (JSON e Markdown) accettano `?profile=internal`
+(default, dettaglio completo) o `?profile=shareable`. Il profilo condivisibile
+maschera gli identificatori di rete strutturati (IP sorgente al prefisso di rete
+/24 o /48), rimuove username e identità operatore/responsabile, e mantiene i
+fingerprint SHA-256, la struttura di detection e il contesto MITRE/IOC
+evidence-backed. **Non** è un'anonimizzazione completa: i campi free-text
+dell'analista e gli identificatori inseriti dall'attaccante dentro
+comandi/payload restano intatti per revisione, e l'export Markdown porta un
+banner di redazione visibile. Il profilo scelto è registrato nella voce di audit
+dell'export.
 
 ### Confini di sicurezza
 

@@ -347,7 +347,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add custom-range SOC Summary Report
 - [x] Include Evidence Integrity warnings in summary reports
 - [x] Include detections, IOC and MITRE statistics
-- [ ] Add report redaction profiles (internal vs shareable)
+- [x] Add report redaction profiles (internal vs shareable) — `?profile=shareable`
 - [x] Add evidence bundle export with a SHA-256 manifest (chain-of-custody) — `GET /api/v1/reports/case/<id>/bundle.zip`
 - [ ] Add safe PDF report export
 - [ ] Generate PDFs without rendering attacker-controlled HTML/JS (no headless-browser rendering of raw evidence)

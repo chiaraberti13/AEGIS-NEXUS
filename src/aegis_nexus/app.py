@@ -37,6 +37,7 @@ from .operator_audit import OperatorAuditLog
 from .pcap import DisabledPcapCaptureProvider, PcapEvidenceStore, PcapValidationError
 from .quarantine import QuarantineError, QuarantineStore
 from .pagination import CursorError
+from .redaction import REDACTION_PROFILES, redact_report
 from .reporting import case_markdown, session_markdown, soc_summary_markdown
 from .soc_summary import NAMED_WINDOWS, build_soc_summary
 from .security import SlidingWindowLimiter, verify_signed_payload
@@ -1440,13 +1441,24 @@ def create_app(test_config: dict | None = None) -> Flask:
         record_audit("case.note_add", target_type="case", target_id=case_id[:128])
         return jsonify(item), 201
 
+    def _report_profile() -> str:
+        profile = (request.args.get("profile") or "internal").strip().lower()
+        return profile if profile in REDACTION_PROFILES else "internal"
+
+    def _markdown_redaction_banner(report: dict, it: bool) -> str:
+        note = report.get("redaction_note")
+        if not note:
+            return ""
+        label = "Redazione: condivisibile" if it else "Redaction: shareable"
+        return f"> **{label}** — {note}\n\n"
+
     @app.get("/api/v1/reports/case/<case_id>")
     def case_report(case_id: str):
         item = store.case_report(case_id[:128])
         if not item:
             return jsonify({"error": "not_found"}), 404
         item["operator_audit"] = case_operator_audit(case_id[:128])
-        return jsonify(item), 200
+        return jsonify(redact_report(item, _report_profile())), 200
 
     @app.get("/api/v1/reports/case/<case_id>.md")
     def case_report_markdown(case_id: str):
@@ -1454,13 +1466,16 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not item:
             return jsonify({"error": "not_found"}), 404
         item["operator_audit"] = case_operator_audit(case_id[:128])
-        body = case_markdown(item, request.args.get("lang", "it")[:8])
+        profile = _report_profile()
+        item = redact_report(item, profile)
+        lang = request.args.get("lang", "it")[:8]
+        body = _markdown_redaction_banner(item, lang.lower().startswith("it")) + case_markdown(item, lang)
         filename = f"aegis-{case_id[:64]}.md"
         record_audit(
             "export.case_report",
             target_type="case",
             target_id=case_id[:128],
-            detail={"format": "markdown"},
+            detail={"format": "markdown", "redaction_profile": profile},
         )
         return Response(
             body,
@@ -1588,20 +1603,25 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/v1/reports/session/<session_id>")
     def session_report(session_id: str):
         item = store.report(session_id)
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+        if not item:
+            return jsonify({"error": "not_found"}), 404
+        return jsonify(redact_report(item, _report_profile())), 200
 
     @app.get("/api/v1/reports/session/<session_id>.md")
     def session_report_markdown(session_id: str):
         item = store.report(session_id)
         if not item:
             return jsonify({"error": "not_found"}), 404
-        body = session_markdown(item, request.args.get("lang", "it")[:8])
+        profile = _report_profile()
+        item = redact_report(item, profile)
+        lang = request.args.get("lang", "it")[:8]
+        body = _markdown_redaction_banner(item, lang.lower().startswith("it")) + session_markdown(item, lang)
         filename = f"aegis-{session_id[:64]}.md"
         record_audit(
             "export.session_report",
             target_type="session",
             target_id=session_id[:128],
-            detail={"format": "markdown"},
+            detail={"format": "markdown", "redaction_profile": profile},
         )
         return Response(
             body,
