@@ -1,4 +1,4 @@
-.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity sbom sast audit
+.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity verify-restore sbom sast audit
 
 install:
 	python -m pip install -e '.[dev]'
@@ -31,6 +31,9 @@ backup:
 
 verify-integrity:
 	python scripts/verify_integrity.py $(DB)
+
+verify-restore:
+	python scripts/verify_restore.py $(BACKUP)
 
 sbom:
 	python scripts/generate_sbom.py $(if $(OUT),--output $(OUT),)

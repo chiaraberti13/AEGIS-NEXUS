@@ -376,7 +376,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Expose operator-authenticated metrics endpoint (Prometheus text format) — `GET /api/v1/metrics`
 - [x] Add structured JSON application logs without attacker-controlled log injection — `AEGIS_LOG_FORMAT=json`
 - [ ] Define explicit load-shedding behavior under disk/ingest pressure and record it as evidence loss
-- [ ] Add automated backup restore verification
+- [x] Add automated backup restore verification — `make verify-restore`
 - [ ] Define StorageBackend interface
 - [ ] Refactor SQLite backend behind StorageBackend
 - [ ] Add optional PostgreSQL backend
