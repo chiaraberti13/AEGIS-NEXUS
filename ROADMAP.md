@@ -547,7 +547,7 @@ These requirements apply to **every** roadmap cycle.
 | F — Behavioral Analytics | ⬜ Planned |
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
-| H — Platform Health & Storage | ⬜ Planned |
+| H — Platform Health & Storage | 🟨 19/22 · PostgreSQL backend deferred (ADR 0002) |
 | I — Backend Architecture & Maintainability | ⬜ Planned |
 | J — Study Mode 2.0 | ⬜ Planned |
 | L — Geospatial Attack Visualization | ✅ Completed |
