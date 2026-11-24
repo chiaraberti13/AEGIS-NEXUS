@@ -1044,6 +1044,74 @@ class Store:
         }
 
     @staticmethod
+    def _evidence_observed_timestamp(evidence: dict[str, Any]) -> str | None:
+        summary = evidence.get("summary")
+        if not isinstance(summary, dict):
+            return None
+        for key in ("timestamp", "first_seen", "started_at"):
+            value = summary.get(key)
+            if value:
+                return str(value)
+        return None
+
+    def case_timeline(self, case_id: str) -> dict[str, Any] | None:
+        """Unified, chronologically ordered case timeline.
+
+        Merges investigation actions (case lifecycle history, notes and
+        evidence links — analyst/collector provenance) with the observed,
+        sensor-reported timestamp of each referenced piece of evidence
+        (observed provenance). Timestamps are never re-derived or inferred; the
+        two provenance classes stay labelled and distinct.
+        """
+        case = self.get_case(case_id)
+        if case is None:
+            return None
+        entries: list[dict[str, Any]] = []
+        for item in case.get("history", []):
+            entries.append({
+                "timestamp": item.get("timestamp"),
+                "kind": "case." + str(item.get("action") or "event"),
+                "provenance": "analyst",
+                "detail": item.get("detail") or {},
+            })
+        for note in case.get("notes", []):
+            entries.append({
+                "timestamp": note.get("created_at"),
+                "kind": "note.added",
+                "provenance": "analyst",
+                "detail": {"note_id": note.get("id")},
+            })
+        for evidence in case.get("evidence", []):
+            ref = {"evidence_type": evidence.get("evidence_type"), "evidence_id": evidence.get("evidence_id")}
+            entries.append({
+                "timestamp": evidence.get("added_at"),
+                "kind": "evidence.linked",
+                "provenance": "analyst",
+                "detail": ref,
+            })
+            observed = self._evidence_observed_timestamp(evidence)
+            if observed:
+                entries.append({
+                    "timestamp": observed,
+                    "kind": "evidence.observed",
+                    "provenance": "observed",
+                    "detail": ref,
+                })
+        entries = [entry for entry in entries if entry.get("timestamp")]
+        entries.sort(key=lambda entry: str(entry["timestamp"]))
+        return {
+            "case_id": case_id,
+            "schema_version": "1.0",
+            "entry_count": len(entries),
+            "entries": entries[:1000],
+            "provenance_note": (
+                "observed = sensor-reported evidence time; analyst = investigation "
+                "actions on the case. Timestamps are taken as recorded, never "
+                "re-derived or inferred."
+            ),
+        }
+
+    @staticmethod
     def _extract_external_enrichment(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         entries: list[dict[str, Any]] = []
         seen: set[str] = set()

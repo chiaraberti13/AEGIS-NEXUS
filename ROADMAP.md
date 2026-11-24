@@ -336,7 +336,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add case tags
 - [x] Link alerts directly to cases
 - [ ] Link IOC directly to cases
-- [ ] Add unified case timeline
+- [x] Add unified case timeline — `GET /api/v1/cases/<id>/timeline`
 - [x] Separate analyst hypotheses from evidence (dedicated non-factual case field)
 - [x] Add case conclusion field
 - [x] Add False Positive closure state (alert disposition: true_positive/false_positive/benign)

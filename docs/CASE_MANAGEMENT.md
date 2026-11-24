@@ -21,6 +21,8 @@ Resource and lifecycle controls:
 
 CSV exports neutralize cells beginning with spreadsheet formula prefixes so attacker-controlled telemetry cannot become a formula when opened in spreadsheet software.
 
+`GET /api/v1/cases/<id>/timeline` returns a unified, chronologically ordered timeline that merges investigation actions (case lifecycle history, notes and evidence links — analyst provenance) with the observed, sensor-reported timestamp of each referenced piece of evidence (observed provenance). Timestamps are taken as recorded, never re-derived, and the two provenance classes stay labelled and distinct so attacker activity is never conflated with analyst actions.
+
 A case severity is an analyst assessment. It does not overwrite the severity stored on source telemetry. Closing a case also does not delete or modify source evidence. Case metadata and analyst notes have a lifecycle separate from raw telemetry. Configure case retention deliberately, export anything that must be preserved before deletion, and avoid storing unnecessary secrets or personal data in notes.
 
 ---
@@ -47,5 +49,7 @@ Controlli su risorse e lifecycle:
 - autenticazione operatore e rate limiting anche sugli endpoint dei casi.
 
 Gli export CSV neutralizzano le celle che iniziano con prefissi interpretabili come formule, evitando che telemetria controllata dall'attaccante venga eseguita come formula quando il file viene aperto in un foglio di calcolo.
+
+`GET /api/v1/cases/<id>/timeline` restituisce una timeline unificata e ordinata cronologicamente che unisce le azioni investigative (history del caso, note e link alle evidenze — provenance *analista*) con il timestamp osservato e riportato dal sensore di ogni evidenza referenziata (provenance *osservato*). I timestamp sono presi come registrati, mai re-derivati, e le due classi di provenance restano etichettate e distinte, così l'attività dell'attaccante non viene mai confusa con le azioni dell'analista.
 
 La severità del caso è una valutazione dell'analista e non sovrascrive la severità della telemetria sorgente. La chiusura di un caso non elimina né modifica le evidenze originali. Metadati del caso e note dell'analista hanno un ciclo di vita separato dalla telemetria raw: configura deliberatamente la retention, esporta ciò che deve essere conservato prima della cancellazione e non inserire nelle note segreti o dati personali non necessari.

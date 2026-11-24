@@ -1416,6 +1416,7 @@
     $("case-evidence").replaceChildren();
     $("case-notes").replaceChildren();
     $("case-history").replaceChildren();
+    $("case-timeline").replaceChildren();
     $("case-evidence-count").textContent = "0";
     setCaseActionState();
     renderCaseList();
@@ -1550,9 +1551,40 @@
     renderCaseList();
   }
 
+  function renderCaseTimeline(entries) {
+    const root = $("case-timeline");
+    root.replaceChildren();
+    if (!entries || !entries.length) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = t("empty.noData");
+      root.append(empty);
+      return;
+    }
+    entries.forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "case-history-item";
+      const head = document.createElement("div");
+      const kind = document.createElement("strong");
+      kind.textContent = String(entry.kind || "");
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = t("cases.provenance." + String(entry.provenance || "")) || String(entry.provenance || "");
+      const time = document.createElement("time");
+      time.textContent = formatDate(entry.timestamp);
+      head.append(kind, badge, time);
+      const pre = document.createElement("pre");
+      pre.textContent = pretty(entry.detail || {});
+      row.append(head, pre);
+      root.append(row);
+    });
+  }
+
   async function selectCase(caseId) {
     const item = await safeGet("/api/v1/cases/" + encodeURIComponent(caseId));
     if (item) renderCaseDetail(item);
+    const timeline = await safeGet("/api/v1/cases/" + encodeURIComponent(caseId) + "/timeline");
+    renderCaseTimeline(timeline?.entries || []);
   }
 
   function auditTargetLabel(item) {

@@ -1343,6 +1343,11 @@ def create_app(test_config: dict | None = None) -> Flask:
         item = store.get_case(case_id[:128])
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
+    @app.get("/api/v1/cases/<case_id>/timeline")
+    def case_timeline(case_id: str):
+        item = store.case_timeline(case_id[:128])
+        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+
     @app.delete("/api/v1/cases/<case_id>")
     def delete_case(case_id: str):
         result = store.delete_case(case_id[:128])
