@@ -348,7 +348,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Include Evidence Integrity warnings in summary reports
 - [x] Include detections, IOC and MITRE statistics
 - [ ] Add report redaction profiles (internal vs shareable)
-- [ ] Add evidence bundle export with a SHA-256 manifest (chain-of-custody)
+- [x] Add evidence bundle export with a SHA-256 manifest (chain-of-custody) — `GET /api/v1/reports/case/<id>/bundle.zip`
 - [ ] Add safe PDF report export
 - [ ] Generate PDFs without rendering attacker-controlled HTML/JS (no headless-browser rendering of raw evidence)
 - [x] Add report-generation regression tests

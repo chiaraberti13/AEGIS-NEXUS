@@ -25,6 +25,18 @@ list is disclosed as *no warnings in the window*, never as a completeness
 guarantee. Geolocation/ASN stay enrichment and MITRE/IOC stay evidence-backed —
 the summary asserts no attribution.
 
+### Evidence bundle (chain of custody)
+
+`GET /api/v1/reports/case/<case_id>/bundle.zip` (operator-authenticated, audited)
+returns a ZIP containing the case report (JSON + Markdown), one JSON file per
+referenced evidence record (the full stored event/alert when available, or a
+bounded summary), and a `manifest.json` listing the SHA-256 and byte length of
+every other file. The manifest never hashes itself; the archive uses fixed
+timestamps so identical inputs produce a byte-identical bundle. The bundle is
+inert data served as an attachment — it is not rendered and executes nothing.
+Because it may embed full events (source IPs, usernames, payloads) and the
+case's operator audit trail, treat the download as sensitive.
+
 ### Safety boundaries
 
 Markdown is generated only from the already export-sanitized session/case report structures.
@@ -65,6 +77,19 @@ IOC derivati. Porta sempre una lista esplicita `evidence_integrity_warnings`
 lista vuota è dichiarata come *nessun avviso nella finestra*, mai come garanzia
 di completezza. Geolocalizzazione/ASN restano enrichment e MITRE/IOC restano
 evidence-backed — il riepilogo non asserisce attribuzione.
+
+### Evidence bundle (catena di custodia)
+
+`GET /api/v1/reports/case/<case_id>/bundle.zip` (autenticato operatore, auditato)
+restituisce uno ZIP con il report del caso (JSON + Markdown), un file JSON per
+ogni evidenza referenziata (l'evento/alert completo memorizzato quando
+disponibile, oppure un riepilogo limitato) e un `manifest.json` che elenca
+SHA-256 e lunghezza in byte di ogni altro file. Il manifest non calcola l'hash
+di sé stesso; l'archivio usa timestamp fissi così input identici producono un
+bundle identico byte-per-byte. Il bundle è dato inerte servito come attachment —
+non viene renderizzato e non esegue nulla. Poiché può includere eventi completi
+(IP sorgente, username, payload) e la traccia di audit operatore del caso, il
+download va trattato come sensibile.
 
 ### Confini di sicurezza
 

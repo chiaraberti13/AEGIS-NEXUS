@@ -29,6 +29,7 @@ from .detection_coverage import mitre_coverage
 from .detection_suppression import DetectionSuppressionStore, SuppressionValidationError
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
+from .evidence_bundle import build_evidence_bundle
 from .forwarding import build_forwarder
 from .ioc import IOCWorkspace
 from .model import EventValidationError, normalize_event
@@ -1485,6 +1486,52 @@ def create_app(test_config: dict | None = None) -> Flask:
             body,
             content_type="text/markdown; charset=utf-8",
             headers={"Content-Disposition": 'attachment; filename="aegis-soc-summary.md"'},
+        )
+
+    @app.get("/api/v1/reports/case/<case_id>/bundle.zip")
+    def case_evidence_bundle(case_id: str):
+        report = store.case_report(case_id[:128])
+        if not report:
+            return jsonify({"error": "not_found"}), 404
+        report["operator_audit"] = case_operator_audit(case_id[:128])
+        lang = request.args.get("lang", "it")[:8]
+        markdown = case_markdown(report, lang)
+
+        records: list[dict] = []
+        for evidence in report.get("evidence", []):
+            etype = str(evidence.get("evidence_type") or "evidence")
+            eid = str(evidence.get("evidence_id") or "")
+            if not evidence.get("available"):
+                records.append({
+                    "name": f"{etype}-{eid}-unavailable",
+                    "record": {"evidence_type": etype, "evidence_id": eid, "available": False},
+                })
+                continue
+            if etype == "event":
+                record = store.get_event(eid) or evidence.get("summary")
+            elif etype == "alert":
+                record = alert_store.get(eid) or evidence.get("summary")
+            else:
+                record = evidence.get("summary")
+            records.append({"name": f"{etype}-{eid}", "record": record})
+
+        bundle, manifest = build_evidence_bundle(
+            case_id=case_id[:128],
+            report_json=report,
+            report_markdown=markdown,
+            evidence_records=records,
+            generated_at=report["generated_at"],
+        )
+        record_audit(
+            "export.case_bundle",
+            target_type="case",
+            target_id=case_id[:128],
+            detail={"format": "zip", "entries": manifest["entry_count"]},
+        )
+        return Response(
+            bundle,
+            content_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="aegis-case-{case_id[:64]}-bundle.zip"'},
         )
 
     @app.get("/api/v1/reports/case/<case_id>.csv")
