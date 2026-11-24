@@ -283,6 +283,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     )
     alert_store = AlertStore(app.config["DATABASE_PATH"])
     ioc_workspace = IOCWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
+    # Let cases resolve directly-linked IOC evidence without the Store importing
+    # the IOC workspace (dependency injection keeps the layering clean).
+    store.set_ioc_resolver(lambda ioc_identifier: ioc_workspace.get(ioc_identifier))
     correlation_workspace = CorrelationWorkspace(app.config["DATABASE_PATH"], max_events=int(app.config.get("ANALYTICS_MAX_EVENTS", 20000)))
     detection_config = DetectionConfig.from_json(str(app.config.get("DETECTION_RULES_JSON") or ""))
     detection_engine = DetectionEngine(config=detection_config)

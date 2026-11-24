@@ -9,6 +9,7 @@ import uuid
 from collections import Counter, defaultdict
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,9 @@ class Store:
         migration_backup_keep: int = 14,
     ):
         self.path = path
+        # Optional resolver for derived IOC evidence (injected by the app so the
+        # Store never imports the IOC workspace). Signature: (ioc_id) -> dict|None.
+        self._ioc_resolver: Callable[[str], dict[str, Any] | None] | None = None
         self.retention_days = max(0, retention_days)
         self.max_events = max(1_000, max_events)
         self.analytics_max_events = max(100, min(analytics_max_events, self.max_events))
@@ -797,12 +801,39 @@ class Store:
                 result.append(item)
         return result
 
+    def set_ioc_resolver(self, resolver: Callable[[str], dict[str, Any] | None] | None) -> None:
+        """Inject the derived-IOC resolver (the IOC workspace's ``get``)."""
+        self._ioc_resolver = resolver
+
     def _resolve_case_evidence(self, conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
         item = dict(row)
         evidence_type = item["evidence_type"]
         evidence_id = item["evidence_id"]
         item["available"] = False
         item["summary"] = None
+        if evidence_type == "ioc":
+            # IOC are derived artifacts, resolved on the fly by the injected
+            # resolver; availability means the artifact is still derivable from
+            # retained events, never a threat-intelligence verdict.
+            resolver = self._ioc_resolver
+            if resolver is not None:
+                try:
+                    ioc = resolver(evidence_id)
+                except Exception:
+                    ioc = None
+                if ioc:
+                    item["available"] = True
+                    item["summary"] = {
+                        "id": ioc.get("id"),
+                        "type": ioc.get("type"),
+                        "value": ioc.get("value"),
+                        "classification": ioc.get("classification"),
+                        "first_seen": ioc.get("first_seen"),
+                        "last_seen": ioc.get("last_seen"),
+                        "occurrences": ioc.get("occurrences"),
+                        "evidence_provenance": "derived_artifact",
+                    }
+            return item
         if evidence_type == "event":
             event = conn.execute(
                 """
@@ -902,6 +933,16 @@ class Store:
         return self.get_case(case_id)
 
     def add_case_evidence(self, case_id: str, evidence_type: str, evidence_id: str) -> dict[str, Any] | None:
+        # Derived IOC existence is validated up front via the injected resolver
+        # (read-only, its own connection) so we never open a nested write path.
+        ioc_available = None
+        if evidence_type == "ioc":
+            resolver = self._ioc_resolver
+            if resolver is not None:
+                try:
+                    ioc_available = resolver(evidence_id)
+                except Exception:
+                    ioc_available = None
         with self.connect() as conn:
             if not conn.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
                 return None
@@ -926,6 +967,8 @@ class Store:
                 available = conn.execute("SELECT 1 FROM sessions WHERE id=?", (evidence_id,)).fetchone()
             elif evidence_type == "alert":
                 available = conn.execute("SELECT 1 FROM alerts WHERE id=?", (evidence_id,)).fetchone()
+            elif evidence_type == "ioc":
+                available = ioc_available
             else:
                 available = None
             if not available:

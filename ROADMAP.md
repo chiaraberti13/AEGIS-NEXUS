@@ -335,7 +335,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add case lifecycle/status
 - [x] Add case tags
 - [x] Link alerts directly to cases
-- [ ] Link IOC directly to cases
+- [x] Link IOC directly to cases (type=ioc evidence, resolved via the IOC workspace)
 - [x] Add unified case timeline — `GET /api/v1/cases/<id>/timeline`
 - [x] Separate analyst hypotheses from evidence (dedicated non-factual case field)
 - [x] Add case conclusion field

@@ -7,7 +7,7 @@ CASE_STATUSES = {"open", "investigating", "monitoring", "closed"}
 CASE_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 # Triage urgency, distinct from `severity` (the assessed threat level).
 CASE_PRIORITIES = {"low", "normal", "high", "urgent"}
-EVIDENCE_TYPES = {"event", "session", "alert"}
+EVIDENCE_TYPES = {"event", "session", "alert", "ioc"}
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
