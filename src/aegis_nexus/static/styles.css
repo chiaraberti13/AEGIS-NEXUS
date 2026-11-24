@@ -386,3 +386,23 @@ td.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;o
 .analytics-finding pre{max-height:220px;overflow:auto;margin:8px 0;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}
 .analytics-evidence{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 @media(max-width:1200px){.analytics-panel{grid-column:span 1}}
+
+/* Operations/Health dashboard */
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+  font-size:11px;font-weight:600;border:1px solid var(--line-strong);color:var(--text);background:#0a141d}
+.status-pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.status-pill.state-healthy{color:var(--green);border-color:var(--green)}
+.status-pill.state-healthy::before{background:var(--green)}
+.status-pill.state-degraded{color:var(--amber);border-color:var(--amber)}
+.status-pill.state-degraded::before{background:var(--amber)}
+.status-pill.state-silent{color:var(--amber);border-color:var(--amber)}
+.status-pill.state-silent::before{background:var(--amber)}
+.status-pill.state-critical{color:var(--red);border-color:var(--red)}
+.status-pill.state-critical::before{background:var(--red)}
+.health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.health-sensors{display:flex;flex-direction:column;gap:8px}
+.health-sensor-item{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 9px;
+  border:1px solid #182a36;border-radius:7px;background:#0a141d}
+.health-sensor-item strong{font-size:12px;color:var(--text)}
+.health-sensor-item .muted{color:var(--muted);font-size:11px}
+@media (max-width:760px){.health-grid{grid-template-columns:1fr}}

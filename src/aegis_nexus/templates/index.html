@@ -33,6 +33,7 @@
       <button class="nav-item" data-view-target="relations" data-i18n="nav.relations"></button>
       <button class="nav-item" data-view-target="audit" data-i18n="nav.audit"></button>
       <button class="nav-item" data-view-target="study" data-i18n="nav.study"></button>
+      <button class="nav-item" data-view-target="health" data-i18n="nav.health"></button>
     </nav>
     <div class="sidebar-note"><span id="collector-status-dot" class="status-dot"></span><span id="collector-status" data-i18n="status.collectorUnknown"></span></div>
     <div id="sensor-telemetry-status" class="sidebar-substatus"></div>
@@ -567,6 +568,29 @@
         <article class="panel">
           <div class="panel-head"><div><span class="eyebrow" data-i18n="study.sessionEyebrow"></span><h2 data-i18n="study.sessionTitle"></h2></div></div>
           <div id="session-study" class="study-content"><p class="empty" data-i18n="study.selectEvent"></p></div>
+        </article>
+      </section>
+    </section>
+
+    <section class="workspace" data-view="health">
+      <section class="grid health-grid">
+        <article class="panel">
+          <div class="panel-head"><div><span class="eyebrow" data-i18n="health.eyebrow"></span><h2 data-i18n="health.title"></h2></div><span id="health-state" class="status-pill">—</span></div>
+          <p class="panel-note" data-i18n="health.note"></p>
+          <div id="health-storage" class="fact-grid"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h3 data-i18n="health.sensors"></h3></div>
+          <div id="health-sensors" class="health-sensors"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h3 data-i18n="health.counters"></h3></div>
+          <div id="health-counters" class="fact-grid"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h3 data-i18n="health.evidenceLoss"></h3></div>
+          <p class="panel-note" data-i18n="health.evidenceLossNote"></p>
+          <div id="health-evidence" class="fact-grid"></div>
         </article>
       </section>
     </section>
