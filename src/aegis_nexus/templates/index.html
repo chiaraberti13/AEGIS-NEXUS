@@ -116,12 +116,14 @@
             <div><span class="eyebrow" data-i18n="panel.map.eyebrow"></span><h2 data-i18n="panel.map.title"></h2></div>
             <div class="panel-tools">
               <span id="map-count" class="badge">0</span>
+              <span id="map-unmapped" class="badge" data-i18n-title="map.unmappedTitle">—</span>
+              <button id="map-live" class="icon-button" type="button" aria-pressed="false" data-i18n-title="map.live">▶</button>
               <button id="map-zoom-in" class="icon-button" type="button" data-i18n-title="map.zoomIn">+</button>
               <button id="map-zoom-out" class="icon-button" type="button" data-i18n-title="map.zoomOut">−</button>
               <button id="map-reset" class="icon-button" type="button" data-i18n-title="map.reset">↺</button>
             </div>
           </div>
-          <svg id="attack-map" class="attack-map" viewBox="0 0 800 390" role="img">
+          <svg id="attack-map" class="attack-map" viewBox="0 0 800 390" role="img" data-i18n-aria="map.title">
             <g class="land">
               <path d="M86 85l78-40 86 15 35 55-30 42-71 1-42 54-55-43z"/>
               <path d="M251 226l50 11 28 55-18 70-39-20-27-67z"/>
@@ -131,7 +133,18 @@
             </g>
             <g id="map-points"></g>
           </svg>
+          <p class="panel-note" data-i18n="map.attributionCaveat"></p>
           <p class="panel-note" data-i18n="map.limit"></p>
+          <table id="map-table" class="visually-hidden">
+            <caption data-i18n="map.tableCaption"></caption>
+            <thead><tr>
+              <th data-i18n="map.col.country"></th>
+              <th data-i18n="map.col.count"></th>
+              <th data-i18n="map.col.sessions"></th>
+              <th data-i18n="map.col.accuracy"></th>
+            </tr></thead>
+            <tbody id="map-table-body"></tbody>
+          </table>
         </article>
       </section>
 

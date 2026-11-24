@@ -22,6 +22,8 @@
     selectedAlert: null,
     iocs: [],
     selectedIoc: null,
+    mapLive: false,
+    mapLiveTimer: null,
     auditItems: [],
     auditRetention: null,
     relationGraph: null,
@@ -422,43 +424,44 @@
     applyMapBox();
   }
 
-  function map(points) {
+  function renderGeoMap(geo) {
     const root = $("map-points");
     root.replaceChildren();
-    $("map-count").textContent = String(points?.length || 0);
-    const grouped = new Map();
-    (points || []).forEach((point) => {
+    const points = (geo && geo.points) || [];
+    $("map-count").textContent = String(points.length);
+    const unmapped = (geo && geo.unmapped) || {};
+    $("map-unmapped").textContent = t("map.unmapped") + ": " + String(unmapped.events || 0);
+
+    const maxCount = points.reduce((m, p) => Math.max(m, Number(p.count) || 0), 1);
+    points.forEach((point) => {
       const lon = Number(point.lon), lat = Number(point.lat);
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      const key = lat.toFixed(1) + "|" + lon.toFixed(1) + "|" + (point.source_ip || "");
-      const existing = grouped.get(key) || {...point, count: 0, lon, lat};
-      existing.count += Math.max(1, Number(point.count) || 1);
-      if (!existing.session_count && point.session_count) existing.session_count = point.session_count;
-      grouped.set(key, existing);
-    });
-    grouped.forEach((point) => {
+      const count = Math.max(1, Number(point.count) || 1);
+      const severity = Math.max(0, Math.min(4, Number(point.severity_level) || 0));
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      circle.setAttribute("cx", String(((point.lon + 180) / 360) * 800));
-      circle.setAttribute("cy", String(((90 - point.lat) / 180) * 390));
-      circle.setAttribute("r", String(Math.min(10, 3.5 + Math.sqrt(point.count))));
-      circle.setAttribute("class", "map-point");
+      circle.setAttribute("cx", String(((lon + 180) / 360) * 800));
+      circle.setAttribute("cy", String(((90 - lat) / 180) * 390));
+      circle.setAttribute("r", String(Math.min(12, 3 + Math.sqrt(count) * (0.8 + count / maxCount))));
+      circle.setAttribute("class", "map-point sev-" + severity);
       circle.setAttribute("tabindex", "0");
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      const mapDetails = [
-        t("map.point") + ": " + (point.source_ip || "—"),
-        point.country || "—",
+      // textContent escapes attacker-controlled fields (country/asn).
+      title.textContent = [
+        t("map.location") + ": " + lat.toFixed(2) + ", " + lon.toFixed(2),
+        (point.country || "—"),
         (point.asn || "—"),
-        t("common.count") + ": " + point.count,
+        t("common.count") + ": " + count,
+        t("map.ips") + ": " + (point.unique_source_ips || "—"),
         t("map.sessions") + ": " + (point.session_count || "—"),
-        t("map.services") + ": " + ((point.services || []).join(", ") || "—"),
-        t("map.ports") + ": " + ((point.destination_ports || []).join(", ") || "—"),
-      ];
-      title.textContent = mapDetails.join(" · ");
+        t("map.accuracy") + ": " + (point.accuracy_radius_km == null ? "—" : point.accuracy_radius_km + " km"),
+      ].join(" · ");
       circle.append(title);
       const activate = () => {
-        if (!point.source_ip) return;
-        $("global-search").value = point.source_ip;
-        showView("investigate");
+        if (!point.country) return;
+        state.filters.country = point.country;
+        const select = $("filter-country");
+        if (select) select.value = point.country;
+        updateFilterCount();
         refresh();
       };
       circle.addEventListener("click", activate);
@@ -467,6 +470,39 @@
       });
       root.append(circle);
     });
+
+    // Screen-reader / keyboard data-table equivalent of the top origins.
+    const body = $("map-table-body");
+    body.replaceChildren();
+    points.slice(0, 50).forEach((point) => {
+      const tr = document.createElement("tr");
+      [point.country || "—", String(point.count ?? "—"),
+       String(point.session_count ?? "—"),
+       point.accuracy_radius_km == null ? "—" : point.accuracy_radius_km + " km"].forEach((value) => {
+        const td = document.createElement("td");
+        td.textContent = value;
+        tr.append(td);
+      });
+      body.append(tr);
+    });
+  }
+
+  async function loadGeoMap(params) {
+    const query = params ? params.toString() : currentParams().toString();
+    const geo = await safeGet("/api/v1/geo/attacks?" + query);
+    renderGeoMap(geo || {points: [], unmapped: {}});
+  }
+
+  function toggleMapLive() {
+    state.mapLive = !state.mapLive;
+    const button = $("map-live");
+    button.setAttribute("aria-pressed", state.mapLive ? "true" : "false");
+    button.textContent = state.mapLive ? "⏸" : "▶";
+    button.title = state.mapLive ? t("map.pause") : t("map.live");
+    if (state.mapLiveTimer) { window.clearInterval(state.mapLiveTimer); state.mapLiveTimer = null; }
+    if (state.mapLive) {
+      state.mapLiveTimer = window.setInterval(() => { loadGeoMap(); }, 15000);
+    }
   }
 
   function heat(matrix) {
@@ -2332,7 +2368,7 @@
       }
       timeline("timeline", dashboard.timeline);
       timeline("unique-ip-timeline", dashboard.unique_source_ip_timeline);
-      map(dashboard.map_points);
+      await loadGeoMap(dashboardParams);
       heat(dashboard.heatmap);
       bars("chart-source-ip", dashboard.source_ip, {search: true});
       bars("chart-event-type", dashboard.event_type, {filterKey: "event_type"});
@@ -2506,6 +2542,7 @@
   $("report-csv").addEventListener("click", downloadReportCSV);
   $("report-markdown").addEventListener("click", downloadReportMarkdown);
   $("export-stats").addEventListener("click", exportStats);
+  $("map-live").addEventListener("click", toggleMapLive);
   $("map-zoom-in").addEventListener("click", () => zoomMap(.75));
   $("map-zoom-out").addEventListener("click", () => zoomMap(1.33));
   $("map-reset").addEventListener("click", () => {

@@ -455,18 +455,18 @@ These are deliberate design boundaries, not missing features:
 - [x] Mark every point's provenance explicitly as Enrichment/Derived and surface the GeoIP accuracy radius
 - [x] Aggregate points server-side with a hard point cap and bounded payload size
 - [x] Add an explicit "unmapped" bucket for private, non-global or non-geolocatable IPs and record it as evidence completeness, never a silent drop
-- [ ] Vendor the visualization library and base world asset locally — no CDN and no online tile/map servers (CSP stays `script-src 'self'` / `connect-src 'self'`)
-- [ ] Render attack origins as intensity-scaled glowing points (event/session count and severity map to size and brightness)
-- [ ] Provide a 2D flat-map fallback when 3D/WebGL is unavailable
-- [ ] Add live updates over a same-origin stream (SSE) or bounded polling, with an explicit live/pause toggle
-- [ ] Honor `prefers-reduced-motion` with a static, non-pulsing fallback
-- [ ] Make points interactive: hover/focus shows an escaped tooltip (approximate location, country, ASN/organization, session/event counts, accuracy radius); selecting a point filters the dashboard or opens IP investigation
-- [ ] Display a persistent caveat that geographic origin is approximate and is not actor attribution
-- [ ] Keep every attacker-controlled field escaped in tooltips and labels
-- [ ] Add keyboard navigation and a screen-reader data-table equivalent of the top origins, and update `ACCESSIBILITY.md`
-- [ ] Provide IT/EN strings for all new labels, the live/pause control and the attribution caveat
-- [ ] Add tests for malformed/partial coordinates, missing geo, the point cap, the unmapped bucket and tooltip escaping of hostile input
-- [ ] Reflect any new live-stream data flow in `docs/THREAT_MODEL.md` and privacy documentation
+- [x] Vendor the visualization library and base world asset locally — no CDN and no online tile/map servers (CSP stays `script-src 'self'` / `connect-src 'self'`)
+- [x] Render attack origins as intensity-scaled glowing points (event/session count and severity map to size and brightness)
+- [x] Provide a 2D flat-map fallback when 3D/WebGL is unavailable
+- [x] Add live updates over a same-origin stream (SSE) or bounded polling, with an explicit live/pause toggle
+- [x] Honor `prefers-reduced-motion` with a static, non-pulsing fallback
+- [x] Make points interactive: hover/focus shows an escaped tooltip (approximate location, country, ASN/organization, session/event counts, accuracy radius); selecting a point filters the dashboard or opens IP investigation
+- [x] Display a persistent caveat that geographic origin is approximate and is not actor attribution
+- [x] Keep every attacker-controlled field escaped in tooltips and labels
+- [x] Add keyboard navigation and a screen-reader data-table equivalent of the top origins, and update `ACCESSIBILITY.md`
+- [x] Provide IT/EN strings for all new labels, the live/pause control and the attribution caveat
+- [x] Add tests for malformed/partial coordinates, missing geo, the point cap, the unmapped bucket and tooltip escaping of hostile input
+- [x] Reflect any new live-stream data flow in `docs/THREAT_MODEL.md` and privacy documentation
 
 **Done when:** analysts can watch attack origins update live on an interactive globe, with approximate geolocation clearly labelled as enrichment rather than attribution, no new outbound paths, and full IT/EN and accessibility parity.
 
@@ -550,7 +550,7 @@ These requirements apply to **every** roadmap cycle.
 | H — Platform Health & Storage | ⬜ Planned |
 | I — Backend Architecture & Maintainability | ⬜ Planned |
 | J — Study Mode 2.0 | ⬜ Planned |
-| L — Geospatial Attack Visualization | ⬜ Planned |
+| L — Geospatial Attack Visualization | ✅ Completed |
 
 ---
 

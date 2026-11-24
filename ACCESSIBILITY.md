@@ -4,6 +4,8 @@
 
 SOC console, tables, maps, charts and reports. Check text alternatives and dynamic updates.
 
+The attack-origins map provides a keyboard-reachable, screen-reader data-table equivalent of its points (country, event count, sessions, GeoIP accuracy) so its information is not conveyed by position or colour alone; point severity is encoded by both colour and size, the live-update control is a labelled toggle, and the pulse animation is gated behind `prefers-reduced-motion`.
+
 Accessibility is an ongoing objective. Automated checks do not replace manual assessment with assistive technology. This statement does not certify WCAG conformance. Lack of reported issues does not establish the absence of barriers.
 
 ## Environments and limitations

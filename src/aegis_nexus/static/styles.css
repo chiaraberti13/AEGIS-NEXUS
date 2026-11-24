@@ -110,8 +110,21 @@ main{min-width:0;padding:24px;max-width:1800px;width:100%;margin:0 auto}
 .timeline-dot{fill:#b2dadd}
 .attack-map{background:#0a141d;border-radius:7px;border:1px solid #172734;cursor:crosshair}
 .land path{fill:#132633;stroke:#294354;stroke-width:1}
-.map-point{fill:var(--amber);stroke:#efd4a2;stroke-width:1.2;cursor:pointer;vector-effect:non-scaling-stroke}
-.map-point:hover,.map-point:focus{fill:#e1b760;stroke:#fff1cf}
+.map-point{fill:var(--amber);stroke:#efd4a2;stroke-width:1.2;cursor:pointer;vector-effect:non-scaling-stroke;
+  fill-opacity:.55;filter:drop-shadow(0 0 2px rgba(197,154,80,.7))}
+.map-point:hover,.map-point:focus{fill:#e1b760;stroke:#fff1cf;fill-opacity:.95}
+/* Intensity by severity: brighter + stronger glow for higher severity. */
+.map-point.sev-0{fill:var(--blue);filter:drop-shadow(0 0 2px rgba(109,149,189,.6))}
+.map-point.sev-1{fill:var(--cyan);filter:drop-shadow(0 0 3px rgba(101,185,194,.6))}
+.map-point.sev-2{fill:var(--amber);filter:drop-shadow(0 0 4px rgba(197,154,80,.75))}
+.map-point.sev-3{fill:#e08a5a;filter:drop-shadow(0 0 6px rgba(224,138,90,.85))}
+.map-point.sev-4{fill:var(--red);fill-opacity:.8;filter:drop-shadow(0 0 8px rgba(201,111,121,.95))}
+@media (prefers-reduced-motion: no-preference){
+  .map-point.sev-3,.map-point.sev-4{animation:aegis-pulse 2.4s ease-in-out infinite}
+  @keyframes aegis-pulse{0%,100%{fill-opacity:.6}50%{fill-opacity:1}}
+}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .bar-chart{display:grid;gap:8px;min-height:150px}
 .bar-row{
   appearance:none;width:100%;border:0;background:transparent;padding:0;

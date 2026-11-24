@@ -60,6 +60,22 @@ def test_geo_attacks_puts_ungeolocated_ips_in_unmapped_bucket(tmp_path):
     assert geo["unmapped"]["unique_source_ips"] == 1
 
 
+def test_geo_attacks_treats_partial_coordinates_as_unmapped(tmp_path):
+    store = Store(str(tmp_path / "aegis.db"))
+    # Latitude present but longitude missing -> cannot place the point -> unmapped.
+    e = normalize_event({
+        "honeypot": "ssh-1", "event_type": "command",
+        "observed": {"source_ip": "203.0.113.9", "service": "ssh", "protocol": "tcp",
+                     "destination_port": 22, "command": "id"},
+    })
+    e["enrichment"] = {"geo": {"source": "t", "observed_at": e["timestamp"],
+                               "data": {"country": "US", "latitude": 37.75}}}
+    store.ingest(e, collector_received_at=e["timestamp"])
+    geo = store.geo_attacks(hours=24)
+    assert geo["points"] == []
+    assert geo["unmapped"]["events"] == 1
+
+
 def test_geo_attacks_hard_caps_points(tmp_path):
     store = Store(str(tmp_path / "aegis.db"))
     for i in range(3):
