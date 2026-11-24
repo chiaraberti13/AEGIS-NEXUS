@@ -451,10 +451,10 @@ These are deliberate design boundaries, not missing features:
 
 **Note:** builds on the completed offline GeoIP/ASN enrichment and the existing Attack Map panel. Geographic origin is enrichment-derived and approximate; it is never presented as actor attribution (VPN/proxy/Tor caveat), consistent with the project non-goals.
 
-- [ ] Design a geo-aggregation API that returns approximate origin points with counts over the active time window, reusing operator-key auth, global filters and search
-- [ ] Mark every point's provenance explicitly as Enrichment/Derived and surface the GeoIP accuracy radius
-- [ ] Aggregate points server-side with a hard point cap and bounded payload size
-- [ ] Add an explicit "unmapped" bucket for private, non-global or non-geolocatable IPs and record it as evidence completeness, never a silent drop
+- [x] Design a geo-aggregation API that returns approximate origin points with counts over the active time window, reusing operator-key auth, global filters and search
+- [x] Mark every point's provenance explicitly as Enrichment/Derived and surface the GeoIP accuracy radius
+- [x] Aggregate points server-side with a hard point cap and bounded payload size
+- [x] Add an explicit "unmapped" bucket for private, non-global or non-geolocatable IPs and record it as evidence completeness, never a silent drop
 - [ ] Vendor the visualization library and base world asset locally — no CDN and no online tile/map servers (CSP stays `script-src 'self'` / `connect-src 'self'`)
 - [ ] Render attack origins as intensity-scaled glowing points (event/session count and severity map to size and brightness)
 - [ ] Provide a 2D flat-map fallback when 3D/WebGL is unavailable

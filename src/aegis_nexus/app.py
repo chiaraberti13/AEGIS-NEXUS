@@ -1178,6 +1178,11 @@ def create_app(test_config: dict | None = None) -> Flask:
             )
         )
 
+    @app.get("/api/v1/geo/attacks")
+    def geo_attacks():
+        hours = request.args.get("hours", 24, type=int)
+        return jsonify(store.geo_attacks(hours=hours, filters=_filters_from_request()))
+
     @app.post("/api/v1/detection/backtest")
     def detection_backtest():
         if not request.is_json:

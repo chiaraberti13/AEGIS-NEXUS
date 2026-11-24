@@ -14,6 +14,8 @@ This adapter is deliberately **offline**:
 - every generated record retains `source` and `observed_at` provenance;
 - GeoIP/ASN remains external context and is never converted into threat-actor attribution or reputation.
 
+`GET /api/v1/geo/attacks?hours=<n>` (operator-authenticated) aggregates approximate attack origins for geospatial visualization. Points are keyed by coarsened coordinates (~2 decimals) with event/session counts, a severity level, the GeoIP accuracy radius and `last_seen`; the response is marked `provenance: "enrichment"` and carries a standing caveat that coordinates are approximate GeoIP, not identity or attribution. The point list is hard-capped, and events whose source IP has no geolocation (private, non-global or not in the database) are counted in an explicit `unmapped` bucket rather than dropped.
+
 The application uses the current `geoip2` Python database reader. AEGIS-NEXUS does not redistribute MaxMind databases. Obtain and maintain the database files according to the provider's licence and update policy.
 
 ### Configuration
@@ -52,6 +54,8 @@ L'adapter è volutamente **offline**:
 - eventuali valori `enrichment.geo` o `enrichment.asn` già presenti non vengono sovrascritti;
 - ogni dato generato mantiene provenienza `source` e `observed_at`;
 - GeoIP/ASN resta contesto esterno e non viene trasformato in attribuzione a threat actor o reputazione.
+
+`GET /api/v1/geo/attacks?hours=<n>` (autenticato operatore) aggrega le origini approssimative degli attacchi per la visualizzazione geospaziale. I punti sono raggruppati per coordinate arrotondate (~2 decimali) con conteggi eventi/sessioni, un livello di severità, il raggio di accuratezza GeoIP e `last_seen`; la risposta è marcata `provenance: "enrichment"` e porta un caveat permanente: le coordinate sono GeoIP approssimate, non identità né attribuzione. La lista di punti ha un cap rigido e gli eventi il cui IP sorgente non ha geolocalizzazione (privato, non-globale o assente dal database) sono contati in un bucket esplicito `unmapped` invece di essere scartati.
 
 L'applicazione utilizza il reader database Python `geoip2`. AEGIS-NEXUS non redistribuisce i database MaxMind: i file devono essere ottenuti e mantenuti dall'operatore secondo licenza e policy di aggiornamento del provider.
 

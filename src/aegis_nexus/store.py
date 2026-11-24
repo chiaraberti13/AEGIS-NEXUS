@@ -1669,6 +1669,118 @@ class Store:
                 result[key] = int(row["count"] or 0)
         return result
 
+    def geo_attacks(
+        self,
+        hours: int = 24,
+        filters: dict[str, str] | None = None,
+        max_points: int = 500,
+    ) -> dict[str, Any]:
+        """Aggregate approximate attack origins for geospatial visualization.
+
+        Coordinates are GeoIP **enrichment**, not identity or attribution, and
+        are coarsened to ~2 decimals for grouping. Events whose source IP has no
+        geolocation (private, non-global or simply not in the database) are not
+        dropped: they are counted in an explicit ``unmapped`` bucket (evidence
+        completeness). The point list is hard-capped.
+        """
+        _SEVERITY = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+        bounded_hours = max(1, min(int(hours), 720))
+        since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+        cap = max(1, min(int(max_points), 2000))
+        clauses = ["timestamp >= ?"]
+        params: list[Any] = [since]
+        filter_clauses, filter_params = self._sql_filters(filters)
+        clauses.extend(filter_clauses)
+        params.extend(filter_params)
+        params.append(self.analytics_max_events)
+        where = " AND ".join(clauses)
+
+        points: dict[tuple[float, float], dict[str, Any]] = {}
+        unmapped_ips: set[str] = set()
+        unmapped_events = 0
+        considered = 0
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT source_ip, latitude, longitude, country, asn, severity,
+                       session_id, timestamp, enrichment
+                FROM events WHERE {where}
+                ORDER BY timestamp DESC LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        for row in rows:
+            considered += 1
+            source_ip = row["source_ip"]
+            lat, lon = row["latitude"], row["longitude"]
+            if lat is None or lon is None:
+                if source_ip:
+                    unmapped_events += 1
+                    unmapped_ips.add(str(source_ip))
+                continue
+            key = (round(float(lat), 2), round(float(lon), 2))
+            point = points.get(key)
+            if point is None:
+                point = {
+                    "lat": key[0], "lon": key[1], "country": row["country"], "asn": row["asn"],
+                    "count": 0, "severity_level": 0, "last_seen": row["timestamp"],
+                    "accuracy_radius_km": None,
+                    "_ips": set(), "_sessions": set(),
+                }
+                points[key] = point
+            point["count"] += 1
+            point["severity_level"] = max(point["severity_level"], _SEVERITY.get(str(row["severity"]), 0))
+            if source_ip:
+                point["_ips"].add(str(source_ip))
+            if row["session_id"]:
+                point["_sessions"].add(str(row["session_id"]))
+            if row["timestamp"] and str(row["timestamp"]) > str(point["last_seen"]):
+                point["last_seen"] = row["timestamp"]
+            try:
+                enrichment = json.loads(row["enrichment"] or "{}")
+                radius = (enrichment.get("geo") or {}).get("data", {}).get("accuracy_radius_km")
+                if radius is not None:
+                    radius = int(radius)
+                    if point["accuracy_radius_km"] is None or radius > point["accuracy_radius_km"]:
+                        point["accuracy_radius_km"] = radius
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+
+        ordered = sorted(points.values(), key=lambda p: (p["count"], p["severity_level"]), reverse=True)
+        truncated = len(ordered) > cap
+        result_points = []
+        for point in ordered[:cap]:
+            result_points.append({
+                "lat": point["lat"], "lon": point["lon"],
+                "country": point["country"], "asn": point["asn"],
+                "count": point["count"],
+                "unique_source_ips": len(point["_ips"]),
+                "session_count": len(point["_sessions"]),
+                "severity_level": point["severity_level"],
+                "accuracy_radius_km": point["accuracy_radius_km"],
+                "last_seen": point["last_seen"],
+            })
+        return {
+            "schema_version": "1.0",
+            "window_hours": bounded_hours,
+            "provenance": "enrichment",
+            "events_considered": considered,
+            "events_truncated_at_limit": considered >= self.analytics_max_events,
+            "points": result_points,
+            "points_truncated": truncated,
+            "point_cap": cap,
+            "unmapped": {
+                "events": unmapped_events,
+                "unique_source_ips": len(unmapped_ips),
+                "reason": "source IP is private, non-global or has no GeoIP location",
+            },
+            "caveat": (
+                "Coordinates are approximate GeoIP enrichment (city-level), not "
+                "identity or attribution; VPN/proxy/Tor and shared hosting are "
+                "common. Unmapped events are disclosed, never dropped."
+            ),
+        }
+
     def evidence_loss_summary(self, hours: int = 24) -> dict[str, Any]:
         """Normalization/evidence-loss counts over a bounded recent window.
 
