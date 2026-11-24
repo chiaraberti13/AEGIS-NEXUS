@@ -20,6 +20,14 @@ from .pagination import decode_cursor, encode_cursor
 from .sensor_sequence import SEQUENCE_FIELD, record_event_sequence, record_heartbeat_sequence, sequence_summary
 
 
+# Fixed vocabulary of collector-side operational counters (never attacker-set).
+COLLECTOR_COUNTERS = (
+    "sensor_auth_failures",
+    "sensor_replay_rejections",
+    "ingest_validation_rejections",
+    "load_shed_events",
+)
+
 _EVENT_FILTERS = (
     "country",
     "asn",
@@ -1630,6 +1638,36 @@ class Store:
                 "never inferred."
             ),
         }
+
+    def increment_counter(self, name: str, by: int = 1) -> None:
+        """Atomically bump a collector operational counter (fixed vocabulary)."""
+        if name not in COLLECTOR_COUNTERS:
+            raise ValueError("unknown_counter")
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO collector_counters(name, count, updated_at)
+                VALUES(?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    count = count + excluded.count,
+                    updated_at = excluded.updated_at
+                """,
+                (name, max(0, int(by)), now),
+            )
+
+    def counters(self) -> dict[str, int]:
+        result = {name: 0 for name in COLLECTOR_COUNTERS}
+        try:
+            with self.connect() as conn:
+                rows = conn.execute("SELECT name, count FROM collector_counters").fetchall()
+        except sqlite3.Error:
+            return result
+        for row in rows:
+            key = str(row["name"])
+            if key in result:
+                result[key] = int(row["count"] or 0)
+        return result
 
     def evidence_loss_summary(self, hours: int = 24) -> dict[str, Any]:
         """Normalization/evidence-loss counts over a bounded recent window.

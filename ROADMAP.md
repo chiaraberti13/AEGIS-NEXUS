@@ -363,11 +363,11 @@ These are deliberate design boundaries, not missing features:
 
 - [x] Add Sensor Health model — `GET /api/v1/sensors/health`
 - [x] Alert on sensor silence using Cycle D heartbeats
-- [ ] Track sensor telemetry gaps and replay rejections from Cycle P
+- [x] Track sensor telemetry gaps and replay rejections from Cycle P
 - [x] Track last sensor event
 - [x] Track sensor event rate
-- [ ] Track invalid/rejected sensor events
-- [ ] Track signature/authentication failures
+- [x] Track invalid/rejected sensor events
+- [x] Track signature/authentication failures
 - [x] Track normalization/evidence-loss metrics — dashboard `data_quality`, SOC summary, `aegis_evidence_*` metrics
 - [x] Track database size
 - [x] Track storage/retention status
@@ -375,7 +375,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Add Operations/Health dashboard
 - [x] Expose operator-authenticated metrics endpoint (Prometheus text format) — `GET /api/v1/metrics`
 - [x] Add structured JSON application logs without attacker-controlled log injection — `AEGIS_LOG_FORMAT=json`
-- [ ] Define explicit load-shedding behavior under disk/ingest pressure and record it as evidence loss
+- [x] Define explicit load-shedding behavior under disk/ingest pressure and record it as evidence loss
 - [x] Add automated backup restore verification — `make verify-restore`
 - [ ] Define StorageBackend interface
 - [ ] Refactor SQLite backend behind StorageBackend

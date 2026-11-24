@@ -9,7 +9,9 @@ import ipaddress
 import json
 import os
 import re
+import shutil
 import sqlite3
+from pathlib import Path
 
 from flask import Flask, Response, g, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
@@ -472,10 +474,33 @@ def create_app(test_config: dict | None = None) -> Flask:
                 return "sensor_replay_rejected"
         return None
 
+    def _bump_counter(name: str) -> None:
+        try:
+            store.increment_counter(name)
+        except Exception:
+            app.logger.exception("counter increment failed")
+
+    def _load_shed_response() -> tuple[Response, int] | None:
+        # Shed ingest only when free disk is below the configured minimum, to
+        # protect the database from a full disk. Dropping telemetry is explicit
+        # evidence loss (counted); if disk cannot be read we do NOT shed, so we
+        # never drop evidence on an unknown condition.
+        threshold = int(app.config.get("MIN_FREE_BYTES", 67_108_864))
+        try:
+            free = shutil.disk_usage(Path(app.config["DATABASE_PATH"]).parent).free
+        except OSError:
+            return None
+        if free >= threshold:
+            return None
+        _bump_counter("load_shed_events")
+        app.logger.warning("aegis-load-shed: free_bytes=%d below min_free_bytes=%d", free, threshold)
+        return jsonify({"error": "load_shed", "detail": "insufficient free storage; telemetry shed (evidence loss)"}), 503
+
     def sensor_auth_failure(sensor_id: str, raw_body: bytes) -> tuple[Response, int] | None:
         error = sensor_authorization_error(sensor_id, raw_body)
         if error is None:
             return None
+        _bump_counter("sensor_replay_rejections" if error == "sensor_replay_rejected" else "sensor_auth_failures")
         return jsonify({"error": error}), 409 if error == "sensor_replay_rejected" else 401
 
     def _default_operator_identity() -> str:
@@ -657,6 +682,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             "items": [],
             "interpretation": "Telemetry freshness unavailable because the collector database is not ready.",
         }
+        counters: dict = {}
         if health["database_ready"]:
             sensor_keys = app.config.get("SENSOR_KEYS") or {}
             telemetry = store.sensor_telemetry_observation(
@@ -664,7 +690,8 @@ def create_app(test_config: dict | None = None) -> Flask:
                 recent_hours=request.args.get("hours", 24, type=int),
                 heartbeat_stale_seconds=int(app.config.get("SENSOR_HEARTBEAT_STALE_SECONDS", 180)),
             )
-        return jsonify({"collector": health, "telemetry": telemetry})
+            counters = store.counters()
+        return jsonify({"collector": health, "telemetry": telemetry, "counters": counters})
 
     def _sensor_health_snapshot(database_ready: bool) -> dict:
         if not database_ready:
@@ -683,10 +710,12 @@ def create_app(test_config: dict | None = None) -> Flask:
         snapshot = _sensor_health_snapshot(health["database_ready"])
         if snapshot:
             telemetry = {**snapshot["observation"], "silent_sensors_count": snapshot["silent_count"]}
+        counters = None
         if health["database_ready"]:
             evidence_loss = store.evidence_loss_summary(hours=24)
+            counters = store.counters()
         return Response(
-            render_prometheus(health, telemetry, evidence_loss),
+            render_prometheus(health, telemetry, evidence_loss, counters),
             content_type=PROMETHEUS_CONTENT_TYPE,
         )
 
@@ -803,6 +832,8 @@ def create_app(test_config: dict | None = None) -> Flask:
                 60,
             ):
                 return jsonify({"error": "rate_limited"}), 429
+            if shed := _load_shed_response():
+                return shed
             event = normalize_event(payload)
             collector_received_at = utc_now_iso()
             validate_event_clock(
@@ -820,8 +851,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
         except EventClockError as exc:
+            _bump_counter("ingest_validation_rejections")
             return jsonify({"error": "clock_validation_error", "detail": str(exc)}), 422
         except EventValidationError as exc:
+            _bump_counter("ingest_validation_rejections")
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         except Exception:
             app.logger.exception("event ingestion failed")

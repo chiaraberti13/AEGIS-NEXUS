@@ -23,10 +23,19 @@ def _gauge(lines: list[str], name: str, value: Any, help_text: str) -> None:
     lines.append(f"{name} {value}")
 
 
+def _counter(lines: list[str], name: str, value: Any, help_text: str) -> None:
+    if value is None:
+        return
+    lines.append(f"# HELP {name} {help_text}")
+    lines.append(f"# TYPE {name} counter")
+    lines.append(f"{name} {int(value)}")
+
+
 def render_prometheus(
     health: dict[str, Any],
     telemetry: dict[str, Any],
     evidence_loss: dict[str, Any] | None = None,
+    counters: dict[str, Any] | None = None,
 ) -> str:
     lines: list[str] = []
     storage = health.get("storage") or {}
@@ -72,5 +81,10 @@ def render_prometheus(
         for key, value in sorted(counts.items()):
             _gauge(lines, f"aegis_evidence_{key}", value,
                    "Disclosed normalization/evidence-loss counter over the recent window.")
+
+    if counters:
+        for key, value in sorted(counters.items()):
+            _counter(lines, f"aegis_{key}_total", value,
+                     "Monotonic collector operational counter (ingest rejections / load-shedding).")
 
     return "\n".join(lines) + "\n"

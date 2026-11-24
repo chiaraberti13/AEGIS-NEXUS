@@ -59,6 +59,7 @@ RELEASED_MIGRATION_IDENTITIES = (
     (9, "case_workflow_fields"),
     (10, "alert_lifecycle_timestamps"),
     (11, "case_hypotheses"),
+    (12, "collector_counters"),
 )
 
 

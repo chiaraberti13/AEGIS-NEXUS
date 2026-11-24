@@ -441,6 +441,23 @@ def _alert_disposition(conn: sqlite3.Connection) -> None:
     )
 
 
+def _collector_counters(conn: sqlite3.Connection) -> None:
+    # Monotonic collector-side operational counters (ingest rejections,
+    # auth/signature/replay failures, load-shedding). Keys are a fixed internal
+    # vocabulary — never attacker-supplied — so they cannot be used to inflate
+    # the table unboundedly.
+    _execute_statements(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS collector_counters (
+            name TEXT PRIMARY KEY,
+            count INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT
+        )
+        """,
+    )
+
+
 def _case_hypotheses(conn: sqlite3.Connection) -> None:
     # Explicitly non-factual analyst hypotheses, kept separate from evidence
     # references and from the factual summary/conclusion so a possibility is
@@ -488,6 +505,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(9, "case_workflow_fields", _case_workflow_fields),
     Migration(10, "alert_lifecycle_timestamps", _alert_lifecycle_timestamps),
     Migration(11, "case_hypotheses", _case_hypotheses),
+    Migration(12, "collector_counters", _collector_counters),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
