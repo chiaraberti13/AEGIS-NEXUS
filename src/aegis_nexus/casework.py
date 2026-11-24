@@ -75,6 +75,7 @@ def normalize_case_create(payload: Any) -> dict[str, Any]:
         "priority": _choice(payload.get("priority"), "priority", CASE_PRIORITIES, "normal"),
         "owner": _text(payload.get("owner"), "owner", 64),
         "conclusion": _text(payload.get("conclusion"), "conclusion", 4000),
+        "hypotheses": _text(payload.get("hypotheses"), "hypotheses", 4000),
         "tags": normalize_tags(payload.get("tags")),
     }
 
@@ -97,6 +98,8 @@ def normalize_case_update(payload: Any) -> dict[str, Any]:
         result["owner"] = _text(payload.get("owner"), "owner", 64)
     if "conclusion" in payload:
         result["conclusion"] = _text(payload.get("conclusion"), "conclusion", 4000)
+    if "hypotheses" in payload:
+        result["hypotheses"] = _text(payload.get("hypotheses"), "hypotheses", 4000)
     if "tags" in payload:
         result["tags"] = normalize_tags(payload.get("tags"))
     if not result:

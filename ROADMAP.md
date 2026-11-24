@@ -337,7 +337,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Link alerts directly to cases
 - [ ] Link IOC directly to cases
 - [ ] Add unified case timeline
-- [ ] Separate analyst hypotheses from evidence
+- [x] Separate analyst hypotheses from evidence (dedicated non-factual case field)
 - [x] Add case conclusion field
 - [x] Add False Positive closure state (alert disposition: true_positive/false_positive/benign)
 - [x] Track time-to-acknowledge and time-to-close metrics (MTTA/MTTR) — `GET /api/v1/alerts/metrics`

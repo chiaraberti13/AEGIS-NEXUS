@@ -441,6 +441,14 @@ def _alert_disposition(conn: sqlite3.Connection) -> None:
     )
 
 
+def _case_hypotheses(conn: sqlite3.Connection) -> None:
+    # Explicitly non-factual analyst hypotheses, kept separate from evidence
+    # references and from the factual summary/conclusion so a possibility is
+    # never mistaken for observed fact. Existing rows default to ''.
+    if "hypotheses" not in _column_names(conn, "cases"):
+        conn.execute("ALTER TABLE cases ADD COLUMN hypotheses TEXT NOT NULL DEFAULT ''")
+
+
 def _alert_lifecycle_timestamps(conn: sqlite3.Connection) -> None:
     # Transition timestamps that make MTTA/MTTR measurable: when the alert first
     # left 'new' (acknowledged) and when it was closed. Existing rows stay NULL
@@ -479,6 +487,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(8, "alert_disposition", _alert_disposition),
     Migration(9, "case_workflow_fields", _case_workflow_fields),
     Migration(10, "alert_lifecycle_timestamps", _alert_lifecycle_timestamps),
+    Migration(11, "case_hypotheses", _case_hypotheses),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version

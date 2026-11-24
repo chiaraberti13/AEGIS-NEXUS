@@ -1406,6 +1406,7 @@
     $("case-owner").value = "";
     $("case-summary").value = "";
     $("case-conclusion").value = "";
+    $("case-hypotheses").value = "";
     $("case-tags").value = "";
     if (state.selected && seed.length) {
       $("case-title").value = t("cases.seedTitle")
@@ -1540,6 +1541,7 @@
     $("case-owner").value = item.owner || "";
     $("case-summary").value = item.summary || "";
     $("case-conclusion").value = item.conclusion || "";
+    $("case-hypotheses").value = item.hypotheses || "";
     $("case-tags").value = (item.tags || []).join(", ");
     renderCaseEvidence(item.evidence || []);
     renderCaseNotes(item.notes || []);
@@ -2020,6 +2022,7 @@
       owner: $("case-owner").value,
       summary: $("case-summary").value,
       conclusion: $("case-conclusion").value,
+      hypotheses: $("case-hypotheses").value,
       tags: $("case-tags").value,
     };
     try {

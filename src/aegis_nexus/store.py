@@ -710,8 +710,8 @@ class Store:
         with self.connect() as conn:
             cur = conn.execute(
                 """
-                INSERT INTO cases(id,title,status,severity,priority,owner,summary,conclusion,created_at,updated_at,closed_at)
-                SELECT ?,?,?,?,?,?,?,?,?,?,?
+                INSERT INTO cases(id,title,status,severity,priority,owner,summary,conclusion,hypotheses,created_at,updated_at,closed_at)
+                SELECT ?,?,?,?,?,?,?,?,?,?,?,?
                 WHERE (SELECT COUNT(*) FROM cases) < ?
                 """,
                 (
@@ -723,6 +723,7 @@ class Store:
                     data.get("owner", ""),
                     data["summary"],
                     data.get("conclusion", ""),
+                    data.get("hypotheses", ""),
                     now,
                     now,
                     closed_at,
@@ -872,7 +873,7 @@ class Store:
             fields: list[str] = []
             params: list[Any] = []
             changed: dict[str, Any] = {}
-            for key in ("title", "summary", "status", "severity", "priority", "owner", "conclusion"):
+            for key in ("title", "summary", "status", "severity", "priority", "owner", "conclusion", "hypotheses"):
                 if key in data:
                     fields.append(f"{key}=?")
                     params.append(data[key])
@@ -1010,6 +1011,7 @@ class Store:
                 "owner": case.get("owner"),
                 "summary": case["summary"],
                 "conclusion": case.get("conclusion", ""),
+                "hypotheses": case.get("hypotheses", ""),
                 "tags": case["tags"],
                 "created_at": case["created_at"],
                 "updated_at": case["updated_at"],

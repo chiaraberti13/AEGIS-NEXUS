@@ -243,6 +243,10 @@ def case_markdown(report: dict[str, Any], lang: str = "it") -> str:
         "",
         _code(case.get("conclusion")),
         "",
+        "### " + ("Ipotesi dell'analista (non fattuali)" if it else "Analyst hypotheses (non-factual)"),
+        "",
+        _code(case.get("hypotheses")),
+        "",
         "## " + ("Riferimenti di evidenza" if it else "Evidence references"),
         "",
     ]

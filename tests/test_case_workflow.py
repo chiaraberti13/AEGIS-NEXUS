@@ -57,6 +57,27 @@ def test_case_owner_defaults_to_acting_operator_and_fields_persist(tmp_path):
     assert body["status"] == "closed"
 
 
+def test_case_hypotheses_are_separate_and_labeled_non_factual(tmp_path):
+    client = _client(tmp_path)
+    operator = {"X-Aegis-Operator-Key": "operator-secret"}
+    case_id = client.post(
+        "/api/v1/cases",
+        headers=operator,
+        json={"title": "Hyp case", "hypotheses": "Possibly the same actor as case X."},
+    ).get_json()["id"]
+
+    detail = client.get(f"/api/v1/cases/{case_id}", headers=operator).get_json()
+    assert detail["hypotheses"] == "Possibly the same actor as case X."
+    # Hypotheses are not evidence references.
+    assert detail["evidence"] == []
+
+    report = client.get(f"/api/v1/reports/case/{case_id}.md?lang=en", headers=operator).get_data(as_text=True)
+    assert "### Analyst hypotheses (non-factual)" in report
+    assert "Possibly the same actor" in report
+    report_it = client.get(f"/api/v1/reports/case/{case_id}.md?lang=it", headers=operator).get_data(as_text=True)
+    assert "Ipotesi dell'analista (non fattuali)" in report_it
+
+
 def test_case_report_includes_workflow_fields(tmp_path):
     client = _client(tmp_path)
     operator = {"X-Aegis-Operator-Key": "operator-secret"}
