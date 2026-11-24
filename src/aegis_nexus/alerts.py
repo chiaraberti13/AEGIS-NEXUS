@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import statistics
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -188,10 +189,22 @@ class AlertStore:
             raise ValueError("invalid_alert_disposition")
         now = self._now()
         with self.connect() as conn:
-            if not conn.execute("SELECT 1 FROM alerts WHERE id=?", (alert_id[:128],)).fetchone():
+            existing = conn.execute(
+                "SELECT status,acknowledged_at,closed_at FROM alerts WHERE id=?", (alert_id[:128],)
+            ).fetchone()
+            if not existing:
                 return None
             if status is not None:
                 conn.execute("UPDATE alerts SET status=?,updated_at=? WHERE id=?", (status, now, alert_id[:128]))
+                # First move away from 'new' stamps acknowledgement time (MTTA);
+                # moving to 'closed' stamps close time (MTTR). Both are set once
+                # and never rewound, so metrics stay monotonic.
+                if status != "new" and not existing["acknowledged_at"]:
+                    conn.execute(
+                        "UPDATE alerts SET acknowledged_at=? WHERE id=?", (now, alert_id[:128])
+                    )
+                if status == "closed" and not existing["closed_at"]:
+                    conn.execute("UPDATE alerts SET closed_at=? WHERE id=?", (now, alert_id[:128]))
             if disposition is not None:
                 conn.execute(
                     "UPDATE alerts SET disposition=?,updated_at=? WHERE id=?",
@@ -268,6 +281,79 @@ class AlertStore:
                 "detector accuracy or attribution."
             ),
             "rules": result,
+        }
+
+    @staticmethod
+    def _parse_iso(value: Any) -> datetime | None:
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+    @staticmethod
+    def _summarize_seconds(values: list[float]) -> dict[str, Any]:
+        if not values:
+            return {"count": 0, "mean_seconds": None, "median_seconds": None,
+                    "p95_seconds": None, "max_seconds": None}
+        ordered = sorted(values)
+        # Nearest-rank p95 (no interpolation, no numpy dependency).
+        rank = max(1, (95 * len(ordered) + 99) // 100)
+        return {
+            "count": len(ordered),
+            "mean_seconds": round(statistics.fmean(ordered), 2),
+            "median_seconds": round(statistics.median(ordered), 2),
+            "p95_seconds": round(ordered[rank - 1], 2),
+            "max_seconds": round(ordered[-1], 2),
+        }
+
+    def response_metrics(self, hours: int | None = None) -> dict[str, Any]:
+        """Aggregate MTTA (time-to-acknowledge) and MTTR (time-to-close).
+
+        Durations are derived from alert lifecycle transition timestamps and
+        measure analyst workflow latency, not detector performance. Alerts
+        triaged before lifecycle timestamps existed carry NULL transition times
+        and are simply excluded (never counted as zero).
+        """
+        clauses = ["created_at IS NOT NULL"]
+        params: list[Any] = []
+        if hours is not None:
+            since = (datetime.now(timezone.utc) - timedelta(hours=max(1, min(int(hours), 8760)))).isoformat()
+            clauses.append("created_at >= ?")
+            params.append(since)
+        where = " WHERE " + " AND ".join(clauses)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"SELECT created_at, acknowledged_at, closed_at FROM alerts{where}", params
+            ).fetchall()
+
+        acknowledge: list[float] = []
+        close: list[float] = []
+        for row in rows:
+            created = self._parse_iso(row["created_at"])
+            if created is None:
+                continue
+            ack = self._parse_iso(row["acknowledged_at"])
+            closed = self._parse_iso(row["closed_at"])
+            if ack is not None and ack >= created:
+                acknowledge.append((ack - created).total_seconds())
+            if closed is not None and closed >= created:
+                close.append((closed - created).total_seconds())
+
+        return {
+            "schema_version": STATISTICS_SCHEMA_VERSION,
+            "window_hours": hours,
+            "total_alerts": len(rows),
+            "time_to_acknowledge": self._summarize_seconds(acknowledge),
+            "time_to_close": self._summarize_seconds(close),
+            "caveat": (
+                "MTTA/MTTR are derived from alert lifecycle transition timestamps "
+                "and measure analyst response latency, not detector accuracy. "
+                "Alerts without a recorded transition are excluded, never counted "
+                "as zero."
+            ),
         }
 
     def add_note(self, alert_id: str, body: str) -> dict[str, Any] | None:

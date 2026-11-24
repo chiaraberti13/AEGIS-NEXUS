@@ -33,6 +33,13 @@ counts, open/closed totals and disposition counts, and reports a
 `false_positive_rate` computed only over dispositioned alerts — it reflects
 triage decisions, not detector accuracy in the abstract.
 
+`GET /api/v1/alerts/metrics?hours=<n>` (operator-authenticated) reports response
+metrics derived from alert lifecycle timestamps: **MTTA** (time-to-acknowledge,
+from creation to the first move out of `new`) and **MTTR** (time-to-close), each
+summarized as count/mean/median/p95/max seconds. These measure analyst response
+latency, not detector performance; alerts without a recorded transition are
+excluded, never counted as zero.
+
 ### Deduplication
 
 Open alerts are aggregated only when rule ID/version, source IP and session ID match. Each matching event remains a distinct evidence reference and increments the occurrence count.
@@ -138,6 +145,13 @@ verità assoluta, e la sua impostazione è registrata nel log di audit operatore
 hit count, i totali aperti/chiusi e i conteggi di disposition, e riporta un
 `false_positive_rate` calcolato solo sugli alert con disposition — riflette le
 decisioni di triage, non l'accuratezza del detector in astratto.
+
+`GET /api/v1/alerts/metrics?hours=<n>` (autenticato operatore) riporta le
+metriche di risposta derivate dai timestamp di lifecycle degli alert: **MTTA**
+(time-to-acknowledge, dalla creazione alla prima uscita da `new`) e **MTTR**
+(time-to-close), ciascuna riassunta come count/mean/median/p95/max in secondi.
+Misurano la latenza di risposta dell'analista, non le prestazioni del detector;
+gli alert senza transizione registrata sono esclusi, mai contati come zero.
 
 ### Deduplicazione
 

@@ -990,6 +990,11 @@ def create_app(test_config: dict | None = None) -> Flask:
     def detection_statistics():
         return jsonify(alert_store.statistics())
 
+    @app.get("/api/v1/alerts/metrics")
+    def alert_response_metrics():
+        hours = request.args.get("hours", type=int)
+        return jsonify(alert_store.response_metrics(hours=hours))
+
     @app.get("/api/v1/analytics/events/<event_id>")
     def event_behavioral_analytics(event_id: str):
         event = store.get_event(event_id[:128])

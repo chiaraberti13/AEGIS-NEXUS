@@ -340,7 +340,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Separate analyst hypotheses from evidence
 - [x] Add case conclusion field
 - [x] Add False Positive closure state (alert disposition: true_positive/false_positive/benign)
-- [ ] Track time-to-acknowledge and time-to-close metrics (MTTA/MTTR)
+- [x] Track time-to-acknowledge and time-to-close metrics (MTTA/MTTR) — `GET /api/v1/alerts/metrics`
 - [ ] Add 24h SOC Summary Report
 - [ ] Add 7d SOC Summary Report
 - [ ] Add 30d SOC Summary Report

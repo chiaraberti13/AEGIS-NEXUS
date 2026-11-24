@@ -441,6 +441,16 @@ def _alert_disposition(conn: sqlite3.Connection) -> None:
     )
 
 
+def _alert_lifecycle_timestamps(conn: sqlite3.Connection) -> None:
+    # Transition timestamps that make MTTA/MTTR measurable: when the alert first
+    # left 'new' (acknowledged) and when it was closed. Existing rows stay NULL
+    # so no response time is invented for alerts triaged before this migration.
+    columns = _column_names(conn, "alerts")
+    for name in ("acknowledged_at", "closed_at"):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE alerts ADD COLUMN {name} TEXT")
+
+
 def _case_workflow_fields(conn: sqlite3.Connection) -> None:
     # SOC workflow metadata on cases. All analyst-authored classification
     # (derived), never observed telemetry. Existing rows keep NULL/'' so no
@@ -468,6 +478,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(7, "operator_audit_log", _operator_audit_log),
     Migration(8, "alert_disposition", _alert_disposition),
     Migration(9, "case_workflow_fields", _case_workflow_fields),
+    Migration(10, "alert_lifecycle_timestamps", _alert_lifecycle_timestamps),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
