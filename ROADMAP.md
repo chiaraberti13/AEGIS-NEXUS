@@ -407,12 +407,14 @@ These are deliberate design boundaries, not missing features:
 - [x] Add schema/migration tests
 - [x] Add API contract tests — `tests/test_api_contract.py`
 - [x] Add static type checking (e.g. `mypy`) for core modules — gate in `pyproject.toml`, `make typecheck`
-- [ ] Review frontend module boundaries
+- [x] Review frontend module boundaries — documented in `docs/ARCHITECTURE.md` + ADR 0003
 - [ ] Split `static/app.js` into ES modules by view without adding a mandatory build step
 - [x] Add browser smoke tests (Playwright) including hostile-content XSS fixtures
 - [x] Document internal architecture — `docs/ARCHITECTURE.md`
 
 > Lint and dependency/security scanning in CI were moved to Cycle P.
+
+> **Monolith splits adopt incremental extraction** (see `docs/adr/0003-modularization-strategy.md`). The storage-domain splits, API-route-by-domain split, explicit service layer and the `app.js` ES-module split stay unchecked: a big-bang refactor of the security-critical monoliths is high-regression-risk, low-value churn. Per the ROADMAP's own guidance, new domains are extracted into their own modules as they are touched (this session added 9+ focused modules + the `StorageBackend` interface rather than growing the monoliths), keeping public API behaviour backward compatible (contract tests). The mypy gate, contract tests, architecture doc and Playwright XSS smoke were completed.
 
 **Done when:** adding a feature no longer requires growing `store.py`, `app.py` or `app.js` as central monoliths.
 
