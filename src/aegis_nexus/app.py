@@ -666,18 +666,35 @@ def create_app(test_config: dict | None = None) -> Flask:
             )
         return jsonify({"collector": health, "telemetry": telemetry})
 
+    def _sensor_health_snapshot(database_ready: bool) -> dict:
+        if not database_ready:
+            return {}
+        return store.sensor_health(
+            configured_sensor_ids=list(app.config.get("SENSOR_KEYS") or {}),
+            recent_hours=24,
+            heartbeat_stale_seconds=int(app.config.get("SENSOR_HEARTBEAT_STALE_SECONDS", 180)),
+        )
+
     @app.get("/api/v1/metrics")
     def platform_metrics():
         health = store.operational_health(int(app.config.get("MIN_FREE_BYTES", 67_108_864)))
         telemetry: dict = {}
-        if health["database_ready"]:
-            sensor_keys = app.config.get("SENSOR_KEYS") or {}
-            telemetry = store.sensor_telemetry_observation(
-                configured_sensor_ids=list(sensor_keys),
-                recent_hours=24,
-                heartbeat_stale_seconds=int(app.config.get("SENSOR_HEARTBEAT_STALE_SECONDS", 180)),
-            )
+        snapshot = _sensor_health_snapshot(health["database_ready"])
+        if snapshot:
+            telemetry = {**snapshot["observation"], "silent_sensors_count": snapshot["silent_count"]}
         return Response(render_prometheus(health, telemetry), content_type=PROMETHEUS_CONTENT_TYPE)
+
+    @app.get("/api/v1/sensors/health")
+    def sensors_health():
+        health = store.operational_health(int(app.config.get("MIN_FREE_BYTES", 67_108_864)))
+        snapshot = _sensor_health_snapshot(health["database_ready"])
+        if not snapshot:
+            return jsonify({
+                "recent_hours": 24, "sensors": [], "silent_sensors": [], "silent_count": 0,
+                "interpretation": "Sensor health unavailable because the collector database is not ready.",
+            })
+        snapshot.pop("observation", None)  # already summarized into the sensors list
+        return jsonify(snapshot)
 
     @app.get("/api/v1/audit")
     def operator_audit():

@@ -58,5 +58,7 @@ def render_prometheus(health: dict[str, Any], telemetry: dict[str, Any]) -> str:
            "Sensors with detected event-sequence gaps (evidence loss).")
     _gauge(lines, "aegis_missing_sequenced_events", telemetry.get("missing_sequenced_events"),
            "Events a sensor numbered but the collector never stored (evidence loss).")
+    _gauge(lines, "aegis_sensors_silent", telemetry.get("silent_sensors_count"),
+           "Configured sensors that are silent (no recent telemetry and a stale/absent heartbeat).")
 
     return "\n".join(lines) + "\n"

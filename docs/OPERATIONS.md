@@ -89,6 +89,8 @@ Authenticated operators can use `GET /api/v1/operations/status`. It includes dat
 
 Setting `AEGIS_LOG_FORMAT=json` switches application logs to structured JSON (one object per line: `timestamp`, `level`, `logger`, `message`, optional `exception`). The message and all values are JSON-encoded, so attacker-controlled content reaching a log line cannot forge a new line or inject extra fields; the field set is fixed.
 
+`GET /api/v1/sensors/health` (operator-authenticated) returns a per-sensor health model derived from telemetry receipt, heartbeats and sequence gaps: `last_event_at`, `event_rate_per_hour`, `sequence_gaps` and a `health` state. A configured sensor with no recent telemetry **and** a stale or absent heartbeat is `silent` (the silence alert, also exported as the `aegis_sensors_silent` metric); sequence gaps or a stale heartbeat with recent events are `degraded`; otherwise `healthy`. Silence is a high-signal alert but not by itself proof of cause (sensor down, network, or simply no attacker activity).
+
 `timestamp` and `received_at` have different meanings:
 
 - `timestamp`: event time reported by the sensor/IDS and used for investigation timelines;
@@ -241,6 +243,8 @@ Gli operatori autenticati possono usare `GET /api/v1/operations/status`. La risp
 `GET /api/v1/metrics` (autenticato operatore) espone gli stessi segnali in **formato testo Prometheus** per lo scraping: `aegis_platform_state{state=...}`, `aegis_ready`, `aegis_database_ready`, `aegis_schema_current`, `aegis_storage_ready`, `aegis_storage_free_bytes`, `aegis_database_size_bytes`, `aegis_events_total`/`_max`/`_capacity_used_fraction`, `aegis_retention_days` e gli aggregati sensore (`aegis_sensors_*`, `aegis_missing_sequenced_events`). Vengono emessi solo nomi di metrica fissi e un set fisso di label di stato — nessun valore controllato dall'attaccante diventa nome o label di metrica.
 
 Impostando `AEGIS_LOG_FORMAT=json` i log applicativi passano a JSON strutturato (un oggetto per riga: `timestamp`, `level`, `logger`, `message`, opzionale `exception`). Il messaggio e tutti i valori sono codificati in JSON, così il contenuto controllato dall'attaccante che raggiunge una riga di log non può forgiare nuove righe né iniettare campi; il set di campi è fisso.
+
+`GET /api/v1/sensors/health` (autenticato operatore) restituisce un modello di salute per sensore derivato da ricezione telemetria, heartbeat e gap di sequenza: `last_event_at`, `event_rate_per_hour`, `sequence_gaps` e uno stato `health`. Un sensore configurato senza telemetria recente **e** con heartbeat stale o assente è `silent` (l'alert di silenzio, esportato anche come metrica `aegis_sensors_silent`); gap di sequenza o heartbeat stale con eventi recenti sono `degraded`; altrimenti `healthy`. Il silenzio è un alert ad alto segnale ma non prova di per sé la causa (sensore down, rete, o semplicemente nessuna attività dell'attaccante).
 
 `timestamp` e `received_at` hanno significati distinti:
 

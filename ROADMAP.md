@@ -361,11 +361,11 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** improve operability and prepare AEGIS for larger deployments without sacrificing simple lab installation.
 
-- [ ] Add Sensor Health model
-- [ ] Alert on sensor silence using Cycle D heartbeats
+- [x] Add Sensor Health model — `GET /api/v1/sensors/health`
+- [x] Alert on sensor silence using Cycle D heartbeats
 - [ ] Track sensor telemetry gaps and replay rejections from Cycle P
-- [ ] Track last sensor event
-- [ ] Track sensor event rate
+- [x] Track last sensor event
+- [x] Track sensor event rate
 - [ ] Track invalid/rejected sensor events
 - [ ] Track signature/authentication failures
 - [ ] Track normalization/evidence-loss metrics

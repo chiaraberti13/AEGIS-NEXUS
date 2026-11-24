@@ -1575,6 +1575,62 @@ class Store:
             ),
         }
 
+    def sensor_health(
+        self,
+        configured_sensor_ids: list[str] | tuple[str, ...] | set[str] | None = None,
+        recent_hours: int = 24,
+        heartbeat_stale_seconds: int = 180,
+    ) -> dict[str, Any]:
+        """Per-sensor health derived from telemetry receipt, heartbeats and gaps.
+
+        A configured sensor with no recent telemetry and a stale/absent
+        heartbeat is `silent` (the silence alert). Sequence gaps or a stale
+        heartbeat with recent events are `degraded`; otherwise `healthy`. All
+        signals come from already-stored data — nothing is inferred.
+        """
+        observation = self.sensor_telemetry_observation(
+            configured_sensor_ids=configured_sensor_ids,
+            recent_hours=recent_hours,
+            heartbeat_stale_seconds=heartbeat_stale_seconds,
+        )
+        hours = observation["recent_hours"]
+        sensors: list[dict[str, Any]] = []
+        silent: list[str] = []
+        for item in observation["items"]:
+            recent = int(item.get("recent_events") or 0)
+            heartbeat = item.get("heartbeat_state")
+            gaps = (item.get("event_sequence") or {}).get("state") == "gaps_detected"
+            if item.get("configured") and recent == 0 and heartbeat in {"stale", "never"}:
+                state = "silent"
+            elif gaps or heartbeat == "stale":
+                state = "degraded"
+            else:
+                state = "healthy"
+            sensors.append({
+                **item,
+                "last_event_at": item.get("latest_event_timestamp"),
+                "event_rate_per_hour": round(recent / hours, 3) if hours else 0.0,
+                "sequence_gaps": gaps,
+                "health": state,
+            })
+            if state == "silent":
+                silent.append(str(item.get("sensor_id")))
+        sensors.sort(key=lambda entry: str(entry.get("sensor_id")).casefold())
+        return {
+            "recent_hours": hours,
+            "observation": observation,
+            "sensors": sensors,
+            "silent_sensors": silent,
+            "silent_count": len(silent),
+            "interpretation": (
+                "A configured sensor is 'silent' when it has sent no telemetry in "
+                "the window and its heartbeat is stale or absent — a high-signal "
+                "alert, but not by itself proof of the cause (sensor down, network, "
+                "or simply no attacker activity). Event rate and gaps are observed, "
+                "never inferred."
+            ),
+        }
+
     def filter_options(self, hours: int = 720) -> dict[str, list[str]]:
         bounded_hours = max(1, min(hours, 720))
         since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
