@@ -377,14 +377,14 @@ These are deliberate design boundaries, not missing features:
 - [x] Add structured JSON application logs without attacker-controlled log injection — `AEGIS_LOG_FORMAT=json`
 - [x] Define explicit load-shedding behavior under disk/ingest pressure and record it as evidence loss
 - [x] Add automated backup restore verification — `make verify-restore`
-- [ ] Define StorageBackend interface
-- [ ] Refactor SQLite backend behind StorageBackend
+- [x] Define StorageBackend interface — `src/aegis_nexus/storage_backend.py` (runtime-checkable Protocol)
+- [x] Refactor SQLite backend behind StorageBackend — `Store` is the reference backend, conformance asserted in tests
 - [ ] Add optional PostgreSQL backend
 - [ ] Extend the Cycle P migration strategy to PostgreSQL
 - [ ] Add backend compatibility tests
-- [ ] Document SQLite vs PostgreSQL deployment profiles
+- [x] Document SQLite vs PostgreSQL deployment profiles — `docs/STORAGE.md`
 
-> **Storage-backend cluster deferred** (see `docs/adr/0002-storage-backend-postgresql.md`). The six items above stay unchecked: no deployment currently needs multi-node storage, and a PostgreSQL backend cannot be verified in this environment. The ADR records what a future superseding effort must do (interface first, SQLite as reference, migration-strategy port, backend-parity tests). The observability items in this cycle were completed instead.
+> **PostgreSQL backend deferred** (see `docs/adr/0002-storage-backend-postgresql.md`). The `StorageBackend` interface is defined with SQLite (`Store`) as the verified reference implementation, and the SQLite vs PostgreSQL deployment profiles are documented. The remaining three items — the PostgreSQL backend, porting the migration strategy to PostgreSQL, and backend-parity tests — require a PostgreSQL server and a verified rewrite of the SQLite-specific migration/integrity/hash-chain SQL; they are not shipped unverified (the project does not declare a component safe without verification). No current deployment needs multi-node storage.
 
 **Done when:** operators can identify degraded sensors/platform components and choose SQLite or PostgreSQL without changing investigation semantics.
 
