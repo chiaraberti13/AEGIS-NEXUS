@@ -31,6 +31,7 @@ from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
 from .evidence_bundle import build_evidence_bundle
 from .forwarding import build_forwarder
+from .logging_config import configure_app_logging
 from .ioc import IOCWorkspace
 from .model import EventValidationError, normalize_event
 from .operator_audit import OperatorAuditLog
@@ -263,9 +264,12 @@ def create_app(test_config: dict | None = None) -> Flask:
         FORWARD_WEBHOOK_SECRET=os.getenv("AEGIS_FORWARD_WEBHOOK_SECRET", ""),
         FORWARD_QUEUE_MAX=int(os.getenv("AEGIS_FORWARD_QUEUE_MAX", "1000")),
         FORWARD_MAX_RETRIES=int(os.getenv("AEGIS_FORWARD_MAX_RETRIES", "3")),
+        LOG_FORMAT=os.getenv("AEGIS_LOG_FORMAT", "plain"),
     )
     if test_config:
         app.config.update(test_config)
+    if str(app.config.get("LOG_FORMAT") or "").lower() == "json":
+        configure_app_logging(app)
     app.config["MAX_CONTENT_LENGTH"] = max(
         int(app.config.get("MAX_CONTENT_LENGTH", 0)),
         int(app.config.get("EVENT_MAX_BYTES", 65536)),
