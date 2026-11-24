@@ -193,7 +193,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Add sensor-native JA4 TLS fingerprints (Suricata JA3/JA3S/JA4 passthrough already exists; review JA4+ licence terms before adoption)
 - [x] Add DNS indicator evidence where available
 - [x] Design optional passive fingerprint provider interface
-- [ ] Evaluate optional Zeek log ingestion (`conn`, `http`, `ssh`, `dns`) with the same provenance model as Suricata _(evaluate)_
+- [x] Evaluate optional Zeek log ingestion (`conn`, `http`, `ssh`, `dns`) with the same provenance model as Suricata _(evaluate)_ — see `docs/adr/0004-zeek-log-ingestion.md` (feasible; implement on demand)
 - [x] Add optional bounded PCAP capture mode
 - [ ] Run PCAP capture in a dedicated capture container (`CAP_NET_RAW` only, never inside decoys)
 - [ ] Restrict capture with BPF filters to decoy ports/interfaces
