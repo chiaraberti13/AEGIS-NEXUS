@@ -29,6 +29,7 @@ from .detection_coverage import mitre_coverage
 from .detection_suppression import DetectionSuppressionStore, SuppressionValidationError
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
+from .forwarding import build_forwarder
 from .ioc import IOCWorkspace
 from .model import EventValidationError, normalize_event
 from .operator_audit import OperatorAuditLog
@@ -248,6 +249,14 @@ def create_app(test_config: dict | None = None) -> Flask:
         QUARANTINE_MAX_FILES=int(os.getenv("AEGIS_QUARANTINE_MAX_FILES", "1000")),
         AUDIT_LOG_RETENTION_DAYS=int(os.getenv("AEGIS_AUDIT_LOG_RETENTION_DAYS", "365")),
         AUDIT_LOG_MAX_ROWS=int(os.getenv("AEGIS_AUDIT_LOG_MAX_ROWS", "1000000")),
+        FORWARDING_ENABLED=os.getenv("AEGIS_FORWARDING_ENABLED", "false").lower() in {"1", "true", "yes"},
+        FORWARD_SYSLOG_HOST=os.getenv("AEGIS_FORWARD_SYSLOG_HOST", ""),
+        FORWARD_SYSLOG_PORT=int(os.getenv("AEGIS_FORWARD_SYSLOG_PORT", "514")),
+        FORWARD_SYSLOG_PROTOCOL=os.getenv("AEGIS_FORWARD_SYSLOG_PROTOCOL", "udp"),
+        FORWARD_WEBHOOK_URL=os.getenv("AEGIS_FORWARD_WEBHOOK_URL", ""),
+        FORWARD_WEBHOOK_SECRET=os.getenv("AEGIS_FORWARD_WEBHOOK_SECRET", ""),
+        FORWARD_QUEUE_MAX=int(os.getenv("AEGIS_FORWARD_QUEUE_MAX", "1000")),
+        FORWARD_MAX_RETRIES=int(os.getenv("AEGIS_FORWARD_MAX_RETRIES", "3")),
     )
     if test_config:
         app.config.update(test_config)
@@ -297,6 +306,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         max_rows=int(app.config.get("AUDIT_LOG_MAX_ROWS", 1_000_000)),
     )
     limiter = SlidingWindowLimiter()
+    forwarder = app.config.get("FORWARDER") or build_forwarder(app.config, logger=app.logger)
+    forwarder.start()
     enricher = app.config.get("ENRICHER")
     if enricher is None:
         enricher = LocalGeoIPEnricher(
@@ -330,6 +341,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.extensions["aegis_pcap_store"] = pcap_store
     app.extensions["aegis_pcap_capture_provider"] = pcap_capture_provider
     app.extensions["aegis_quarantine_store"] = quarantine_store
+    app.extensions["aegis_forwarder"] = forwarder
     app.extensions["aegis_audit_log"] = audit_log
     app.extensions["aegis_rate_limiter"] = limiter
     app.extensions["aegis_enricher"] = enricher
@@ -722,6 +734,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             if detection_suppressions.match(finding):
                 continue
             alert_store.record(finding, stored["timestamp"])
+            forwarder.submit("alert", finding)
 
     @app.post("/api/v1/events")
     def ingest_event():
@@ -754,6 +767,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = benign_scanners.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
             record_detection_findings(stored)
+            forwarder.submit("event", stored)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
         except EventClockError as exc:
@@ -795,6 +809,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             event = benign_scanners.enrich(event)
             stored = store.ingest(event, collector_received_at=collector_received_at)
             record_detection_findings(stored)
+            forwarder.submit("event", stored)
         except sqlite3.IntegrityError:
             return jsonify({"error": "duplicate_event"}), 409
         except EventClockError as exc:

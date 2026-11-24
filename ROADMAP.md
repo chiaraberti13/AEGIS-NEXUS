@@ -316,11 +316,11 @@ These are deliberate design boundaries, not missing features:
 - [x] Add evidence-backed MITRE ATT&CK coverage view (only techniques supported by implemented rules) — `GET /api/v1/detections/coverage`
 - [ ] Evaluate Sigma-compatible rule export _(evaluate)_
 - [x] Document field mapping to ECS and/or OCSF — `docs/SIEM_INTEROP.md`
-- [ ] Add alert/event forwarding via syslog (RFC 5424) and signed JSON webhook from the collector only
-- [ ] Keep forwarding bounded (queue limits, retries, back-pressure) and never block ingestion
-- [ ] Ensure forwarded payloads carry provenance and Evidence Integrity metadata
-- [ ] Ensure sensors never gain new outbound network paths because of forwarding
-- [ ] Add forwarding and rule-configuration regression tests
+- [x] Add alert/event forwarding via syslog (RFC 5424) and signed JSON webhook from the collector only
+- [x] Keep forwarding bounded (queue limits, retries, back-pressure) and never block ingestion
+- [x] Ensure forwarded payloads carry provenance and Evidence Integrity metadata
+- [x] Ensure sensors never gain new outbound network paths because of forwarding
+- [x] Add forwarding and rule-configuration regression tests
 
 **Done when:** a detection can be tuned, backtested and measured, and its alerts reach an external SIEM with provenance intact.
 
