@@ -5,6 +5,8 @@ from typing import Any
 
 CASE_STATUSES = {"open", "investigating", "monitoring", "closed"}
 CASE_SEVERITIES = {"info", "low", "medium", "high", "critical"}
+# Triage urgency, distinct from `severity` (the assessed threat level).
+CASE_PRIORITIES = {"low", "normal", "high", "urgent"}
 EVIDENCE_TYPES = {"event", "session", "alert"}
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -70,6 +72,9 @@ def normalize_case_create(payload: Any) -> dict[str, Any]:
         "summary": _text(payload.get("summary"), "summary", 4000),
         "status": _choice(payload.get("status"), "status", CASE_STATUSES, "open"),
         "severity": _choice(payload.get("severity"), "severity", CASE_SEVERITIES, "info"),
+        "priority": _choice(payload.get("priority"), "priority", CASE_PRIORITIES, "normal"),
+        "owner": _text(payload.get("owner"), "owner", 64),
+        "conclusion": _text(payload.get("conclusion"), "conclusion", 4000),
         "tags": normalize_tags(payload.get("tags")),
     }
 
@@ -86,6 +91,12 @@ def normalize_case_update(payload: Any) -> dict[str, Any]:
         result["status"] = _choice(payload.get("status"), "status", CASE_STATUSES, "open")
     if "severity" in payload:
         result["severity"] = _choice(payload.get("severity"), "severity", CASE_SEVERITIES, "info")
+    if "priority" in payload:
+        result["priority"] = _choice(payload.get("priority"), "priority", CASE_PRIORITIES, "normal")
+    if "owner" in payload:
+        result["owner"] = _text(payload.get("owner"), "owner", 64)
+    if "conclusion" in payload:
+        result["conclusion"] = _text(payload.get("conclusion"), "conclusion", 4000)
     if "tags" in payload:
         result["tags"] = normalize_tags(payload.get("tags"))
     if not result:

@@ -56,6 +56,7 @@ RELEASED_MIGRATION_IDENTITIES = (
     (6, "event_hash_chain"),
     (7, "operator_audit_log"),
     (8, "alert_disposition"),
+    (9, "case_workflow_fields"),
 )
 
 

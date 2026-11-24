@@ -1307,7 +1307,11 @@ def create_app(test_config: dict | None = None) -> Flask:
         if not request.is_json:
             return jsonify({"error": "content_type_must_be_json"}), 415
         try:
-            item = store.create_case(normalize_case_create(request.get_json()))
+            case_data = normalize_case_create(request.get_json())
+            if not case_data.get("owner"):
+                # Default ownership to the acting operator (Cycle P identity).
+                case_data["owner"] = current_operator_identity() or _default_operator_identity()
+            item = store.create_case(case_data)
         except CaseValidationError as exc:
             return jsonify({"error": "validation_error", "detail": str(exc)}), 422
         except ValueError as exc:
@@ -1318,7 +1322,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             "case.create",
             target_type="case",
             target_id=str(item.get("id") or "")[:128],
-            detail={"status": item.get("status"), "severity": item.get("severity")},
+            detail={
+                "status": item.get("status"),
+                "severity": item.get("severity"),
+                "priority": item.get("priority"),
+                "owner": item.get("owner"),
+            },
         )
         return jsonify(item), 201
 

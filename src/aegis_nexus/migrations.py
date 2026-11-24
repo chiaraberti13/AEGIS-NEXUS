@@ -441,6 +441,21 @@ def _alert_disposition(conn: sqlite3.Connection) -> None:
     )
 
 
+def _case_workflow_fields(conn: sqlite3.Connection) -> None:
+    # SOC workflow metadata on cases. All analyst-authored classification
+    # (derived), never observed telemetry. Existing rows keep NULL/'' so no
+    # value is invented retroactively; `priority` defaults to 'normal' at
+    # creation time in the application layer.
+    columns = _column_names(conn, "cases")
+    for name, ddl in (
+        ("owner", "TEXT"),
+        ("priority", "TEXT"),
+        ("conclusion", "TEXT NOT NULL DEFAULT ''"),
+    ):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE cases ADD COLUMN {name} {ddl}")
+
+
 # Append new migrations at the end with the next integer version. Never edit or
 # reorder a migration that has been released: deployed databases already recorded it.
 MIGRATIONS: tuple[Migration, ...] = (
@@ -452,6 +467,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(6, "event_hash_chain", _event_hash_chain),
     Migration(7, "operator_audit_log", _operator_audit_log),
     Migration(8, "alert_disposition", _alert_disposition),
+    Migration(9, "case_workflow_fields", _case_workflow_fields),
 )
 
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version

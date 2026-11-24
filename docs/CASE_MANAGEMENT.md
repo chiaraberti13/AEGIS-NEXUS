@@ -4,7 +4,7 @@
 
 AEGIS-NEXUS cases organize an investigation without changing the provenance of the underlying telemetry.
 
-A case stores analyst-owned metadata: title, status, severity, summary, tags and notes. These fields are marked as analyst classifications or annotations. They are never promoted to observed facts.
+A case stores analyst-owned metadata: title, status, severity, **priority** (triage urgency, distinct from severity), **owner** (the responsible operator identity, defaulted to the acting operator on creation), summary, **conclusion** (the closing statement), tags and notes. These fields are marked as analyst classifications or annotations. They are never promoted to observed facts, and they appear in the case report (owner, priority and conclusion included).
 
 Evidence is linked by reference to an existing event, correlated session or detection alert. Alert references preserve the rule ID/version, severity, confidence and lifecycle summary while the alert itself keeps its event evidence links. The case store does not copy commands, payloads, credentials or enrichment into a second long-lived evidence store. This avoids silently extending telemetry retention. When a referenced source event/session is removed by the configured retention policy, the case keeps its identifier and marks that source reference as unavailable. Alert references remain separate detection records and do not replace source telemetry.
 
@@ -30,6 +30,8 @@ A case severity is an analyst assessment. It does not overwrite the severity sto
 I casi di AEGIS-NEXUS organizzano un'investigazione senza modificare la provenienza della telemetria sottostante.
 
 Un caso conserva metadati dell'analista: titolo, stato, severità, sintesi, tag e note. Questi campi sono marcati come classificazioni o annotazioni dell'analista e non vengono mai trasformati in fatti osservati.
+
+Un caso memorizza metadati dell'analista: titolo, stato, severità, **priorità** (urgenza di triage, distinta dalla severità), **responsabile** (l'identità operatore responsabile, impostata di default sull'operatore attivo alla creazione), sintesi, **conclusione** (la dichiarazione di chiusura), tag e note. Questi campi sono classificazioni o annotazioni dell'analista, mai promossi a fatti osservati, e compaiono nel report del caso (responsabile, priorità e conclusione inclusi).
 
 Le evidenze vengono collegate tramite riferimento a un evento esistente, a una sessione correlata o a un detection alert. Il riferimento all'alert conserva nel riepilogo rule ID/version, severity, confidence e lifecycle, mentre l'alert mantiene i propri riferimenti agli eventi sorgente. Il case store non copia comandi, payload, credenziali o enrichment in un secondo archivio persistente. In questo modo il caso non prolunga implicitamente la retention della telemetria. Quando un evento/sessione sorgente referenziato viene eliminato dalla policy di retention, il caso conserva l'identificativo e marca quel riferimento come non più disponibile. I riferimenti agli alert restano record di detection separati e non sostituiscono la telemetria sorgente.
 

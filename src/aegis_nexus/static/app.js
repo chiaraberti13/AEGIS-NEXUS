@@ -1402,7 +1402,10 @@
     $("case-title").value = "";
     $("case-status").value = "open";
     $("case-severity").value = "info";
+    $("case-priority").value = "normal";
+    $("case-owner").value = "";
     $("case-summary").value = "";
+    $("case-conclusion").value = "";
     $("case-tags").value = "";
     if (state.selected && seed.length) {
       $("case-title").value = t("cases.seedTitle")
@@ -1533,7 +1536,10 @@
     $("case-title").value = item.title || "";
     $("case-status").value = item.status || "open";
     $("case-severity").value = item.severity || "info";
+    $("case-priority").value = item.priority || "normal";
+    $("case-owner").value = item.owner || "";
     $("case-summary").value = item.summary || "";
+    $("case-conclusion").value = item.conclusion || "";
     $("case-tags").value = (item.tags || []).join(", ");
     renderCaseEvidence(item.evidence || []);
     renderCaseNotes(item.notes || []);
@@ -2010,7 +2016,10 @@
       title: $("case-title").value,
       status: $("case-status").value,
       severity: $("case-severity").value,
+      priority: $("case-priority").value,
+      owner: $("case-owner").value,
       summary: $("case-summary").value,
+      conclusion: $("case-conclusion").value,
       tags: $("case-tags").value,
     };
     try {

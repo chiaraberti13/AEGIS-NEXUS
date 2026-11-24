@@ -330,15 +330,15 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** turn cases into complete investigation workspaces and improve operational reporting.
 
-- [ ] Add case owner (uses Cycle P operator identities)
-- [ ] Add case priority
-- [ ] Add case lifecycle/status
-- [ ] Add case tags
-- [ ] Link alerts directly to cases
+- [x] Add case owner (uses Cycle P operator identities) — defaults to acting operator
+- [x] Add case priority
+- [x] Add case lifecycle/status
+- [x] Add case tags
+- [x] Link alerts directly to cases
 - [ ] Link IOC directly to cases
 - [ ] Add unified case timeline
 - [ ] Separate analyst hypotheses from evidence
-- [ ] Add case conclusion field
+- [x] Add case conclusion field
 - [x] Add False Positive closure state (alert disposition: true_positive/false_positive/benign)
 - [ ] Track time-to-acknowledge and time-to-close metrics (MTTA/MTTR)
 - [ ] Add 24h SOC Summary Report
