@@ -4,7 +4,15 @@
 // Shared state and base helpers live in core.js; this module imports them as
 // live bindings and holds the view logic. Per-view modules are not split out
 // yet (they call back into these helpers — see core.js / ADR 0003).
-import { state, $, t, pretty, apiHeaders } from "./core.js";
+import {
+  state, $, t, pretty, apiHeaders,
+  getJSON, safeGet, currentParams, feedParams, updateFilterCount,
+  setUnauthorizedHandler,
+} from "./core.js";
+
+// The network layer lives in core.js; wire its 401 handling back to the
+// operator-gate UI that stays here (function declarations are hoisted).
+setUnauthorizedHandler(() => showOperatorGate(true));
 
   let lastOperatorStatus = null;
 
@@ -40,13 +48,6 @@ import { state, $, t, pretty, apiHeaders } from "./core.js";
     $("operator-key").value = "";
   }
 
-  async function getJSON(url) {
-    const response = await fetch(url, {headers: apiHeaders()});
-    if (response.status === 401 && url !== "/api/v1/operator/status") showOperatorGate(true);
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    return response.json();
-  }
-
   async function requestJSON(url, method, payload) {
     const response = await fetch(url, {
       method,
@@ -64,15 +65,6 @@ import { state, $, t, pretty, apiHeaders } from "./core.js";
     }
     if (response.status === 204) return null;
     return response.json();
-  }
-
-  async function safeGet(url) {
-    try {
-      return await getJSON(url);
-    } catch (error) {
-      console.error("AEGIS request failed", error);
-      return null;
-    }
   }
 
   function i18n() {
@@ -244,31 +236,6 @@ import { state, $, t, pretty, apiHeaders } from "./core.js";
     ["country", "asn", "destination_port", "protocol", "service", "honeypot", "severity", "event_type"].forEach((key) => {
       populateFilter(key, data[key]);
     });
-  }
-
-  function currentParams() {
-    const params = new URLSearchParams();
-    const q = $("global-search").value.trim();
-    if (q) params.set("q", q);
-    params.set("hours", $("window").value);
-    Object.entries(state.filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-    });
-    return params;
-  }
-
-  function feedParams() {
-    const params = currentParams();
-    params.set("limit", "120");
-    return params;
-  }
-
-  function activeFilterCount() {
-    return Object.values(state.filters).filter(Boolean).length;
-  }
-
-  function updateFilterCount() {
-    $("active-filter-count").textContent = String(activeFilterCount());
   }
 
   function setFilter(key, value) {
