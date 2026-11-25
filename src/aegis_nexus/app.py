@@ -27,6 +27,7 @@ from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
 from .detection_backtest import DetectionBacktester
 from .detection_config import DetectionConfig
+from .api_activity import make_activity_blueprint
 from .api_detections import make_detections_blueprint
 from .api_ips import make_ips_blueprint
 from .api_status import make_status_blueprint
@@ -41,7 +42,6 @@ from .model import EventValidationError, normalize_event
 from .operator_audit import OperatorAuditLog
 from .pcap import DisabledPcapCaptureProvider, PcapEvidenceStore, PcapValidationError
 from .quarantine import QuarantineError, QuarantineStore
-from .pagination import CursorError
 from .metrics import CONTENT_TYPE as PROMETHEUS_CONTENT_TYPE
 from .metrics import render_prometheus
 from .pdf import text_to_pdf
@@ -988,54 +988,13 @@ def create_app(test_config: dict | None = None) -> Flask:
             },
         )
 
-    @app.get("/api/v1/events")
-    def events():
-        limit = request.args.get("limit", 100, type=int)
-        q = request.args.get("q", type=str)
-        filters = _filters_from_request()
-        hours = request.args.get("hours", type=int)
-        if hours is not None:
-            hours = max(1, min(hours, 720))
-        scope = _pagination_scope("events", q=q, filters=filters, hours=hours)
-        try:
-            page = store.page_events(
-                limit=limit,
-                q=q,
-                filters=filters,
-                hours=hours,
-                cursor=request.args.get("cursor", type=str),
-                scope=scope,
-            )
-        except CursorError:
-            return jsonify({"error": "invalid_cursor"}), 422
-        return jsonify(page)
-
-    @app.get("/api/v1/events/<event_id>")
-    def event_detail(event_id: str):
-        item = store.get_event(event_id)
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
-
-    @app.get("/api/v1/sessions")
-    def sessions():
-        limit = request.args.get("limit", 100, type=int)
-        q = request.args.get("q", type=str)
-        scope = _pagination_scope("sessions", q=q)
-        try:
-            page = store.page_sessions(
-                limit=limit,
-                q=q,
-                cursor=request.args.get("cursor", type=str),
-                scope=scope,
-            )
-        except CursorError:
-            return jsonify({"error": "invalid_cursor"}), 422
-        return jsonify(page)
-
-    @app.get("/api/v1/sessions/<session_id>")
-    def session_detail(session_id: str):
-        item = store.get_session(session_id)
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
-
+    app.register_blueprint(
+        make_activity_blueprint(
+            store=store,
+            filters_from_request=_filters_from_request,
+            pagination_scope=_pagination_scope,
+        )
+    )
     app.register_blueprint(make_ips_blueprint(store=store))
     app.register_blueprint(
         make_detections_blueprint(detection_config=detection_config, alert_store=alert_store)
