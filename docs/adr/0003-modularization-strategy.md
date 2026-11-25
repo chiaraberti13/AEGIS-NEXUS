@@ -40,6 +40,27 @@ of growing the monolith."*
 - A dedicated service layer is introduced only where a concrete need appears
   (it is "where useful", not mandatory).
 
+## Update (2026-11-25) — splits carried out
+
+The incremental extraction above has since been executed, all behaviour-preserving
+and guarded by the contract/store tests:
+
+- **Storage split (done):** six domains were extracted from `store.py`
+  (~2400→~940 lines): `store_relations.py` (pure function) and the
+  `store_cases.py`, `store_analytics.py`, `store_events.py`, `store_sessions.py`
+  mixins that `Store` composes, with shared constants in the dependency-free
+  `store_common.py`. The alert domain already lived in `alerts.py`. `Store`
+  remains the composed reference backend.
+- **API-route split (done):** `app.py` (~1833→~977 lines) was split into twelve
+  domain blueprints via a **blueprint-factory pattern** — a module-level
+  `make_<domain>_blueprint(...)` captures its dependencies explicitly (never
+  importing `app`, so no cycle) and returns a Flask `Blueprint` with the same
+  absolute URLs. The app-level `before_request` trust boundary and
+  `after_request` security headers still run for blueprint routes, so
+  operator/sensor authentication is unchanged. The authenticated ingest/identity
+  core (events, Suricata, quarantine, sensor heartbeat, `/`, `/health`, operator
+  status) stays in the factory by design.
+
 **Frontend boundaries review:** `static/app.js` is a single IIFE with a central
 `state` object and clear internal sections by view (api/i18n helpers, feed,
 dashboard, alerts, iocs, cases, relations, audit, health, map). The
