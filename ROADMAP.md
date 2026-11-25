@@ -405,7 +405,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Separate case storage _(extracted to `store_cases.CaseStoreMixin`; `Store` composes it, behaviour unchanged — ADR 0003)_
 - [x] Separate analytics storage _(extracted to `store_analytics.AnalyticsStoreMixin`; shared constants in `store_common.py` — ADR 0003)_
 - [x] Separate relationship queries _(extracted to `store_relations.py`; `Store.relations` delegates — ADR 0003)_
-- [ ] Split API routes by domain _(in progress — blueprint-factory pattern established; `detections`, provider-status, IP-enrichment, activity (event/session reads) and PCAP-evidence (`api_pcap.py`, auth via app-level trust boundary + injected audit) domains extracted; remaining domains to follow incrementally — ADR 0003)_
+- [ ] Split API routes by domain _(in progress — blueprint-factory pattern established; extracted so far: `detections`, provider-status, IP-enrichment, activity (event/session reads), PCAP-evidence and IOC workspace (`api_iocs.py`, incl. CSV export via injected csv-safe guard + audit); remaining domains to follow incrementally — ADR 0003)_
 - [ ] Introduce explicit service layer where useful
 - [x] Keep public API behavior backward compatible where practical — guarded by contract tests
 - [x] Add schema/migration tests

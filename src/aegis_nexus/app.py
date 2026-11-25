@@ -29,6 +29,7 @@ from .detection_backtest import DetectionBacktester
 from .detection_config import DetectionConfig
 from .api_activity import make_activity_blueprint
 from .api_detections import make_detections_blueprint
+from .api_iocs import make_iocs_blueprint
 from .api_ips import make_ips_blueprint
 from .api_pcap import make_pcap_blueprint
 from .api_status import make_status_blueprint
@@ -1173,62 +1174,13 @@ def create_app(test_config: dict | None = None) -> Flask:
         )
         return jsonify(item), 201
 
-    @app.get("/api/v1/iocs")
-    def iocs():
-        return jsonify(ioc_workspace.list(
-            limit=request.args.get("limit", 200, type=int),
-            q=request.args.get("q", type=str),
-            ioc_type=request.args.get("type", type=str),
-            hours=request.args.get("hours", 720, type=int),
-        ))
-
-    @app.get("/api/v1/iocs/export.csv")
-    def export_iocs_csv():
-        data = ioc_workspace.list(
-            limit=500,
-            q=request.args.get("q", type=str),
-            ioc_type=request.args.get("type", type=str),
-            hours=request.args.get("hours", 720, type=int),
+    app.register_blueprint(
+        make_iocs_blueprint(
+            ioc_workspace=ioc_workspace,
+            csv_safe=_csv_safe,
+            record_audit=record_audit,
         )
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow([
-            "id", "type", "value", "first_seen", "last_seen", "occurrences",
-            "source_ips", "session_ids", "honeypots", "services", "provenance", "classification",
-        ])
-        for item in data["items"]:
-            writer.writerow([
-                _csv_safe(item.get("id")),
-                _csv_safe(item.get("type")),
-                _csv_safe(item.get("value")),
-                _csv_safe(item.get("first_seen")),
-                _csv_safe(item.get("last_seen")),
-                item.get("occurrences", 0),
-                _csv_safe(";".join(item.get("source_ips") or [])),
-                _csv_safe(";".join(item.get("session_ids") or [])),
-                _csv_safe(";".join(item.get("honeypots") or [])),
-                _csv_safe(";".join(item.get("services") or [])),
-                _csv_safe(item.get("provenance")),
-                _csv_safe(item.get("classification")),
-            ])
-        record_audit(
-            "export.ioc_csv",
-            target_type="ioc",
-            detail={"format": "csv", "rows": len(data["items"])},
-        )
-        return Response(
-            output.getvalue(),
-            mimetype="text/csv; charset=utf-8",
-            headers={"Content-Disposition": 'attachment; filename="aegis-iocs.csv"'},
-        )
-
-    @app.get("/api/v1/iocs/<item_id>")
-    def ioc_detail(item_id: str):
-        item = ioc_workspace.get(
-            item_id[:128],
-            hours=request.args.get("hours", 720, type=int),
-        )
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
+    )
 
     @app.get("/api/v1/cases")
     def cases():
