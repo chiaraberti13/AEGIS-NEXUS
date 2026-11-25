@@ -28,6 +28,7 @@ from .detection import DetectionEngine
 from .detection_backtest import DetectionBacktester
 from .detection_config import DetectionConfig
 from .api_detections import make_detections_blueprint
+from .api_status import make_status_blueprint
 from .detection_suppression import DetectionSuppressionStore, SuppressionValidationError
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
@@ -1050,17 +1051,15 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "invalid_ip"}), 422
         return jsonify(store.threat_intelligence(normalized))
 
-    @app.get("/api/v1/enrichment/status")
-    def enrichment_status():
-        status = getattr(enricher, "status", None)
-        return jsonify(status() if callable(status) else {
-            "mode": "custom",
-            "configured": True,
-            "network_requests": None,
-        })
-
     app.register_blueprint(
         make_detections_blueprint(detection_config=detection_config, alert_store=alert_store)
+    )
+    app.register_blueprint(
+        make_status_blueprint(
+            enricher=enricher,
+            benign_scanners=benign_scanners,
+            threat_context=threat_context,
+        )
     )
 
     @app.get("/api/v1/alerts/metrics")
@@ -1081,19 +1080,6 @@ def create_app(test_config: dict | None = None) -> Flask:
         )
         result["history"] = context["analysis"]
         return jsonify(result)
-
-    @app.get("/api/v1/benign-scanners/status")
-    def benign_scanner_status():
-        return jsonify(benign_scanners.status())
-
-    @app.get("/api/v1/threat-context/status")
-    def threat_context_status():
-        status = getattr(threat_context, "status", None)
-        return jsonify(status() if callable(status) else {
-            "mode": "custom",
-            "configured": True,
-            "network_requests": None,
-        })
 
     @app.get("/api/v1/threat-context/stix")
     def threat_context_stix_export():

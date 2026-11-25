@@ -21,8 +21,9 @@ and the conventions skill.
   being split out of the factory by domain via the blueprint-factory pattern
   (ADR 0003): a module-level `make_<domain>_blueprint(...)` captures its
   dependencies and returns a Flask `Blueprint` with the same absolute URLs, so
-  the app-level request hooks still apply and behaviour is unchanged. First
-  domain extracted: `api_detections.py` (`/api/v1/detections/*`).
+  the app-level request hooks still apply and behaviour is unchanged. Domains
+  extracted so far: `api_detections.py` (`/api/v1/detections/*`) and
+  `api_status.py` (enrichment/benign-scanner/threat-context status).
 - **Model** (`model.py`): `normalize_event` — bounded, hostile-input-safe
   normalization into the four provenance classes; disclosed, never silent, loss.
 - **Derivation & enrichment** (`derivation.py`, `enrichment.py`,
@@ -99,8 +100,9 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
   (ADR 0003): una `make_<dominio>_blueprint(...)` a livello di modulo cattura le
   sue dipendenze e restituisce un `Blueprint` Flask con gli stessi URL
   assoluti, così gli hook di request a livello app continuano ad applicarsi e il
-  comportamento resta invariato. Primo dominio estratto: `api_detections.py`
-  (`/api/v1/detections/*`).
+  comportamento resta invariato. Domini estratti finora: `api_detections.py`
+  (`/api/v1/detections/*`) e `api_status.py` (status enrichment/benign-scanner/
+  threat-context).
 - **Model** (`model.py`): `normalize_event` — normalizzazione bounded e sicura
   su input ostile nelle quattro classi di provenance; perdita dichiarata, mai
   silenziosa.
