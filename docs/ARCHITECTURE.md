@@ -31,8 +31,9 @@ and the conventions skill.
   (`/api/v1/detection/*`: backtest + suppression lifecycle) and `api_alerts.py`
   (`/api/v1/alerts/*`: metrics, list/detail, update, notes) and
   `api_analytics.py` (filter options, dashboard, geo attack map, relations,
-  correlations). The POST `/api/v1/events` ingest path stays in the
-  authenticated write core.
+  correlations) and `api_cases.py` (`/api/v1/cases/*`: CRUD, evidence, notes,
+  timeline). The POST `/api/v1/events` ingest path stays in the authenticated
+  write core.
 - **Model** (`model.py`): `normalize_event` — bounded, hostile-input-safe
   normalization into the four provenance classes; disclosed, never silent, loss.
 - **Derivation & enrichment** (`derivation.py`, `enrichment.py`,
@@ -118,8 +119,9 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
   `api_detection_mgmt.py` (`/api/v1/detection/*`: backtest + ciclo di vita delle
   soppressioni) e `api_alerts.py` (`/api/v1/alerts/*`: metriche, lista/dettaglio,
   update, note) e `api_analytics.py` (opzioni filtri, dashboard, mappa
-  geospaziale attacchi, relazioni, correlazioni). Il POST `/api/v1/events` di
-  ingest resta nel core di scrittura autenticato.
+  geospaziale attacchi, relazioni, correlazioni) e `api_cases.py`
+  (`/api/v1/cases/*`: CRUD, evidenze, note, timeline). Il POST `/api/v1/events`
+  di ingest resta nel core di scrittura autenticato.
 - **Model** (`model.py`): `normalize_event` — normalizzazione bounded e sicura
   su input ostile nelle quattro classi di provenance; perdita dichiarata, mai
   silenziosa.

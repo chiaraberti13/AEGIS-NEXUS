@@ -19,7 +19,6 @@ from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 from .alerts import AlertStore
 from .benign_scanners import BenignScannerContext
 from .behavioral_analytics import BehavioralAnalytics
-from .casework import CaseValidationError, normalize_case_create, normalize_case_update, normalize_evidence, normalize_note
 from .cti_stix import export_stix_bundle
 from .cti_sharing import sanitize_shareable_indicators
 from .custom_feed import load_custom_feed_adapter_config
@@ -30,6 +29,7 @@ from .detection_config import DetectionConfig
 from .api_activity import make_activity_blueprint
 from .api_alerts import make_alerts_blueprint
 from .api_analytics import make_analytics_blueprint
+from .api_cases import make_cases_blueprint
 from .api_detection_mgmt import make_detection_management_blueprint
 from .api_detections import make_detections_blueprint
 from .api_iocs import make_iocs_blueprint
@@ -1030,143 +1030,14 @@ def create_app(test_config: dict | None = None) -> Flask:
         )
     )
 
-    @app.get("/api/v1/cases")
-    def cases():
-        return jsonify({
-            "items": store.list_cases(
-                limit=request.args.get("limit", 100, type=int),
-                q=request.args.get("q", type=str),
-                status=request.args.get("status", type=str),
-            )
-        })
-
-    @app.post("/api/v1/cases")
-    def create_case():
-        if not request.is_json:
-            return jsonify({"error": "content_type_must_be_json"}), 415
-        try:
-            case_data = normalize_case_create(request.get_json())
-            if not case_data.get("owner"):
-                # Default ownership to the acting operator (Cycle P identity).
-                case_data["owner"] = current_operator_identity() or _default_operator_identity()
-            item = store.create_case(case_data)
-        except CaseValidationError as exc:
-            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
-        except ValueError as exc:
-            if str(exc) == "case_capacity":
-                return jsonify({"error": "case_capacity"}), 409
-            raise
-        record_audit(
-            "case.create",
-            target_type="case",
-            target_id=str(item.get("id") or "")[:128],
-            detail={
-                "status": item.get("status"),
-                "severity": item.get("severity"),
-                "priority": item.get("priority"),
-                "owner": item.get("owner"),
-            },
+    app.register_blueprint(
+        make_cases_blueprint(
+            store=store,
+            record_audit=record_audit,
+            current_operator_identity=current_operator_identity,
+            default_operator_identity=_default_operator_identity,
         )
-        return jsonify(item), 201
-
-    @app.get("/api/v1/cases/<case_id>")
-    def case_detail(case_id: str):
-        item = store.get_case(case_id[:128])
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
-
-    @app.get("/api/v1/cases/<case_id>/timeline")
-    def case_timeline(case_id: str):
-        item = store.case_timeline(case_id[:128])
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
-
-    @app.delete("/api/v1/cases/<case_id>")
-    def delete_case(case_id: str):
-        result = store.delete_case(case_id[:128])
-        if result == "not_found":
-            return jsonify({"error": "not_found"}), 404
-        if result == "case_not_closed":
-            return jsonify({"error": "case_not_closed"}), 409
-        record_audit("case.delete", target_type="case", target_id=case_id[:128])
-        return ("", 204)
-
-    @app.patch("/api/v1/cases/<case_id>")
-    def update_case(case_id: str):
-        if not request.is_json:
-            return jsonify({"error": "content_type_must_be_json"}), 415
-        try:
-            item = store.update_case(case_id[:128], normalize_case_update(request.get_json()))
-        except CaseValidationError as exc:
-            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
-        if not item:
-            return jsonify({"error": "not_found"}), 404
-        record_audit(
-            "case.update",
-            target_type="case",
-            target_id=case_id[:128],
-            detail={"status": item.get("status"), "severity": item.get("severity")},
-        )
-        return jsonify(item), 200
-
-    @app.post("/api/v1/cases/<case_id>/evidence")
-    def add_case_evidence(case_id: str):
-        if not request.is_json:
-            return jsonify({"error": "content_type_must_be_json"}), 415
-        try:
-            evidence = normalize_evidence(request.get_json())
-            item = store.add_case_evidence(case_id[:128], evidence["type"], evidence["id"])
-        except CaseValidationError as exc:
-            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
-        except ValueError as exc:
-            if str(exc) == "evidence_not_found":
-                return jsonify({"error": "evidence_not_found"}), 404
-            if str(exc) == "case_evidence_limit":
-                return jsonify({"error": "case_evidence_limit"}), 422
-            raise
-        if not item:
-            return jsonify({"error": "not_found"}), 404
-        record_audit(
-            "case.evidence_add",
-            target_type="case",
-            target_id=case_id[:128],
-            detail={"evidence_type": evidence["type"], "evidence_id": evidence["id"]},
-        )
-        return jsonify(item), 200
-
-    @app.delete("/api/v1/cases/<case_id>/evidence/<int:evidence_row_id>")
-    def remove_case_evidence(case_id: str, evidence_row_id: int):
-        try:
-            item = store.remove_case_evidence(case_id[:128], evidence_row_id)
-        except ValueError as exc:
-            if str(exc) == "evidence_not_found":
-                return jsonify({"error": "evidence_not_found"}), 404
-            raise
-        if not item:
-            return jsonify({"error": "not_found"}), 404
-        record_audit(
-            "case.evidence_remove",
-            target_type="case",
-            target_id=case_id[:128],
-            detail={"evidence_row_id": int(evidence_row_id)},
-        )
-        return jsonify(item), 200
-
-    @app.post("/api/v1/cases/<case_id>/notes")
-    def add_case_note(case_id: str):
-        if not request.is_json:
-            return jsonify({"error": "content_type_must_be_json"}), 415
-        try:
-            item = store.add_case_note(case_id[:128], normalize_note(request.get_json()))
-        except CaseValidationError as exc:
-            return jsonify({"error": "validation_error", "detail": str(exc)}), 422
-        except ValueError as exc:
-            if str(exc) == "case_note_limit":
-                return jsonify({"error": "case_note_limit"}), 422
-            raise
-        if not item:
-            return jsonify({"error": "not_found"}), 404
-        # The note body is operator free text and is intentionally not stored.
-        record_audit("case.note_add", target_type="case", target_id=case_id[:128])
-        return jsonify(item), 201
+    )
 
     def _report_profile() -> str:
         profile = (request.args.get("profile") or "internal").strip().lower()
