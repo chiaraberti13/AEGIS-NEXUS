@@ -82,13 +82,28 @@ The one app→UI dependency of the network layer (showing the operator gate on a
 app.js at bootstrap — the same dependency-injection pattern used for the backend
 blueprints.
 
-Per-view modules are now being split out on this foundation, one view at a time.
-First view extracted: the geospatial attack map (`map.js`) — it imports only from
-`core.js`, and its one orchestration dependency (re-running `refresh()` when a
-map point sets the country filter) is inverted via an injected hook
-(`setMapRefresh`) that app.js registers at bootstrap. Each view extraction is
-verified by the browser smoke test. The remaining view sections
-(dashboard/alerts/iocs/cases/relations/audit/health) follow the same pattern. The ES-module conversion is guarded by the
+Per-view modules are split out on this foundation one view at a time, each
+importing only from `core.js` with any cross-view call inverted via an injected
+hook (the same DI pattern as the backend blueprints), and each verified by a
+browser **nav smoke test** that clicks through every view and fails on any
+uncaught JS error, plus the XSS smoke test.
+
+Extracted as independent modules: the geospatial attack map (`map.js`, with a
+`setMapRefresh` hook), the platform-health view (`health.js`, read-only, no hook)
+and the IOC workspace (`iocs.js`, with a `setIocEventOpener` hook).
+
+**Boundary — where the split stops (by design):** the remaining views —
+dashboard, investigate, relations, alerts, cases — are a *coupled core*. They
+share the event/session selection flow (`selectEvent`/`selectSession`/the detail
+renderers) and the global `refresh()` orchestrator, and they cross-call each
+other (an alert seeds a case; a list opens an event in investigate; the
+dashboard drives them all). Extracting each into its own module would not yield
+clean leaves: it would replace direct calls with a growing web of injected
+hooks between modules — worse boundaries, not better, on code that already
+works. So this coupled core stays in `app.js` (the entry module), exactly as the
+authenticated ingest/identity core stays in the Flask factory. A deeper future
+refactor of the shared selection model would be the prerequisite to splitting it
+further, and is out of scope here. The ES-module conversion is guarded by the
 browser XSS smoke test (`tests/browser/xss_smoke.cjs`) and the safe-DOM/i18n
 checks now scan every `static/*.js` module.
 
