@@ -31,12 +31,15 @@ and the conventions skill.
   interface (`storage_backend.py`); forward-only migrations (`migrations.py`)
   keyed on `PRAGMA user_version`; tamper-evident event hash chain
   (`event_chain.py`); backups + restore verification (`backup.py`). The
-  relationship-graph projection is extracted into `store_relations.py`, the
-  case-management domain into `store_cases.py` and the analytics/dashboard
-  domain into `store_analytics.py` (mixins that `Store` composes, with shared
-  vocabulary in the dependency-free `store_common.py`), as incremental Cycle I
-  storage splits (ADR 0003); `Store` remains the composed reference backend with
-  unchanged public behaviour.
+  storage domains are extracted into focused modules — relationship-graph
+  projection (`store_relations.py`), case management (`store_cases.py`), analytics
+  /dashboard (`store_analytics.py`), event reads (`store_events.py`) and session
+  reads (`store_sessions.py`), the last four as mixins that `Store` composes,
+  with shared vocabulary in the dependency-free `store_common.py` — as
+  incremental Cycle I storage splits (ADR 0003); `Store` keeps the write/ingest
+  core (ingest, migrations hooks, retention, health, counters, IP/threat
+  profiles) and remains the composed reference backend with unchanged public
+  behaviour.
 - **Cases & reporting** (`casework.py`, `reporting.py`, `evidence_bundle.py`,
   `redaction.py`, `pdf.py`, `soc_summary.py`): analyst workspaces and
   JSON/CSV/Markdown/PDF exports with redaction profiles and a SHA-256 evidence
@@ -101,12 +104,15 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
   `StorageBackend` (`storage_backend.py`); migrazioni forward-only
   (`migrations.py`) su `PRAGMA user_version`; hash-chain degli eventi a prova di
   manomissione (`event_chain.py`); backup + verifica restore (`backup.py`). La
-  proiezione del grafo di relazioni è estratta in `store_relations.py`, il
-  dominio di gestione dei casi in `store_cases.py` e il dominio
-  analytics/dashboard in `store_analytics.py` (mixin che `Store` compone, con
-  vocabolario condiviso nel modulo senza dipendenze `store_common.py`), come
-  split incrementali del Cycle I (ADR 0003); `Store` resta il backend di
-  riferimento composto, con comportamento pubblico invariato.
+  domini di storage sono estratti in moduli dedicati — proiezione del grafo di
+  relazioni (`store_relations.py`), gestione casi (`store_cases.py`), analytics
+  /dashboard (`store_analytics.py`), letture eventi (`store_events.py`) e
+  letture sessioni (`store_sessions.py`), gli ultimi quattro come mixin che
+  `Store` compone, con vocabolario condiviso nel modulo senza dipendenze
+  `store_common.py` — come split incrementali del Cycle I (ADR 0003); `Store`
+  mantiene il core di scrittura/ingest (ingest, hook migrazioni, retention,
+  health, counter, profili IP/threat) e resta il backend di riferimento
+  composto, con comportamento pubblico invariato.
 - **Casi & reporting** (`casework.py`, `reporting.py`, `evidence_bundle.py`,
   `redaction.py`, `pdf.py`, `soc_summary.py`): workspace dell'analista ed export
   JSON/CSV/Markdown/PDF con profili di redazione e bundle di evidenze con

@@ -398,10 +398,10 @@ These are deliberate design boundaries, not missing features:
 
 **Goal:** keep the project maintainable as features grow.
 
-- [ ] Split monolithic storage responsibilities into modules
-- [ ] Separate event storage
-- [ ] Separate session storage
-- [ ] Separate alert storage
+- [x] Split monolithic storage responsibilities into modules _(6 domains extracted to `store_*` mixins/modules; `store.py` ~2400→~940 lines, `Store` remains the composed reference backend — ADR 0003)_
+- [x] Separate event storage _(extracted to `store_events.EventStoreMixin` — ADR 0003)_
+- [x] Separate session storage _(extracted to `store_sessions.SessionStoreMixin` — ADR 0003)_
+- [x] Separate alert storage _(alert logic already lives in the dedicated `alerts.py`, never in the `store.py` monolith)_
 - [x] Separate case storage _(extracted to `store_cases.CaseStoreMixin`; `Store` composes it, behaviour unchanged — ADR 0003)_
 - [x] Separate analytics storage _(extracted to `store_analytics.AnalyticsStoreMixin`; shared constants in `store_common.py` — ADR 0003)_
 - [x] Separate relationship queries _(extracted to `store_relations.py`; `Store.relations` delegates — ADR 0003)_
@@ -537,7 +537,7 @@ These requirements apply to **every** roadmap cycle.
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
 | H — Platform Health & Storage | 🟨 19/22 · PostgreSQL backend deferred (ADR 0002) |
-| I — Backend Architecture & Maintainability | 🟨 10/17 · relationship + case + analytics storage extracted; further splits incremental (ADR 0003) |
+| I — Backend Architecture & Maintainability | 🟨 14/17 · storage split done (6 domains in `store_*`); remaining: API-route split, optional service layer, app.js ES modules (ADR 0003) |
 | J — Study Mode | ❌ Removed |
 | L — Geospatial Attack Visualization | ✅ Completed |
 
