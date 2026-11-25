@@ -207,6 +207,8 @@ These are deliberate design boundaries, not missing features:
 - [x] Add network-evidence security/privacy documentation
 - [x] Add bounded-capture and hostile-input tests
 
+> **Remaining extension items decided** (see `docs/adr/0005-network-fingerprints-and-pcap-capture.md`). SSH client version/KEX + HASSH is deferred until it no longer needs private paramiko state; HTTP (JA4H) / TLS (JA4) fingerprints are blocked pending licence review (product/legal); dedicated-container PCAP capture (BPF, ring-buffer) is an opt-in deployment pattern (privileged capture sidecar), while the collector-side bounds already hold. No sensor gains new capability or egress, and nothing fingerprint/capture is shipped unverified.
+
 **Done when:** network evidence enriches investigations without creating unlimited packet retention or unsupported attribution.
 
 ---
@@ -526,11 +528,11 @@ These requirements apply to **every** roadmap cycle.
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
-| P — Platform Readiness & Integrity Hardening | 🟨 In progress |
-| C — Network Evidence & Visibility | 🟨 Core completed · extensions planned |
-| D — Sensor Platform & Honeypot Expansion | 🟨 In progress |
-| E — Threat Intelligence & CTI | ⬜ Planned |
-| F — Behavioral Analytics | ⬜ Planned |
+| P — Platform Readiness & Integrity Hardening | 🟨 12/20 · local quality tooling done; CI wiring deferred (CI removed) |
+| C — Network Evidence & Visibility | 🟨 19/26 · extensions decided (ADR 0004 Zeek, ADR 0005 fingerprints/PCAP) |
+| D — Sensor Platform & Honeypot Expansion | ✅ Completed |
+| E — Threat Intelligence & CTI | ✅ Completed |
+| F — Behavioral Analytics | ✅ Completed |
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
 | H — Platform Health & Storage | 🟨 19/22 · PostgreSQL backend deferred (ADR 0002) |
