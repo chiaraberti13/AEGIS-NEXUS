@@ -26,9 +26,10 @@ and the conventions skill.
   (enrichment/benign-scanner/threat-context status), `api_ips.py`
   (`/api/v1/ips/*`), `api_activity.py` (event/session reads) and `api_pcap.py`
   (`/api/v1/pcap/*`; operator auth via the app-level trust boundary, audit via
-  an injected writer) and `api_iocs.py` (`/api/v1/iocs/*`, incl. CSV export
-  guarded against formula injection). The POST `/api/v1/events` ingest path
-  stays in the authenticated write core.
+  an injected writer), `api_iocs.py` (`/api/v1/iocs/*`, incl. CSV export
+  guarded against formula injection) and `api_detection_mgmt.py`
+  (`/api/v1/detection/*`: backtest + suppression lifecycle). The POST
+  `/api/v1/events` ingest path stays in the authenticated write core.
 - **Model** (`model.py`): `normalize_event` — bounded, hostile-input-safe
   normalization into the four provenance classes; disclosed, never silent, loss.
 - **Derivation & enrichment** (`derivation.py`, `enrichment.py`,
@@ -110,8 +111,10 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
   threat-context), `api_ips.py` (`/api/v1/ips/*`) e `api_activity.py` (letture
   eventi/sessioni) e `api_pcap.py` (`/api/v1/pcap/*`; auth operatore via il
   trust boundary a livello app, audit tramite writer iniettato) e `api_iocs.py`
-  (`/api/v1/iocs/*`, incl. export CSV protetto da formula injection). Il POST
-  `/api/v1/events` di ingest resta nel core di scrittura autenticato.
+  (`/api/v1/iocs/*`, incl. export CSV protetto da formula injection) e
+  `api_detection_mgmt.py` (`/api/v1/detection/*`: backtest + ciclo di vita delle
+  soppressioni). Il POST `/api/v1/events` di ingest resta nel core di scrittura
+  autenticato.
 - **Model** (`model.py`): `normalize_event` — normalizzazione bounded e sicura
   su input ostile nelle quattro classi di provenance; perdita dichiarata, mai
   silenziosa.
