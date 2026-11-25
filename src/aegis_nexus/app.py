@@ -27,7 +27,7 @@ from .correlation_workspace import CorrelationWorkspace
 from .detection import DetectionEngine
 from .detection_backtest import DetectionBacktester
 from .detection_config import DetectionConfig
-from .detection_coverage import mitre_coverage
+from .api_detections import make_detections_blueprint
 from .detection_suppression import DetectionSuppressionStore, SuppressionValidationError
 from .derivation import derive_observed_artifacts
 from .enrichment import LocalGeoIPEnricher
@@ -1059,17 +1059,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             "network_requests": None,
         })
 
-    @app.get("/api/v1/detections/config")
-    def detection_config_status():
-        return jsonify(detection_config.public())
-
-    @app.get("/api/v1/detections/coverage")
-    def detection_coverage_view():
-        return jsonify(mitre_coverage(detection_config))
-
-    @app.get("/api/v1/detections/stats")
-    def detection_statistics():
-        return jsonify(alert_store.statistics())
+    app.register_blueprint(
+        make_detections_blueprint(detection_config=detection_config, alert_store=alert_store)
+    )
 
     @app.get("/api/v1/alerts/metrics")
     def alert_response_metrics():

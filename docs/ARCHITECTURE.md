@@ -17,7 +17,12 @@ and the conventions skill.
 - **Collector app** (`app.py`): the Flask `create_app` factory. All config is
   `AEGIS_*` env read in one place. A `before_request` trust boundary makes every
   `/api/v1/*` operator route fail closed, and sensor ingest is separately
-  authenticated (key, optional HMAC signature + anti-replay nonce).
+  authenticated (key, optional HMAC signature + anti-replay nonce). Routes are
+  being split out of the factory by domain via the blueprint-factory pattern
+  (ADR 0003): a module-level `make_<domain>_blueprint(...)` captures its
+  dependencies and returns a Flask `Blueprint` with the same absolute URLs, so
+  the app-level request hooks still apply and behaviour is unchanged. First
+  domain extracted: `api_detections.py` (`/api/v1/detections/*`).
 - **Model** (`model.py`): `normalize_event` — bounded, hostile-input-safe
   normalization into the four provenance classes; disclosed, never silent, loss.
 - **Derivation & enrichment** (`derivation.py`, `enrichment.py`,
@@ -89,7 +94,13 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
 - **App collector** (`app.py`): la factory Flask `create_app`. Tutta la config è
   da env `AEGIS_*` letta in un unico punto. Un trust boundary `before_request`
   rende fail-closed ogni rotta operatore `/api/v1/*`; l'ingest sensori è
-  autenticato a parte (chiave, HMAC opzionale + nonce anti-replay).
+  autenticato a parte (chiave, HMAC opzionale + nonce anti-replay). Le rotte
+  vengono estratte dalla factory per dominio con il pattern blueprint-factory
+  (ADR 0003): una `make_<dominio>_blueprint(...)` a livello di modulo cattura le
+  sue dipendenze e restituisce un `Blueprint` Flask con gli stessi URL
+  assoluti, così gli hook di request a livello app continuano ad applicarsi e il
+  comportamento resta invariato. Primo dominio estratto: `api_detections.py`
+  (`/api/v1/detections/*`).
 - **Model** (`model.py`): `normalize_event` — normalizzazione bounded e sicura
   su input ostile nelle quattro classi di provenance; perdita dichiarata, mai
   silenziosa.
