@@ -18,6 +18,8 @@ from .registry import register_sensor
 
 HOST_KEY = paramiko.RSAKey.generate(2048)
 MAX_COMMAND = 512
+# RFC 4253 §4.2 caps the SSH identification string at 255 bytes.
+MAX_SSH_IDENTIFICATION = 255
 
 def _base_observed(
     source_ip: str,
@@ -46,6 +48,51 @@ def _base_observed(
         transport=transport,
         connection=connection,
     )
+    return observed
+
+
+def _identification_observed(
+    source_ip: str,
+    sensor_session_id: str,
+    client_version: str,
+    source_port: int | None = None,
+    *,
+    destination_port: int | None = None,
+) -> dict:
+    """Observed evidence for the attacker's SSH client identification banner.
+
+    The identification string is attacker-controlled: it is bounded per
+    RFC 4253 and recorded strictly as an ``observed`` tooling hint under
+    ``observed.network.ssh.client_version`` — never as attacker identity, and
+    never a fingerprint claim. Evidence loss (truncation) is disclosed via the
+    standard capture-metadata audit, like every other hostile sensor field.
+    """
+    audit: dict = {}
+    bounded_version = bounded_text(
+        client_version,
+        MAX_SSH_IDENTIFICATION,
+        "observed.network.ssh.client_version",
+        audit,
+    )
+    destination_port = int(destination_port or os.getenv("AEGIS_SSH_PORT", "2222"))
+    transport = {"protocol": "tcp", "destination_port": destination_port}
+    observed: dict = {
+        "source_ip": source_ip,
+        "service": "ssh",
+        "protocol": "tcp",
+        "destination_port": destination_port,
+        "sensor_session_id": sensor_session_id,
+    }
+    if source_port is not None:
+        observed["source_port"] = int(source_port)
+        transport["source_port"] = int(source_port)
+    observed["network"] = make_network_evidence(
+        "sensor_socket",
+        "application",
+        transport=transport,
+        ssh={"client_version": bounded_version},
+    )
+    attach_capture_metadata(observed, audit)
     return observed
 
 
@@ -178,6 +225,18 @@ class SSHHandler(socketserver.BaseRequestHandler):
         server = AegisSSHServer(self.sensor, source_ip, source_port, destination_port, sensor_session_id)
         try:
             transport.start_server(server=server)
+            client_version = getattr(transport, "remote_version", "") or ""
+            if client_version:
+                self.sensor.emit(
+                    "connection.identified",
+                    _identification_observed(
+                        source_ip,
+                        sensor_session_id,
+                        client_version,
+                        source_port,
+                        destination_port=destination_port,
+                    ),
+                )
             channel = transport.accept(10)
             if channel is None:
                 return
@@ -223,9 +282,9 @@ class SSHSensorPlugin:
     name = "ssh"
     capabilities = SensorCapabilities(
         protocols=("ssh", "tcp"),
-        event_types=("connection", "connection.closed", "credential", "command"),
+        event_types=("connection", "connection.identified", "connection.closed", "credential", "command"),
         interaction_mode="emulated",
-        network_evidence=("transport", "connection"),
+        network_evidence=("transport", "connection", "ssh"),
         captures_credentials=True,
         captures_commands=True,
         executes_attacker_input=False,

@@ -14,7 +14,15 @@ Every network block declares:
 - `capture_layer`: `application`, `transport` or `ids_flow`;
 - `completeness`: whether the block is partial or complete for the specific source. AEGIS does not treat missing fields as zero or infer them.
 
-Optional sections are `transport`, `connection`, `http`, `tls` and `dns`. Values remain observed evidence. Deterministic IOC extracted from exact DNS names are stored separately under `derived.ioc` with an evidence path back to `observed.network.dns`.
+Optional sections are `transport`, `connection`, `http`, `tls`, `dns` and `ssh`. Values remain observed evidence. Deterministic IOC extracted from exact DNS names are stored separately under `derived.ioc` with an evidence path back to `observed.network.dns`.
+
+The `ssh` section carries `client_version`, the SSH client identification string
+(e.g. `SSH-2.0-OpenSSH_8.9p1`) observed during the handshake and emitted on a
+`connection.identified` event. It is attacker-controlled, so it is bounded to
+the 255-byte limit of RFC 4253 §4.2 and any truncation is disclosed under
+`sensor_capture`. It is strictly a tooling hint: AEGIS never treats it as
+attacker identity and never derives a fingerprint claim from it. Full
+KEX/cipher offer lists (HASSH) are not captured — see ADR 0005.
 
 ### Collection boundaries
 
@@ -52,7 +60,16 @@ Ogni blocco network dichiara:
 - `capture_layer`: `application`, `transport` oppure `ids_flow`;
 - `completeness`: indica se il blocco è parziale o completo per quella specifica sorgente. AEGIS non interpreta i campi mancanti come zero e non li inferisce.
 
-Le sezioni opzionali sono `transport`, `connection`, `http`, `tls` e `dns`. I valori restano evidenza osservata. Gli IOC deterministici estratti da nomi DNS esatti vengono conservati separatamente in `derived.ioc` con evidence path verso `observed.network.dns`.
+Le sezioni opzionali sono `transport`, `connection`, `http`, `tls`, `dns` e `ssh`. I valori restano evidenza osservata. Gli IOC deterministici estratti da nomi DNS esatti vengono conservati separatamente in `derived.ioc` con evidence path verso `observed.network.dns`.
+
+La sezione `ssh` contiene `client_version`, la stringa di identificazione del
+client SSH (es. `SSH-2.0-OpenSSH_8.9p1`) osservata durante l'handshake ed
+emessa con un evento `connection.identified`. È controllata dall'attaccante,
+quindi viene limitata ai 255 byte previsti dalla RFC 4253 §4.2 e ogni
+troncamento è dichiarato sotto `sensor_capture`. È solo un indizio operativo:
+AEGIS non la tratta mai come identità dell'attaccante e non ne deriva alcun
+fingerprint. Le offer-list complete KEX/cipher (HASSH) non vengono catturate —
+vedi ADR 0005.
 
 ### Confini della raccolta
 

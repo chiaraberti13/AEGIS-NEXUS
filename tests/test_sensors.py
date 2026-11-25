@@ -5,7 +5,14 @@ import threading
 
 from aegis_nexus.sensors.legacy import FTPDataHandler, FTPHandler, _readline, _readline_with_status
 from aegis_nexus.sensors.server import BoundedThreadingTCPServer
-from aegis_nexus.sensors.ssh_decoy import PERSONA as SSH_PERSONA, _base_observed, _fake_command, _read_command
+from aegis_nexus.sensors.ssh_decoy import (
+    MAX_SSH_IDENTIFICATION,
+    PERSONA as SSH_PERSONA,
+    _base_observed,
+    _fake_command,
+    _identification_observed,
+    _read_command,
+)
 from aegis_nexus.sensors import web_decoy
 
 
@@ -120,6 +127,53 @@ def test_ssh_network_evidence_includes_peer_port_and_duration(monkeypatch):
     assert network["transport"]["source_port"] == 50123
     assert network["transport"]["destination_port"] == 2222
     assert network["connection"]["duration_ms"] == 1750
+
+
+def test_ssh_client_version_is_observed_network_evidence_not_identity(monkeypatch):
+    monkeypatch.setenv("AEGIS_SSH_PORT", "2222")
+    observed = _identification_observed(
+        "203.0.113.52", "session-3", "SSH-2.0-OpenSSH_8.9p1", 50125
+    )
+    network = observed["network"]
+    # Captured directly by the sensor socket, at the application layer.
+    assert network["source"] == "sensor_socket"
+    assert network["capture_layer"] == "application"
+    # The banner is recorded strictly under observed.network.ssh — a tooling
+    # hint, never attacker identity and never an enrichment/derived claim.
+    assert network["ssh"]["client_version"] == "SSH-2.0-OpenSSH_8.9p1"
+    assert observed["source_port"] == 50125
+    assert "enrichment" not in observed and "derived" not in observed
+
+
+def test_ssh_client_version_is_bounded_and_discloses_truncation():
+    hostile = "SSH-2.0-" + "A" * 1000
+    observed = _identification_observed("203.0.113.53", "session-4", hostile)
+    captured = observed["network"]["ssh"]["client_version"]
+    # Bounded to RFC 4253's 255-byte identification-string limit.
+    assert len(captured) == MAX_SSH_IDENTIFICATION
+    # Evidence loss is disclosed, never silent, via the capture-metadata audit.
+    assert observed["sensor_capture"]["truncated"] is True
+    assert any(
+        entry.get("path") == "observed.network.ssh.client_version"
+        for entry in observed["sensor_capture"]["truncated_fields"]
+    )
+
+
+def test_ssh_client_version_survives_event_normalization():
+    from aegis_nexus.model import normalize_event
+
+    observed = _identification_observed(
+        "203.0.113.54", "session-5", "SSH-2.0-libssh_0.10.6", 50126
+    )
+    event = normalize_event(
+        {
+            "honeypot": "ssh-decoy-01",
+            "event_type": "connection.identified",
+            "severity": "info",
+            "observed": observed,
+        }
+    )
+    assert event["observed"]["network"]["ssh"]["client_version"] == "SSH-2.0-libssh_0.10.6"
 
 
 def test_web_decoy_captures_bounded_http_headers_as_network_evidence(monkeypatch):

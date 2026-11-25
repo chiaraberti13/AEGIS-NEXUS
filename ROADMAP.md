@@ -186,7 +186,8 @@ These are deliberate design boundaries, not missing features:
 - [x] Capture packet/connection counters where available
 - [x] Capture relevant TCP metadata without claiming unsupported OS attribution
 - [x] Improve HTTP header and User-Agent evidence
-- [ ] Capture SSH client version string and KEX/cipher offer lists
+- [x] Capture SSH client version string _(observed.network.ssh.client_version, bounded per RFC 4253; tooling hint, never identity)_
+- [ ] Capture SSH KEX/cipher offer lists _(deferred — needs non-private paramiko API; ADR 0005)_
 - [ ] Add HASSH-style SSH client fingerprints (fingerprint = tooling hint, never identity)
 - [ ] Add HTTP client fingerprints (e.g. JA4H) after licence review
 - [x] Add optional TLS metadata/fingerprints where technically available
@@ -529,7 +530,7 @@ These requirements apply to **every** roadmap cycle.
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
 | P — Platform Readiness & Integrity Hardening | 🟨 12/20 · local quality tooling done; CI wiring deferred (CI removed) |
-| C — Network Evidence & Visibility | 🟨 19/26 · extensions decided (ADR 0004 Zeek, ADR 0005 fingerprints/PCAP) |
+| C — Network Evidence & Visibility | 🟨 20/26 · SSH client version captured; remaining extensions decided (ADR 0004 Zeek, ADR 0005 fingerprints/PCAP) |
 | D — Sensor Platform & Honeypot Expansion | ✅ Completed |
 | E — Threat Intelligence & CTI | ✅ Completed |
 | F — Behavioral Analytics | ✅ Completed |

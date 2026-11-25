@@ -50,6 +50,7 @@ def make_network_evidence(
     http: dict[str, Any] | None = None,
     tls: dict[str, Any] | None = None,
     dns: dict[str, Any] | None = None,
+    ssh: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     evidence: dict[str, Any] = {
         "schema_version": NETWORK_EVIDENCE_SCHEMA_VERSION,
@@ -63,6 +64,7 @@ def make_network_evidence(
         ("http", http),
         ("tls", tls),
         ("dns", dns),
+        ("ssh", ssh),
     ):
         if isinstance(value, dict) and value:
             evidence[key] = value
@@ -151,6 +153,21 @@ def validate_network_evidence(value: Any) -> None:
                     f"observed.network.connection.{field}",
                 )
 
-    for field in ("http", "tls", "dns"):
+    for field in ("http", "tls", "dns", "ssh"):
         if value.get(field) is not None and not isinstance(value[field], dict):
             raise NetworkEvidenceValidationError(f"observed.network.{field} must be an object")
+
+    ssh = value.get("ssh")
+    if isinstance(ssh, dict) and ssh.get("client_version") is not None:
+        client_version = ssh["client_version"]
+        if not isinstance(client_version, str):
+            raise NetworkEvidenceValidationError(
+                "observed.network.ssh.client_version must be a string"
+            )
+        # RFC 4253 §4.2 caps the SSH identification string at 255 bytes; the
+        # value is attacker-controlled so it is an observed tooling hint only,
+        # never attacker identity.
+        if len(client_version) > 255:
+            raise NetworkEvidenceValidationError(
+                "observed.network.ssh.client_version exceeds 255 bytes"
+            )
