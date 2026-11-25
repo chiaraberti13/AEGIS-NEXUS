@@ -403,7 +403,7 @@ These are deliberate design boundaries, not missing features:
 - [ ] Separate session storage
 - [ ] Separate alert storage
 - [x] Separate case storage _(extracted to `store_cases.CaseStoreMixin`; `Store` composes it, behaviour unchanged — ADR 0003)_
-- [ ] Separate analytics storage
+- [x] Separate analytics storage _(extracted to `store_analytics.AnalyticsStoreMixin`; shared constants in `store_common.py` — ADR 0003)_
 - [x] Separate relationship queries _(extracted to `store_relations.py`; `Store.relations` delegates — ADR 0003)_
 - [ ] Split API routes by domain
 - [ ] Introduce explicit service layer where useful
@@ -537,7 +537,7 @@ These requirements apply to **every** roadmap cycle.
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
 | H — Platform Health & Storage | 🟨 19/22 · PostgreSQL backend deferred (ADR 0002) |
-| I — Backend Architecture & Maintainability | 🟨 9/17 · relationship queries + case storage extracted; further splits incremental (ADR 0003) |
+| I — Backend Architecture & Maintainability | 🟨 10/17 · relationship + case + analytics storage extracted; further splits incremental (ADR 0003) |
 | J — Study Mode | ❌ Removed |
 | L — Geospatial Attack Visualization | ✅ Completed |
 
