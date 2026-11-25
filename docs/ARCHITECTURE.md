@@ -28,7 +28,8 @@ and the conventions skill.
   (`/api/v1/pcap/*`; operator auth via the app-level trust boundary, audit via
   an injected writer), `api_iocs.py` (`/api/v1/iocs/*`, incl. CSV export
   guarded against formula injection) and `api_detection_mgmt.py`
-  (`/api/v1/detection/*`: backtest + suppression lifecycle). The POST
+  (`/api/v1/detection/*`: backtest + suppression lifecycle) and `api_alerts.py`
+  (`/api/v1/alerts/*`: metrics, list/detail, update, notes). The POST
   `/api/v1/events` ingest path stays in the authenticated write core.
 - **Model** (`model.py`): `normalize_event` — bounded, hostile-input-safe
   normalization into the four provenance classes; disclosed, never silent, loss.
@@ -113,7 +114,8 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
   trust boundary a livello app, audit tramite writer iniettato) e `api_iocs.py`
   (`/api/v1/iocs/*`, incl. export CSV protetto da formula injection) e
   `api_detection_mgmt.py` (`/api/v1/detection/*`: backtest + ciclo di vita delle
-  soppressioni). Il POST `/api/v1/events` di ingest resta nel core di scrittura
+  soppressioni) e `api_alerts.py` (`/api/v1/alerts/*`: metriche, lista/dettaglio,
+  update, note). Il POST `/api/v1/events` di ingest resta nel core di scrittura
   autenticato.
 - **Model** (`model.py`): `normalize_event` — normalizzazione bounded e sicura
   su input ostile nelle quattro classi di provenance; perdita dichiarata, mai
