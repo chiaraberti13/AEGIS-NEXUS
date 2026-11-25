@@ -33,8 +33,11 @@ and the conventions skill.
   `api_analytics.py` (filter options, dashboard, geo attack map, relations,
   correlations), `api_cases.py` (`/api/v1/cases/*`: CRUD, evidence, notes,
   timeline) and `api_reports.py` (`/api/v1/reports/*`: case/session
-  JSON/MD/PDF/CSV, SOC summary, evidence bundle ZIP, with redaction profiles).
-  The POST `/api/v1/events` ingest path stays in the authenticated write core.
+  JSON/MD/PDF/CSV, SOC summary, evidence bundle ZIP, with redaction profiles) and
+  `api_observability.py` (operations status, Prometheus metrics, sensor health,
+  operator audit). The authenticated ingest/identity core (POST
+  `/api/v1/events`, Suricata ingest, quarantine, sensor heartbeat, `/`,
+  `/health`, operator status) stays in the factory by design.
 - **Model** (`model.py`): `normalize_event` — bounded, hostile-input-safe
   normalization into the four provenance classes; disclosed, never silent, loss.
 - **Derivation & enrichment** (`derivation.py`, `enrichment.py`,
@@ -123,8 +126,11 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
   geospaziale attacchi, relazioni, correlazioni), `api_cases.py`
   (`/api/v1/cases/*`: CRUD, evidenze, note, timeline) e `api_reports.py`
   (`/api/v1/reports/*`: report caso/sessione JSON/MD/PDF/CSV, SOC summary,
-  bundle evidenze ZIP, con profili di redazione). Il POST `/api/v1/events`
-  di ingest resta nel core di scrittura autenticato.
+  bundle evidenze ZIP, con profili di redazione) e `api_observability.py`
+  (status operazioni, metriche Prometheus, salute sensori, audit operatore). Il
+  core autenticato di ingest/identità (POST `/api/v1/events`, ingest Suricata,
+  quarantena, heartbeat sensori, `/`, `/health`, operator status) resta nella
+  factory per scelta.
 - **Model** (`model.py`): `normalize_event` — normalizzazione bounded e sicura
   su input ostile nelle quattro classi di provenance; perdita dichiarata, mai
   silenziosa.
