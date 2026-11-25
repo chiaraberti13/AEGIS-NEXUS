@@ -405,7 +405,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Separate case storage _(extracted to `store_cases.CaseStoreMixin`; `Store` composes it, behaviour unchanged — ADR 0003)_
 - [x] Separate analytics storage _(extracted to `store_analytics.AnalyticsStoreMixin`; shared constants in `store_common.py` — ADR 0003)_
 - [x] Separate relationship queries _(extracted to `store_relations.py`; `Store.relations` delegates — ADR 0003)_
-- [ ] Split API routes by domain _(in progress — blueprint-factory pattern established; extracted so far: `detections`, provider-status, IP-enrichment, activity (event/session reads), PCAP-evidence, IOC workspace, detection-management (`api_detection_mgmt.py`: backtest + suppression lifecycle), alert triage (`api_alerts.py`), analytics-read (`api_analytics.py`: filters/dashboard/geo/relations/correlations) and case management (`api_cases.py`: CRUD + evidence/notes/timeline); remaining domains to follow incrementally — ADR 0003)_
+- [ ] Split API routes by domain _(in progress — blueprint-factory pattern established; extracted so far: `detections`, provider-status, IP-enrichment, activity (event/session reads), PCAP-evidence, IOC workspace, detection-management (`api_detection_mgmt.py`: backtest + suppression lifecycle), alert triage (`api_alerts.py`), analytics-read (`api_analytics.py`: filters/dashboard/geo/relations/correlations) case management (`api_cases.py`: CRUD + evidence/notes/timeline) and reporting/export (`api_reports.py`: case/session JSON/MD/PDF/CSV, SOC summary, evidence bundle ZIP); remaining domains to follow incrementally — ADR 0003)_
 - [ ] Introduce explicit service layer where useful
 - [x] Keep public API behavior backward compatible where practical — guarded by contract tests
 - [x] Add schema/migration tests
@@ -537,7 +537,7 @@ These requirements apply to **every** roadmap cycle.
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
 | H — Platform Health & Storage | 🟨 19/22 · PostgreSQL backend deferred (ADR 0002) |
-| I — Backend Architecture & Maintainability | 🟨 14/17 · storage split done (6 domains in `store_*`); API-route split started (`detections` blueprint); remaining: finish API-route split, optional service layer, app.js ES modules (ADR 0003) |
+| I — Backend Architecture & Maintainability | 🟨 14/17 · storage split done (6 domains in `store_*`); API-route split well underway (11 blueprint domains extracted, `app.py` ~1833→~1050 lines); remaining: finish API-route split, optional service layer, app.js ES modules (ADR 0003) |
 | J — Study Mode | ❌ Removed |
 | L — Geospatial Attack Visualization | ✅ Completed |
 
