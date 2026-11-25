@@ -24,8 +24,10 @@ and the conventions skill.
   the app-level request hooks still apply and behaviour is unchanged. Domains
   extracted so far: `api_detections.py` (`/api/v1/detections/*`), `api_status.py`
   (enrichment/benign-scanner/threat-context status), `api_ips.py`
-  (`/api/v1/ips/*`) and `api_activity.py` (event/session reads). The POST
-  `/api/v1/events` ingest path stays in the authenticated write core.
+  (`/api/v1/ips/*`), `api_activity.py` (event/session reads) and `api_pcap.py`
+  (`/api/v1/pcap/*`; operator auth via the app-level trust boundary, audit via
+  an injected writer). The POST `/api/v1/events` ingest path stays in the
+  authenticated write core.
 - **Model** (`model.py`): `normalize_event` — bounded, hostile-input-safe
   normalization into the four provenance classes; disclosed, never silent, loss.
 - **Derivation & enrichment** (`derivation.py`, `enrichment.py`,
@@ -105,8 +107,9 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
   comportamento resta invariato. Domini estratti finora: `api_detections.py`
   (`/api/v1/detections/*`), `api_status.py` (status enrichment/benign-scanner/
   threat-context), `api_ips.py` (`/api/v1/ips/*`) e `api_activity.py` (letture
-  eventi/sessioni). Il POST `/api/v1/events` di ingest resta nel core di
-  scrittura autenticato.
+  eventi/sessioni) e `api_pcap.py` (`/api/v1/pcap/*`; auth operatore via il
+  trust boundary a livello app, audit tramite writer iniettato). Il POST
+  `/api/v1/events` di ingest resta nel core di scrittura autenticato.
 - **Model** (`model.py`): `normalize_event` — normalizzazione bounded e sicura
   su input ostile nelle quattro classi di provenance; perdita dichiarata, mai
   silenziosa.
