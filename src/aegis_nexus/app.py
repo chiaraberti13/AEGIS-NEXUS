@@ -28,6 +28,7 @@ from .detection import DetectionEngine
 from .detection_backtest import DetectionBacktester
 from .detection_config import DetectionConfig
 from .api_detections import make_detections_blueprint
+from .api_ips import make_ips_blueprint
 from .api_status import make_status_blueprint
 from .detection_suppression import DetectionSuppressionStore, SuppressionValidationError
 from .derivation import derive_observed_artifacts
@@ -1035,22 +1036,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         item = store.get_session(session_id)
         return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
-    @app.get("/api/v1/ips/<ip>")
-    def ip_detail(ip: str):
-        try:
-            normalized = str(ipaddress.ip_address(ip))
-        except ValueError:
-            return jsonify({"error": "invalid_ip"}), 422
-        return jsonify(store.ip_profile(normalized))
-
-    @app.get("/api/v1/ips/<ip>/threat-intelligence")
-    def ip_threat_intelligence(ip: str):
-        try:
-            normalized = str(ipaddress.ip_address(ip))
-        except ValueError:
-            return jsonify({"error": "invalid_ip"}), 422
-        return jsonify(store.threat_intelligence(normalized))
-
+    app.register_blueprint(make_ips_blueprint(store=store))
     app.register_blueprint(
         make_detections_blueprint(detection_config=detection_config, alert_store=alert_store)
     )
