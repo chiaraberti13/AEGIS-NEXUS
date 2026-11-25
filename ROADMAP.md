@@ -412,7 +412,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add API contract tests — `tests/test_api_contract.py`
 - [x] Add static type checking (e.g. `mypy`) for core modules — gate in `pyproject.toml`, `make typecheck`
 - [x] Review frontend module boundaries — documented in `docs/ARCHITECTURE.md` + ADR 0003
-- [ ] Split `static/app.js` into ES modules by view without adding a mandatory build step
+- [ ] Split `static/app.js` into ES modules by view without adding a mandatory build step _(started — `app.js` converted to a native ES module (`<script type="module">`, no build step) and the shared `state`/helpers extracted to the leaf module `core.js`; per-view modules deferred because they call back into app.js helpers and would introduce import cycles — ADR 0003. Verified by the browser XSS smoke test.)_
 - [x] Add browser smoke tests (Playwright) including hostile-content XSS fixtures
 - [x] Document internal architecture — `docs/ARCHITECTURE.md`
 

@@ -67,8 +67,12 @@ and the conventions skill.
 - **Operations** (`metrics.py`, `logging_config.py`, forwarding in
   `forwarding.py`): platform health, Prometheus metrics, JSON logging and
   collector-only SIEM forwarding.
-- **Frontend** (`static/app.js`, `static/i18n.js`, `templates/index.html`):
-  a single vanilla-JS IIFE, no build step, bilingual, safe DOM only.
+- **Frontend** (`static/app.js`, `static/core.js`, `static/i18n.js`,
+  `templates/index.html`): vanilla JS, no build step, bilingual, safe DOM only.
+  `app.js` is a native ES module (`<script type="module">`); shared `state` and
+  base helpers (`$`, `t`, `pretty`, `apiHeaders`) live in the leaf module
+  `core.js` (ADR 0003). Per-view modules are not split out yet (import-cycle
+  risk — see ADR 0003).
 
 ### Ingest flow
 
@@ -161,8 +165,12 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
 - **Operazioni** (`metrics.py`, `logging_config.py`, forwarding in
   `forwarding.py`): salute della piattaforma, metriche Prometheus, log JSON e
   forwarding SIEM solo-collector.
-- **Frontend** (`static/app.js`, `static/i18n.js`, `templates/index.html`): un
-  singolo IIFE vanilla-JS, senza build step, bilingue, solo DOM sicuro.
+- **Frontend** (`static/app.js`, `static/core.js`, `static/i18n.js`,
+  `templates/index.html`): vanilla JS, senza build step, bilingue, solo DOM
+  sicuro. `app.js` è un modulo ES nativo (`<script type="module">`); lo `state`
+  condiviso e gli helper base (`$`, `t`, `pretty`, `apiHeaders`) stanno nel
+  modulo foglia `core.js` (ADR 0003). I moduli per-view non sono ancora separati
+  (rischio di cicli di import — vedi ADR 0003).
 
 ### Flusso di ingest
 

@@ -71,6 +71,19 @@ every view; it is deferred until it can be done without regressing the
 safe-DOM/i18n invariants. The module boundaries and the intended split are
 documented in `docs/ARCHITECTURE.md`.
 
+**Frontend split — step taken (2026-11-25):** `app.js` is now loaded as a native
+ES module (`<script type="module">`, no build step), and the shared mutable
+`state` plus the base helpers (`$`, `t`, `pretty`, `apiHeaders`) are extracted
+into a leaf module `core.js` that app.js imports as live bindings. This is
+cycle-free (core imports nothing from app.js). Splitting the per-view sections
+into their own modules is **still deferred**: those sections call back into
+app.js helpers (`refresh`, `updateFilterCount`, `safeGet`, …), so extracting them
+today would create import cycles rather than cleaner boundaries. A future step
+would first lift those cross-cutting helpers into `core.js` (or a sibling leaf
+module), then move each view. The ES-module conversion is guarded by the
+browser XSS smoke test (`tests/browser/xss_smoke.cjs`) and the safe-DOM/i18n
+checks now scan every `static/*.js` module.
+
 ## Consequences
 
 - The remaining Cycle I split/service-layer items stay unchecked and are tracked

@@ -1,47 +1,10 @@
 "use strict";
 
-(() => {
-  const state = {
-    lang: localStorage.getItem("aegis-lang") || "it",
-    selected: null,
-    session: null,
-    ipProfile: null,
-    behavioralAnalytics: null,
-    dashboard: null,
-    enrichmentStatus: null,
-    operationsStatus: null,
-    events: [],
-    eventsCursor: null,
-    eventsHasMore: false,
-    eventsLoadingOlder: false,
-    cases: [],
-    selectedCase: null,
-    alerts: [],
-    selectedAlert: null,
-    iocs: [],
-    selectedIoc: null,
-    mapLive: false,
-    mapLiveTimer: null,
-    auditItems: [],
-    auditRetention: null,
-    relationGraph: null,
-    relationPathNodes: [],
-    relationPathEdges: [],
-    caseSeed: [],
-    filters: {},
-    mapBox: [0, 0, 800, 390],
-    operatorKey: sessionStorage.getItem("aegis-operator-key") || "",
-  };
-
-  const $ = (id) => document.getElementById(id);
-  const t = (key) => (window.AEGIS_I18N[state.lang] || {})[key] || key;
-  const pretty = (value) => JSON.stringify(value ?? {}, null, 2);
-
-  function apiHeaders(extra = {}) {
-    const headers = {Accept: "application/json", ...extra};
-    if (state.operatorKey) headers["X-Aegis-Operator-Key"] = state.operatorKey;
-    return headers;
-  }
+// AEGIS-NEXUS console entry module (ES module, no build step — ADR 0003).
+// Shared state and base helpers live in core.js; this module imports them as
+// live bindings and holds the view logic. Per-view modules are not split out
+// yet (they call back into these helpers — see core.js / ADR 0003).
+import { state, $, t, pretty, apiHeaders } from "./core.js";
 
   let lastOperatorStatus = null;
 
@@ -2514,4 +2477,3 @@
   window.setInterval(() => {
     if (!document.hidden && $("operator-gate").hidden) loadOperationsStatus();
   }, 30000);
-})();
