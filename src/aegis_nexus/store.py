@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import sqlite3
@@ -18,6 +17,7 @@ from .correlation import explicit_session_token, session_id_for, session_id_for_
 from .migrations import LATEST_SCHEMA_VERSION, applied_migrations, apply_migrations, enable_wal, schema_version
 from .pagination import decode_cursor, encode_cursor
 from .sensor_sequence import SEQUENCE_FIELD, record_event_sequence, record_heartbeat_sequence, sequence_summary
+from .store_relations import build_relation_graph
 
 
 # Fixed vocabulary of collector-side operational counters (never attacker-set).
@@ -2230,171 +2230,8 @@ class Store:
         bundle = self.get_session(session_id)
         if not bundle:
             return {"nodes": [], "edges": []}
-
-        nodes: dict[str, dict[str, Any]] = {}
-        edges: set[tuple[str, str, str]] = set()
-        graph_truncated = False
-
-        def add(kind: str, value: Any, provenance: str, metadata: dict[str, Any] | None = None) -> str | None:
-            nonlocal graph_truncated
-            if value in (None, ""):
-                return None
-            label = str(value)
-            digest = hashlib.sha256(f"{kind}\0{label}".encode("utf-8", "replace")).hexdigest()[:20]
-            node_id = f"{kind}:{digest}"
-            if node_id not in nodes and len(nodes) >= self.relation_max_nodes:
-                graph_truncated = True
-                return None
-            node = {
-                "id": node_id,
-                "kind": kind,
-                "label": label[:180],
-                "provenance": provenance,
-            }
-            if metadata:
-                node["metadata"] = deepcopy(metadata)
-            nodes[node_id] = node
-            return node_id
-
-        for event in bundle["events"]:
-            event_node = add("event", event["id"], "observed")
-            if event_node is None and graph_truncated:
-                break
-            summary = bundle.get("summary", {})
-            session_node = add("session", event["session_id"], "derived", {
-                "correlation": deepcopy(summary.get("correlation") or {
-                    "method": summary.get("correlation_method", "temporal_fallback"),
-                    "strength": "heuristic",
-                    "basis": [],
-                })
-            })
-            ip_node = add("ip", event.get("source_ip"), "observed")
-            asn_node = add("asn", event.get("asn"), "enrichment")
-            country_node = add("country", event.get("country"), "enrichment")
-            port_node = add("port", event.get("destination_port"), "observed")
-            protocol_node = add("protocol", event.get("protocol"), "observed")
-            service_node = add("service", event.get("service"), "observed")
-            honeypot_node = add("honeypot", event.get("honeypot"), "observed")
-            credential = event["observed"].get("credential")
-            credential = credential if isinstance(credential, dict) else {}
-            user_node = add("credential", credential.get("username"), "observed")
-            secret_node = None
-            secret = self._credential_secret_summary(credential)
-            if secret:
-                secret_node = add(
-                    "credential_secret_fingerprint",
-                    secret["label"],
-                    "derived",
-                    {
-                        "algorithm": "sha256",
-                        "password_length": secret["length"],
-                        "complete": secret["complete"],
-                        "fingerprint_provenance": secret["provenance"],
-                    },
-                )
-            command_node = add("command", event["observed"].get("command"), "observed")
-            payload_node = add("payload", event["observed"].get("payload"), "observed")
-
-            alert = event["observed"].get("alert")
-            alert = alert if isinstance(alert, dict) else {}
-            alert_node = add("ids", alert.get("signature"), "observed", {
-                "category": alert.get("category"),
-                "signature_id": alert.get("signature_id"),
-            })
-
-            for target, relation in [
-                (session_node, "belongs_to"),
-                (ip_node, "source"),
-                (asn_node, "enriched_asn"),
-                (country_node, "enriched_country"),
-                (port_node, "targets_port"),
-                (protocol_node, "uses_protocol"),
-                (service_node, "targets_service"),
-                (honeypot_node, "observed_by"),
-                (user_node, "uses_username"),
-                (secret_node, "credential_secret_fingerprint"),
-                (command_node, "observed_command"),
-                (payload_node, "observed_payload"),
-                (alert_node, "ids_alert"),
-            ]:
-                if event_node and target:
-                    edges.add((event_node, target, relation))
-
-            for item in event["derived"].get("mitre", []) or []:
-                if not isinstance(item, dict):
-                    continue
-                mitre_node = add("mitre", item.get("technique_id"), "derived", {
-                    "rationale": item.get("rationale"),
-                    "evidence": item.get("evidence"),
-                })
-                if event_node and mitre_node:
-                    edges.add((event_node, mitre_node, "mapped_with_evidence"))
-
-            for item in event["derived"].get("cve", []) or []:
-                if not isinstance(item, dict):
-                    continue
-                cve_node = add("cve", item.get("cve_id"), "derived", {
-                    "rationale": item.get("rationale"),
-                    "evidence": item.get("evidence"),
-                })
-                if event_node and cve_node:
-                    edges.add((event_node, cve_node, "correlated_with_evidence"))
-
-            for ioc in event["derived"].get("ioc", []) or []:
-                if not isinstance(ioc, dict):
-                    continue
-                ioc_type = ioc.get("type")
-                ioc_value = ioc.get("value")
-                ioc_node = add("ioc", ioc_value, "derived", {
-                    "type": ioc_type,
-                    "evidence": ioc.get("evidence"),
-                    "classification": ioc.get("classification"),
-                })
-                if event_node and ioc_node:
-                    edges.add((event_node, ioc_node, "derived_ioc"))
-
-            threat_context = (event.get("enrichment") or {}).get("threat_context")
-            if isinstance(threat_context, dict):
-                source = threat_context.get("source")
-                data = threat_context.get("data") if isinstance(threat_context.get("data"), dict) else {}
-                for match in (data.get("matches") or [])[:16]:
-                    if not isinstance(match, dict):
-                        continue
-                    kind = match.get("type")
-                    value = match.get("value")
-                    label = f"{kind}: {value}" if kind and value not in (None, "") else value
-                    ti_node = add("threat_intel", label, "enrichment", {
-                        "source": source,
-                        "confidence": match.get("confidence"),
-                        "labels": match.get("labels"),
-                        "reference": match.get("reference"),
-                        "evidence": match.get("evidence"),
-                    })
-                    if event_node and ti_node:
-                        edges.add((event_node, ti_node, "external_threat_context"))
-
-        graph_analysis = dict(bundle.get("analysis", {}))
-        graph_analysis.update({
-            "graph_truncated": graph_truncated,
-            "graph_node_limit": self.relation_max_nodes,
-            "graph_nodes_returned": len(nodes),
-            "graph_edges_returned": len(edges),
-        })
-        return {
-            "analysis": graph_analysis,
-            "nodes": list(nodes.values()),
-            "edges": [
-                {
-                    "source": source,
-                    "target": target,
-                    "relation": relation,
-                    "provenance": (nodes.get(target) or {}).get("provenance", "observed"),
-                }
-                for source, target, relation in sorted(edges)
-            ],
-            "provenance": {
-                "observed": "direct sensor or IDS telemetry",
-                "enrichment": "external or operator-supplied context",
-                "derived": "deterministic correlation or evidence-backed derivation",
-            },
-        }
+        return build_relation_graph(
+            bundle,
+            max_nodes=self.relation_max_nodes,
+            credential_secret_summary=self._credential_secret_summary,
+        )

@@ -73,7 +73,8 @@ def make_network_evidence(
 
 
 def suricata_flow_evidence(payload: dict[str, Any]) -> dict[str, Any]:
-    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
+    raw_flow = payload.get("flow")
+    flow = raw_flow if isinstance(raw_flow, dict) else {}
     connection: dict[str, Any] = {}
     mapping = {
         "bytes_toserver": "bytes_to_server",

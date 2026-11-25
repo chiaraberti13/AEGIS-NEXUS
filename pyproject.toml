@@ -63,4 +63,6 @@ files = [
   "src/aegis_nexus/ioc.py",
   "src/aegis_nexus/derivation.py",
   "src/aegis_nexus/honeytokens.py",
+  "src/aegis_nexus/network_evidence.py",
+  "src/aegis_nexus/store_relations.py",
 ]

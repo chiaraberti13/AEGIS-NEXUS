@@ -30,7 +30,10 @@ and the conventions skill.
 - **Storage** (`store.py`): raw SQLite (WAL) behind the `StorageBackend`
   interface (`storage_backend.py`); forward-only migrations (`migrations.py`)
   keyed on `PRAGMA user_version`; tamper-evident event hash chain
-  (`event_chain.py`); backups + restore verification (`backup.py`).
+  (`event_chain.py`); backups + restore verification (`backup.py`). The
+  relationship-graph projection is extracted into `store_relations.py` as the
+  first step of the incremental Cycle I storage split (ADR 0003); `Store`
+  remains the composed reference backend with unchanged public behaviour.
 - **Cases & reporting** (`casework.py`, `reporting.py`, `evidence_bundle.py`,
   `redaction.py`, `pdf.py`, `soc_summary.py`): analyst workspaces and
   JSON/CSV/Markdown/PDF exports with redaction profiles and a SHA-256 evidence
@@ -94,7 +97,10 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
 - **Storage** (`store.py`): SQLite raw (WAL) dietro l'interfaccia
   `StorageBackend` (`storage_backend.py`); migrazioni forward-only
   (`migrations.py`) su `PRAGMA user_version`; hash-chain degli eventi a prova di
-  manomissione (`event_chain.py`); backup + verifica restore (`backup.py`).
+  manomissione (`event_chain.py`); backup + verifica restore (`backup.py`). La
+  proiezione del grafo di relazioni è estratta in `store_relations.py` come
+  primo passo dello split incrementale del Cycle I (ADR 0003); `Store` resta il
+  backend di riferimento composto, con comportamento pubblico invariato.
 - **Casi & reporting** (`casework.py`, `reporting.py`, `evidence_bundle.py`,
   `redaction.py`, `pdf.py`, `soc_summary.py`): workspace dell'analista ed export
   JSON/CSV/Markdown/PDF con profili di redazione e bundle di evidenze con

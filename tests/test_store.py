@@ -857,3 +857,40 @@ def test_sensor_heartbeat_distinguishes_silent_healthy_stale_and_never(tmp_path)
 
     assert status["configured_with_recent_telemetry"] == 0
     assert status["configured_with_healthy_heartbeat"] == 1
+
+
+def test_build_relation_graph_is_usable_standalone_and_bounds_nodes():
+    # The relationship-graph projection was extracted from Store (ADR 0003);
+    # it must work as a pure function on a resolved bundle, with no DB coupling,
+    # and keep the node cap + provenance split intact.
+    from aegis_nexus.store_relations import build_relation_graph
+
+    bundle = {
+        "events": [
+            {
+                "id": "evt-1",
+                "session_id": "sess-1",
+                "source_ip": "203.0.113.9",
+                "asn": "AS64500",
+                "destination_port": 22,
+                "protocol": "tcp",
+                "service": "ssh",
+                "honeypot": "ssh-decoy-01",
+                "observed": {},
+                "derived": {},
+                "enrichment": {},
+            }
+        ],
+        "summary": {},
+        "analysis": {},
+    }
+    graph = build_relation_graph(
+        bundle, max_nodes=2, credential_secret_summary=lambda credential: None
+    )
+    assert graph["analysis"]["graph_node_limit"] == 2
+    assert graph["analysis"]["graph_truncated"] is True
+    assert len(graph["nodes"]) <= 2
+    # ASN stays enrichment, never collapsed into observed identity.
+    for node in graph["nodes"]:
+        if node["kind"] == "asn":
+            assert node["provenance"] == "enrichment"
