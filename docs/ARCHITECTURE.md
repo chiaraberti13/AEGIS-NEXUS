@@ -71,8 +71,9 @@ and the conventions skill.
   `templates/index.html`): vanilla JS, no build step, bilingual, safe DOM only.
   `app.js` is a native ES module (`<script type="module">`); shared `state` and
   base helpers (`$`, `t`, `pretty`, `apiHeaders`) live in the leaf module
-  `core.js` (ADR 0003). Per-view modules are not split out yet (import-cycle
-  risk — see ADR 0003).
+  `core.js` (ADR 0003). The attack-map view is the first per-view module
+  (`map.js`); further views follow the same pattern (cross-view calls inverted
+  via injected hooks to stay cycle-free — see ADR 0003).
 
 ### Ingest flow
 
@@ -169,8 +170,10 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
   `templates/index.html`): vanilla JS, senza build step, bilingue, solo DOM
   sicuro. `app.js` è un modulo ES nativo (`<script type="module">`); lo `state`
   condiviso e gli helper base (`$`, `t`, `pretty`, `apiHeaders`) stanno nel
-  modulo foglia `core.js` (ADR 0003). I moduli per-view non sono ancora separati
-  (rischio di cicli di import — vedi ADR 0003).
+  modulo foglia `core.js` (ADR 0003). La vista mappa attacchi è il primo modulo
+  per-view (`map.js`); le altre viste seguono lo stesso pattern (le chiamate
+  trasversali sono invertite con hook iniettati per restare senza cicli — vedi
+  ADR 0003).
 
 ### Flusso di ingest
 

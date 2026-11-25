@@ -82,11 +82,13 @@ The one app→UI dependency of the network layer (showing the operator gate on a
 app.js at bootstrap — the same dependency-injection pattern used for the backend
 blueprints.
 
-Splitting the per-view *sections* into their own modules is the remaining work:
-each still calls the orchestrator `refresh()` (which in turn calls every view's
-loader), so a view module would need `refresh` injected as a hook too. The
-foundation is now in place for that; it proceeds one view at a time, each
-verified by the browser smoke test. The ES-module conversion is guarded by the
+Per-view modules are now being split out on this foundation, one view at a time.
+First view extracted: the geospatial attack map (`map.js`) — it imports only from
+`core.js`, and its one orchestration dependency (re-running `refresh()` when a
+map point sets the country filter) is inverted via an injected hook
+(`setMapRefresh`) that app.js registers at bootstrap. Each view extraction is
+verified by the browser smoke test. The remaining view sections
+(dashboard/alerts/iocs/cases/relations/audit/health) follow the same pattern. The ES-module conversion is guarded by the
 browser XSS smoke test (`tests/browser/xss_smoke.cjs`) and the safe-DOM/i18n
 checks now scan every `static/*.js` module.
 
