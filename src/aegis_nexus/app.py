@@ -29,6 +29,7 @@ from .detection_backtest import DetectionBacktester
 from .detection_config import DetectionConfig
 from .api_activity import make_activity_blueprint
 from .api_alerts import make_alerts_blueprint
+from .api_analytics import make_analytics_blueprint
 from .api_detection_mgmt import make_detection_management_blueprint
 from .api_detections import make_detections_blueprint
 from .api_iocs import make_iocs_blueprint
@@ -1004,29 +1005,13 @@ def create_app(test_config: dict | None = None) -> Flask:
             headers={"Content-Disposition": 'attachment; filename="aegis-threat-context.stix.json"'},
         )
 
-    @app.get("/api/v1/meta/filters")
-    def filter_options():
-        return jsonify(store.filter_options(request.args.get("hours", 720, type=int)))
-
-    @app.get("/api/v1/dashboard")
-    def dashboard():
-        hours = request.args.get("hours", 24, type=int)
-        q = request.args.get("q", type=str)
-        include_sim = request.args.get("include_simulation", "false").lower() in {"1", "true", "yes"}
-        return jsonify(
-            store.dashboard(
-                hours=hours,
-                include_simulation=include_sim,
-                q=q,
-                filters=_filters_from_request(),
-            )
+    app.register_blueprint(
+        make_analytics_blueprint(
+            store=store,
+            correlation_workspace=correlation_workspace,
+            filters_from_request=_filters_from_request,
         )
-
-    @app.get("/api/v1/geo/attacks")
-    def geo_attacks():
-        hours = request.args.get("hours", 24, type=int)
-        return jsonify(store.geo_attacks(hours=hours, filters=_filters_from_request()))
-
+    )
     app.register_blueprint(
         make_detection_management_blueprint(
             store=store,
@@ -1471,23 +1456,6 @@ def create_app(test_config: dict | None = None) -> Flask:
             mimetype="text/csv; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
-
-    @app.get("/api/v1/relations")
-    def relations():
-        return jsonify(store.relations(request.args.get("session_id", "")[:128]))
-
-    @app.get("/api/v1/correlations")
-    def correlations():
-        session_id = request.args.get("session_id", "")[:128]
-        if not session_id:
-            return jsonify({"error": "session_id_required"}), 422
-        item = correlation_workspace.analyze(
-            session_id,
-            hours=request.args.get("hours", 720, type=int),
-            limit=request.args.get("limit", 50, type=int),
-            min_score=request.args.get("min_score", 0.50, type=float),
-        )
-        return (jsonify(item), 200) if item else (jsonify({"error": "not_found"}), 404)
 
     return app
 
