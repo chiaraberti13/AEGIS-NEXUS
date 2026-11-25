@@ -104,3 +104,22 @@ export function activeFilterCount() {
 export function updateFilterCount() {
   $("active-filter-count").textContent = String(activeFilterCount());
 }
+
+// Shared pure presentation helpers used across views.
+export function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+}
+
+export function fact(root, label, value) {
+  const item = document.createElement("div");
+  item.className = "fact";
+  const key = document.createElement("span");
+  key.textContent = label;
+  const val = document.createElement("strong");
+  val.textContent = Array.isArray(value) ? (value.join(", ") || "—") : String(value ?? "—");
+  item.append(key, val);
+  root.append(item);
+}

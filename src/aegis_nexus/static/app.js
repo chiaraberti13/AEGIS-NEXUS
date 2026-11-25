@@ -7,6 +7,7 @@
 import {
   state, $, t, pretty, apiHeaders,
   getJSON, safeGet, currentParams, feedParams, updateFilterCount,
+  formatDate, fact,
   setUnauthorizedHandler,
 } from "./core.js";
 import { applyMapBox, zoomMap, loadGeoMap, toggleMapLive, setMapRefresh } from "./map.js";
@@ -368,13 +369,6 @@ setMapRefresh(() => refresh());
     return date.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
   }
 
-  function formatDate(value) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
-    return date.toLocaleString();
-  }
-
   function renderEventPagination() {
     const button = $("event-load-older");
     if (!button) return;
@@ -451,17 +445,6 @@ setMapRefresh(() => refresh());
       });
       body.append(row);
     });
-  }
-
-  function fact(root, label, value) {
-    const item = document.createElement("div");
-    item.className = "fact";
-    const key = document.createElement("span");
-    key.textContent = label;
-    const val = document.createElement("strong");
-    val.textContent = Array.isArray(value) ? (value.join(", ") || "—") : String(value ?? "—");
-    item.append(key, val);
-    root.append(item);
   }
 
   function rankedLabels(items) {
