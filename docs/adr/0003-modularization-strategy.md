@@ -88,22 +88,29 @@ hook (the same DI pattern as the backend blueprints), and each verified by a
 browser **nav smoke test** that clicks through every view and fails on any
 uncaught JS error, plus the XSS smoke test.
 
-Extracted as independent modules: the geospatial attack map (`map.js`, with a
-`setMapRefresh` hook), the platform-health view (`health.js`, read-only, no hook)
-and the IOC workspace (`iocs.js`, with a `setIocEventOpener` hook).
+Extracted as independent modules, each importing only from `core.js`:
+- `map.js` — geospatial attack map (`setMapRefresh` hook);
+- `health.js` — platform health (read-only, no hook);
+- `iocs.js` — IOC workspace (`setIocEventOpener` hook);
+- `alerts.js` — alert triage, incl. PATCH/notes mutations via `requestJSON`
+  (`setAlertEventOpener` + `setCaseSeeder` hooks; the event opener is shared
+  with `iocs.js`);
+- `audit.js` — operator audit log (read-only, no hook).
+
+The mutation network helper `requestJSON` was lifted into `core.js` alongside
+`getJSON`/`safeGet`, reusing the same 401 `unauthorizedHandler` hook.
 
 **Boundary — where the split stops (by design):** the remaining views —
-dashboard, investigate, relations, alerts, cases — are a *coupled core*. They
-share the event/session selection flow (`selectEvent`/`selectSession`/the detail
-renderers) and the global `refresh()` orchestrator, and they cross-call each
-other (an alert seeds a case; a list opens an event in investigate; the
-dashboard drives them all). Extracting each into its own module would not yield
-clean leaves: it would replace direct calls with a growing web of injected
-hooks between modules — worse boundaries, not better, on code that already
-works. So this coupled core stays in `app.js` (the entry module), exactly as the
-authenticated ingest/identity core stays in the Flask factory. A deeper future
-refactor of the shared selection model would be the prerequisite to splitting it
-further, and is out of scope here. The ES-module conversion is guarded by the
+dashboard, investigate, relations, cases — are an *irreducible coupled core*.
+They share the event/session selection flow (`selectEvent`/`selectSession`/the
+detail renderers) and the global `refresh()` orchestrator, the dashboard drives
+all of them, and the case editor pulls cross-view evidence. Extracting each into
+its own module would not yield clean leaves: it would replace direct calls with
+a growing web of injected hooks between modules — worse boundaries, not better,
+on code that already works. So this coupled core stays in `app.js` (the entry
+module), exactly as the authenticated ingest/identity core stays in the Flask
+factory. A deeper future refactor of the shared selection model would be the
+prerequisite to splitting it further, and is out of scope here. The ES-module conversion is guarded by the
 browser XSS smoke test (`tests/browser/xss_smoke.cjs`) and the safe-DOM/i18n
 checks now scan every `static/*.js` module.
 
