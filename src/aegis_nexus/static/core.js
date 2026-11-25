@@ -80,6 +80,25 @@ export async function safeGet(url) {
   }
 }
 
+export async function requestJSON(url, method, payload) {
+  const response = await fetch(url, {
+    method,
+    headers: apiHeaders({"Content-Type": "application/json"}),
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+  if (response.status === 401 && unauthorizedHandler) unauthorizedHandler();
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const body = await response.json();
+      detail = body.detail || body.error || "";
+    } catch {}
+    throw new Error("HTTP " + response.status + (detail ? " · " + detail : ""));
+  }
+  if (response.status === 204) return null;
+  return response.json();
+}
+
 export function currentParams() {
   const params = new URLSearchParams();
   const q = $("global-search").value.trim();

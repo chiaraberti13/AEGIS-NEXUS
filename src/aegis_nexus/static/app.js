@@ -6,13 +6,17 @@
 // yet (they call back into these helpers — see core.js / ADR 0003).
 import {
   state, $, t, pretty, apiHeaders,
-  getJSON, safeGet, currentParams, feedParams, updateFilterCount,
+  getJSON, safeGet, requestJSON, currentParams, feedParams, updateFilterCount,
   formatDate, fact,
   setUnauthorizedHandler,
 } from "./core.js";
 import { applyMapBox, zoomMap, loadGeoMap, toggleMapLive, setMapRefresh } from "./map.js";
 import { loadHealth } from "./health.js";
 import { loadIocs, renderIocDetail, setIocEventOpener } from "./iocs.js";
+import {
+  loadAlerts, renderAlertDetail, saveAlert, addAlertNote, seedCaseFromAlert,
+  setAlertEventOpener, setCaseSeeder,
+} from "./alerts.js";
 
 // The network layer lives in core.js; wire its 401 handling back to the
 // operator-gate UI that stays here (function declarations are hoisted).
@@ -20,13 +24,23 @@ setUnauthorizedHandler(() => showOperatorGate(true));
 // The map view lives in map.js; wire a map-point filter selection back to the
 // global refresh orchestrator (which stays here).
 setMapRefresh(() => refresh());
-// The IOC view lives in iocs.js; wire opening a referenced event back to the
-// investigate flow that stays here.
-setIocEventOpener(async (eventId) => {
+// The iocs/alerts views live in their own modules; wire their cross-view
+// callbacks back to the flows that stay here (function declarations hoisted).
+async function openEventInInvestigate(eventId) {
   const event = await safeGet("/api/v1/events/" + encodeURIComponent(eventId));
   if (!event) return;
   showView("investigate");
   await selectEvent(event, true);
+}
+setIocEventOpener(openEventInInvestigate);
+setAlertEventOpener(openEventInInvestigate);
+setCaseSeeder((payload) => {
+  showView("cases");
+  resetCaseEditor(payload.seed);
+  $("case-title").value = payload.title;
+  $("case-severity").value = payload.severity;
+  $("case-tags").value = payload.tags;
+  loadCases();
 });
 
   let lastOperatorStatus = null;
@@ -61,25 +75,6 @@ setIocEventOpener(async (eventId) => {
     $("operator-gate").hidden = true;
     $("operator-error").hidden = true;
     $("operator-key").value = "";
-  }
-
-  async function requestJSON(url, method, payload) {
-    const response = await fetch(url, {
-      method,
-      headers: apiHeaders({"Content-Type": "application/json"}),
-      body: payload === undefined ? undefined : JSON.stringify(payload),
-    });
-    if (response.status === 401) showOperatorGate(true);
-    if (!response.ok) {
-      let detail = "";
-      try {
-        const body = await response.json();
-        detail = body.detail || body.error || "";
-      } catch {}
-      throw new Error("HTTP " + response.status + (detail ? " · " + detail : ""));
-    }
-    if (response.status === 204) return null;
-    return response.json();
   }
 
   function i18n() {
@@ -1519,220 +1514,6 @@ setIocEventOpener(async (eventId) => {
     URL.revokeObjectURL(url);
   }
 
-  function renderAlertList() {
-    const root = $("alert-list");
-    if (!root) return;
-    root.replaceChildren();
-    $("alert-count").textContent = String(state.alerts.length);
-    if (!state.alerts.length) {
-      const empty = document.createElement("p");
-      empty.className = "mini-empty";
-      empty.textContent = t("alerts.empty");
-      root.append(empty);
-      return;
-    }
-    state.alerts.forEach((item) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "alert-list-item" + (state.selectedAlert?.id === item.id ? " selected" : "");
-      const head = document.createElement("div");
-      head.className = "alert-list-head";
-      const title = document.createElement("strong");
-      title.textContent = item.title;
-      const severity = document.createElement("span");
-      severity.className = "badge alert-severity " + String(item.severity || "info").toLowerCase();
-      severity.textContent = String(item.severity || "info").toUpperCase();
-      head.append(title, severity);
-      const meta = document.createElement("span");
-      meta.className = "alert-list-meta";
-      meta.textContent = [item.rule_id + "@" + item.rule_version, item.source_ip || "—", t("alerts.status." + item.status)].join(" · ");
-      const tail = document.createElement("span");
-      tail.className = "alert-list-meta";
-      tail.textContent = formatDate(item.last_seen) + " · " + t("alerts.occurrences") + ": " + String(item.occurrence_count || 1);
-      button.append(head, meta, tail);
-      button.addEventListener("click", () => selectAlert(item.id));
-      root.append(button);
-    });
-  }
-
-  function renderAlertEvidence(items) {
-    const root = $("alert-evidence");
-    root.replaceChildren();
-    $("alert-evidence-count").textContent = String(items?.length || 0);
-    if (!items?.length) {
-      const empty = document.createElement("p");
-      empty.className = "mini-empty";
-      empty.textContent = t("empty.noData");
-      root.append(empty);
-      return;
-    }
-    items.forEach((item) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "alert-evidence-item";
-      button.textContent = String(item.type || "event") + " · " + String(item.id || "—");
-      if (item.type === "event") {
-        button.addEventListener("click", async () => {
-          const event = await safeGet("/api/v1/events/" + encodeURIComponent(item.id));
-          if (!event) return;
-          showView("investigate");
-          await selectEvent(event, true);
-        });
-      } else {
-        button.disabled = true;
-      }
-      root.append(button);
-    });
-  }
-
-  function renderAlertIocs(items) {
-    const root = $("alert-iocs");
-    if (!root) return;
-    root.replaceChildren();
-    if (!items?.length) {
-      const empty = document.createElement("p");
-      empty.className = "mini-empty";
-      empty.textContent = t("alerts.noIocs");
-      root.append(empty);
-      return;
-    }
-    items.forEach((item) => {
-      const card = document.createElement("div");
-      card.className = "alert-evidence-item";
-      const label = document.createElement("strong");
-      label.textContent = String(item.type || "ioc") + " · " + String(item.value || "—");
-      const meta = document.createElement("span");
-      meta.className = "alert-list-meta";
-      meta.textContent = t("alerts.iocEvidence") + ": " + String(item.evidence_event_id || "—");
-      card.append(label, meta);
-      root.append(card);
-    });
-  }
-
-  function renderAlertNotes(items) {
-    const root = $("alert-notes");
-    root.replaceChildren();
-    if (!items?.length) {
-      const empty = document.createElement("p");
-      empty.className = "mini-empty";
-      empty.textContent = t("empty.noData");
-      root.append(empty);
-      return;
-    }
-    items.forEach((item) => {
-      const card = document.createElement("article");
-      card.className = "case-note";
-      const time = document.createElement("time");
-      time.textContent = formatDate(item.created_at);
-      const body = document.createElement("p");
-      body.textContent = item.body;
-      card.append(time, body);
-      root.append(card);
-    });
-  }
-
-  function renderAlertDetail(item) {
-    state.selectedAlert = item;
-    $("alert-empty").hidden = true;
-    $("alert-detail-content").hidden = false;
-    $("alert-title").textContent = item.title || item.rule_id;
-    $("alert-rule").textContent = item.rule_id + " · v" + item.rule_version + " · schema " + item.schema_version;
-    $("alert-severity").textContent = String(item.severity || "info").toUpperCase();
-    $("alert-severity").className = "badge alert-severity " + String(item.severity || "info").toLowerCase();
-    $("alert-confidence").textContent = String(item.confidence) + "%";
-    $("alert-occurrences").textContent = String(item.occurrence_count || 1);
-    $("alert-source").textContent = item.source_ip || "—";
-    $("alert-session").textContent = item.session_id || "—";
-    $("alert-description").textContent = item.description || "";
-    $("alert-status").value = item.status || "new";
-    $("alert-disposition").value = item.disposition || "";
-    $("alert-tags").value = (item.tags || []).join(", ");
-    renderAlertEvidence(item.evidence || []);
-    renderAlertIocs(item.related_iocs || []);
-    renderAlertNotes(item.notes || []);
-    renderAlertList();
-  }
-
-  async function selectAlert(alertId) {
-    const item = await safeGet("/api/v1/alerts/" + encodeURIComponent(alertId));
-    if (item) renderAlertDetail(item);
-  }
-
-  async function loadAlerts() {
-    const params = new URLSearchParams();
-    const status = $("alert-status-filter")?.value || "";
-    const severity = $("alert-severity-filter")?.value || "";
-    if (status) params.set("status", status);
-    if (severity) params.set("severity", severity);
-    params.set("limit", "200");
-    const data = await safeGet("/api/v1/alerts?" + params.toString());
-    if (!data) return;
-    state.alerts = data.items || [];
-    renderAlertList();
-  }
-
-  async function saveAlert() {
-    if (!state.selectedAlert?.id) return;
-    try {
-      const item = await requestJSON(
-        "/api/v1/alerts/" + encodeURIComponent(state.selectedAlert.id),
-        "PATCH",
-        {
-          status: $("alert-status").value,
-          disposition: $("alert-disposition").value || null,
-          tags: $("alert-tags").value.split(",").map((item) => item.trim()).filter(Boolean),
-        }
-      );
-      renderAlertDetail(item);
-      await loadAlerts();
-    } catch (error) {
-      console.error("AEGIS alert update failed", error);
-    }
-  }
-
-  async function addAlertNote(event) {
-    event.preventDefault();
-    if (!state.selectedAlert?.id) return;
-    const body = $("alert-note").value.trim();
-    if (!body) return;
-    try {
-      const item = await requestJSON(
-        "/api/v1/alerts/" + encodeURIComponent(state.selectedAlert.id) + "/notes",
-        "POST",
-        {body}
-      );
-      $("alert-note").value = "";
-      renderAlertDetail(item);
-    } catch (error) {
-      console.error("AEGIS alert note failed", error);
-    }
-  }
-
-  function seedCaseFromAlert() {
-    if (!state.selectedAlert) return;
-    const seen = new Set();
-    const seed = [];
-    const add = (type, id) => {
-      if (!id) return;
-      const key = type + ":" + id;
-      if (seen.has(key)) return;
-      seen.add(key);
-      seed.push({type, id});
-    };
-    add("alert", state.selectedAlert.id);
-    (state.selectedAlert.evidence || []).forEach((item) => {
-      if (item.type === "event") add("event", item.id);
-    });
-    (state.selectedAlert.related_session_ids || []).forEach((id) => add("session", id));
-    showView("cases");
-    resetCaseEditor(seed);
-    $("case-title").value = t("alerts.caseTitle")
-      .replace("{rule}", state.selectedAlert.rule_id || t("common.unknown"))
-      .replace("{ip}", state.selectedAlert.source_ip || t("common.unknown"));
-    $("case-severity").value = state.selectedAlert.severity || "medium";
-    $("case-tags").value = "alert, " + String(state.selectedAlert.rule_id || "detection");
-    loadCases();
-  }
 
   async function loadCases() {
     const params = new URLSearchParams();
