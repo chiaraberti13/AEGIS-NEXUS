@@ -122,10 +122,16 @@ FoxIO licence or patent exposure into the GPLv3 codebase.
   maintenance for marginal analytic gain over the existing passthrough. **Reopen
   trigger:** a deployment that needs JA4 without running Suricata/Zeek.
 - "HTTP client fingerprints (JA4H)" and HASSH-via-JA4SSH — **declined** as a
-  native AEGIS feature under the current GPLv3 + FoxIO-1.1 + patent situation;
-  delivered only through external-producer ingestion. **Reopen trigger:** FoxIO
-  re-licenses these methods under a GPL-compatible, patent-granting licence, or
-  the maintainer obtains an OEM licence *and* resolves the GPLv3 relicensing.
+  native AEGIS feature under the current GPLv3 + FoxIO-1.1 + patent situation.
+  They are delivered through **external-producer ingestion**: when the operator
+  runs Suricata (or Zeek) with a JA4+ plugin, the Suricata-EVE ingestion stores
+  the JA4H *value* it emits as `observed.network.http.ja4h` passthrough evidence
+  (`suricata.normalize_eve_event`), exactly like the existing ja3/ja3s/ja4 TLS
+  passthrough. This stores a value the operator's own tool computed; it does not
+  put any FoxIO JA4+ implementation, or its licence/patent exposure, into this
+  GPLv3 codebase. **Reopen trigger:** FoxIO re-licenses these methods under a
+  GPL-compatible, patent-granting licence, or the maintainer obtains an OEM
+  licence *and* resolves the GPLv3 relicensing.
 
 Native **HASSH** (Salesforce, BSD-3) is the one SSH-family fingerprint AEGIS
 computes itself, precisely because its licence is GPLv3-compatible; the FoxIO

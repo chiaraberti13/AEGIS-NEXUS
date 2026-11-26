@@ -176,3 +176,45 @@ def test_collector_bounds_oversize_ssh_offer_list_and_discloses():
     normalization = event["collector"]["normalization"]
     assert normalization["lossy"] is True
     assert "observed.network.ssh.kex_algorithms" in normalization["paths"]["truncated_collections"]
+
+
+def test_suricata_ja4h_http_fingerprint_is_passed_through_as_observed_evidence():
+    # JA4H computed by an external IDS (Suricata/Zeek) is preserved as observed
+    # passthrough evidence — AEGIS never computes the FoxIO JA4+ methods itself
+    # (ADR 0005). Mirrors the existing ja3/ja4 TLS passthrough.
+    from aegis_nexus.suricata import normalize_eve_event
+
+    # (a) ja4h as a bare string inside the http object
+    event = normalize_event(normalize_eve_event({
+        "timestamp": "2026-09-22T18:05:00Z",
+        "event_type": "http",
+        "src_ip": "203.0.113.9", "src_port": 51111,
+        "dest_ip": "192.0.2.10", "dest_port": 80, "proto": "TCP",
+        "http": {"hostname": "portal.example.invalid", "http_method": "GET",
+                 "ja4h": "ge11nn09enus_fixturehash"},
+    }, "suricata-01"))
+    assert event["observed"]["network"]["http"]["ja4h"] == "ge11nn09enus_fixturehash"
+    # It is observed evidence, never promoted to a derived/enrichment verdict.
+    assert event["derived"] == {}
+
+    # (b) ja4h as a {hash,string} object
+    event2 = normalize_event(normalize_eve_event({
+        "timestamp": "2026-09-22T18:06:00Z",
+        "event_type": "http",
+        "src_ip": "203.0.113.9", "src_port": 51112,
+        "dest_ip": "192.0.2.10", "dest_port": 80, "proto": "TCP",
+        "http": {"hostname": "portal.example.invalid",
+                 "ja4h": {"hash": "ge11nn09enus_h", "string": "ge11nn09enus_raw"}},
+    }, "suricata-01"))
+    assert event2["observed"]["network"]["http"]["ja4h"]["hash"] == "ge11nn09enus_h"
+
+    # (c) ja4h at the record top level (some producers emit it there)
+    event3 = normalize_event(normalize_eve_event({
+        "timestamp": "2026-09-22T18:07:00Z",
+        "event_type": "http",
+        "src_ip": "203.0.113.9", "src_port": 51113,
+        "dest_ip": "192.0.2.10", "dest_port": 80, "proto": "TCP",
+        "http": {"hostname": "portal.example.invalid"},
+        "ja4h": "ge11nn09enus_toplevel",
+    }, "suricata-01"))
+    assert event3["observed"]["network"]["http"]["ja4h"] == "ge11nn09enus_toplevel"

@@ -58,11 +58,28 @@ def normalize_eve_event(payload: dict[str, Any], sensor_id: str) -> dict[str, An
 
     http = payload.get("http")
     if isinstance(http, dict):
-        network["http"] = {
+        http_evidence = {
             key: http[key]
             for key in ("hostname", "url", "http_method", "protocol", "status", "length", "http_user_agent", "http_refer")
             if http.get(key) not in (None, "")
         }
+        # JA4H (HTTP client fingerprint) is a VALUE computed by the external IDS
+        # (Suricata/Zeek with a JA4+ plugin), stored here as observed passthrough
+        # evidence. AEGIS never computes the FoxIO JA4+ methods itself — their
+        # licence is GPLv3-incompatible and the methods are patent-pending
+        # (ADR 0005) — so this only preserves a fingerprint the operator's own
+        # tool produced, exactly like the ja3/ja3s/ja4 TLS passthrough below.
+        ja4h = http.get("ja4h")
+        if ja4h in (None, ""):
+            ja4h = payload.get("ja4h")
+        if isinstance(ja4h, dict):
+            ja4h_value = {key: ja4h[key] for key in ("hash", "string") if ja4h.get(key) not in (None, "")}
+            if ja4h_value:
+                http_evidence["ja4h"] = ja4h_value
+        elif ja4h not in (None, ""):
+            http_evidence["ja4h"] = ja4h
+        if http_evidence:
+            network["http"] = http_evidence
 
     tls = payload.get("tls")
     if isinstance(tls, dict):
