@@ -59,8 +59,8 @@ def backend(request, tmp_path) -> StorageBackend:
     return _make_backend(request.param, tmp_path)
 
 
-def _event(ip: str = "203.0.113.7") -> dict:
-    return normalize_event({
+def _event(ip: str = "203.0.113.7", ts: str | None = None) -> dict:
+    payload = {
         "honeypot": "ssh-1",
         "event_type": "command",
         "severity": "medium",
@@ -68,7 +68,10 @@ def _event(ip: str = "203.0.113.7") -> dict:
             "source_ip": ip, "service": "ssh", "protocol": "tcp",
             "destination_port": 22, "command": "whoami",
         },
-    })
+    }
+    if ts is not None:
+        payload["timestamp"] = ts
+    return normalize_event(payload)
 
 
 def test_backend_satisfies_protocol(backend):
@@ -115,3 +118,30 @@ def test_dashboard_returns_a_mapping(backend):
     backend.ingest(_event())
     dashboard = backend.dashboard(hours=24)
     assert isinstance(dashboard, dict)
+
+
+def test_page_events_paginates_every_ingested_event(backend):
+    from datetime import datetime, timedelta, timezone
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    ingested = {
+        backend.ingest(_event(ts=(base + timedelta(minutes=i)).isoformat()))["id"]
+        for i in range(3)
+    }
+    first = backend.page_events(limit=2)
+    assert len(first["items"]) == 2
+    assert first["has_more"] is True
+    assert first["next_cursor"]
+    second = backend.page_events(limit=2, cursor=first["next_cursor"])
+    seen = {e["id"] for e in first["items"]} | {e["id"] for e in second["items"]}
+    assert ingested <= seen
+
+
+def test_filter_options_lists_persisted_dimensions(backend):
+    backend.ingest(_event())
+    opts = backend.filter_options()
+    assert set(opts) == {
+        "country", "asn", "destination_port", "protocol",
+        "service", "honeypot", "severity", "event_type",
+    }
+    assert "ssh-1" in opts["honeypot"]
+    assert "command" in opts["event_type"]

@@ -91,11 +91,18 @@ PostgreSQL. So all three storage items — "optional PostgreSQL backend",
 "backend compatibility tests" and "extend the migration strategy to
 PostgreSQL" — are done at the core-persistence level.
 
+Analytics surface — incrementally extended on top of the foundation, each
+method verified on SQLite **and** PostgreSQL by the parametrized compatibility
+suite: `page_events` (filters on persisted columns, time window, opaque cursor
+paging via the shared `pagination` module) and `filter_options` (persisted
+columns + jsonb-derived dimensions) are now implemented on PostgreSQL.
+
 Still deferred (methods raise `PostgresBackendUnsupported`, not silently wrong
-data): the richer analytical surface — detection/behavioural context, filter
-options, sensor telemetry/health rollups, case evidence resolution, case report
-and timeline. That is a Store-API-surface extension, independent of the
-storage/migration foundation, and is out of scope for the Cycle H cluster.
+data): detection/behavioural context windows, sensor telemetry/health rollups,
+and the case evidence/report/timeline methods (which also need the richer case
+schema — case_evidence/history/notes, sessions, alerts — ported first). That is
+a Store-API-surface extension, independent of the storage/migration foundation,
+and is tracked here, out of the closed Cycle H cluster.
 
 ## Notes
 

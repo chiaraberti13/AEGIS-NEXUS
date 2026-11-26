@@ -30,10 +30,11 @@ provenance classes are never collapsed; credentials are already redacted by
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from .migrations import SchemaVersionError
+from .pagination import decode_cursor, encode_cursor
 from .storage_backend import REQUIRED_METHODS
 
 
@@ -216,16 +217,63 @@ class PostgresBackend:
             row = cur.fetchone()
         return row["document"] if row else None
 
-    def page_events(self, *, limit: int = 100, **_: Any) -> dict[str, Any]:
+    # Event filters supported directly as persisted columns. Enrichment-derived
+    # filters (country/asn) and raw-observed ones (protocol/service/
+    # destination_port) are matched from the jsonb document in filter_options;
+    # page_events filters only on the indexed persisted columns.
+    _PAGE_FILTER_COLUMNS = ("honeypot", "event_type", "severity", "source_ip", "session_id")
+
+    def page_events(self, limit: int = 100, q: str | None = None,
+                    filters: dict[str, str] | None = None, hours: int | None = None,
+                    cursor: str | None = None, scope: str = "") -> dict[str, Any]:
         bounded = max(1, min(int(limit), 500))
+        clauses: list[str] = []
+        params: list[Any] = []
+        for key, value in (filters or {}).items():
+            if value and key in self._PAGE_FILTER_COLUMNS:
+                clauses.append(f"{key} = %s")
+                params.append(value)
+        since: str | None = None
+        cursor_data: dict[str, Any] | None = None
+        if cursor:
+            cursor_data = decode_cursor(cursor, kind="events", scope=scope)
+            since = cursor_data.get("since")
+        elif hours is not None:
+            bounded_hours = max(1, min(int(hours), 720))
+            since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+        if since:
+            clauses.append("timestamp >= %s")
+            params.append(since)
+        if q:
+            # The event document never holds cleartext credentials (normalize_event
+            # redacts them upstream), so a document-wide text match is safe.
+            clauses.append("(source_ip ILIKE %s OR event_type ILIKE %s OR honeypot ILIKE %s "
+                           "OR document::text ILIKE %s)")
+            needle = f"%{q[:128]}%"
+            params.extend([needle] * 4)
+        if cursor_data:
+            clauses.append("(timestamp < %s OR (timestamp = %s AND id < %s))")
+            params.extend([cursor_data["position"], cursor_data["position"], cursor_data["id"]])
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        params.append(bounded + 1)
         with self._conn.cursor() as cur:
             cur.execute(
-                "SELECT document FROM events ORDER BY collector_received_at DESC, id DESC LIMIT %s",
-                (bounded,),
+                f"SELECT id, timestamp, document FROM events{where} "
+                "ORDER BY timestamp DESC, id DESC LIMIT %s",
+                tuple(params),
             )
-            items = [r["document"] for r in cur.fetchall()]
-        # Cursor paging parity with Store is out of scope for the core backend.
-        return {"items": items, "next_cursor": None, "has_more": False}
+            rows = cur.fetchall()
+        has_more = len(rows) > bounded
+        rows = rows[:bounded]
+        items = [r["document"] for r in rows]
+        next_cursor = None
+        if has_more and rows:
+            last = rows[-1]
+            next_cursor = encode_cursor(
+                "events", position=str(last["timestamp"]), row_id=str(last["id"]),
+                scope=scope, since=since,
+            )
+        return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
 
     # -- counters ----------------------------------------------------------
     def counters(self) -> dict[str, int]:
@@ -393,6 +441,36 @@ class PostgresBackend:
             "by_severity": by_severity,
         }
 
+    # Filter dimensions mapped to their location in the schema. honeypot /
+    # event_type / severity are persisted columns; the rest are read from the
+    # event jsonb document. All identifiers here are constants (no user input),
+    # so interpolating them into SQL is safe.
+    _FILTER_EXPR = {
+        "country": "document->'enrichment'->'geoip'->>'country'",
+        "asn": "document->'enrichment'->'geoip'->>'asn'",
+        "destination_port": "document->'observed'->>'destination_port'",
+        "protocol": "document->'observed'->>'protocol'",
+        "service": "document->'observed'->>'service'",
+        "honeypot": "honeypot",
+        "severity": "severity",
+        "event_type": "event_type",
+    }
+
+    def filter_options(self, hours: int = 720) -> dict[str, list[str]]:
+        bounded_hours = max(1, min(int(hours), 720))
+        since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+        result: dict[str, list[str]] = {}
+        for column, expr in self._FILTER_EXPR.items():
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT {expr} AS value, COUNT(*) AS n FROM events "
+                    f"WHERE timestamp >= %s AND {expr} IS NOT NULL AND ({expr})::text <> '' "
+                    f"GROUP BY {expr} ORDER BY n DESC, value ASC LIMIT 100",
+                    (since,),
+                )
+                result[column] = [str(r["value"]) for r in cur.fetchall()]
+        return result
+
     def evidence_loss_summary(self, hours: int = 24) -> dict[str, Any]:
         counters = self.counters()
         return {
@@ -414,9 +492,6 @@ class PostgresBackend:
 
     def behavioral_context(self, *a: Any, **k: Any) -> Any:
         self._unsupported("behavioral_context")
-
-    def filter_options(self, *a: Any, **k: Any) -> Any:
-        self._unsupported("filter_options")
 
     def sensor_telemetry_observation(self, *a: Any, **k: Any) -> Any:
         self._unsupported("sensor_telemetry_observation")
