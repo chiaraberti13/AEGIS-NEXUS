@@ -167,7 +167,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Add secret scanning to CI (e.g. `gitleaks`) _(job `secret-scan`: `gitleaks/gitleaks-action` over full history)_
 - [x] Add container image vulnerability scanning (e.g. Trivy) for the built image _(job `container`: Trivy scan of the built image, CRITICAL/HIGH, ignore-unfixed)_
 - [x] Generate an SBOM (CycloneDX) for each build _(job `sbom`: CycloneDX via `scripts/generate_sbom.py --reproducible`, uploaded as an artifact)_
-- [ ] Pin GitHub Actions by commit SHA and enable automated dependency updates _(automated updates done — `.github/dependabot.yml` for github-actions + pip; SHA-pinning still pending: actions are currently pinned by major tag and Dependabot is set to bump them — the tag→SHA conversion needs resolving the action SHAs)_
+- [x] Pin GitHub Actions by commit SHA and enable automated dependency updates _(all CI actions pinned to immutable commit SHAs with a `# vX.Y.Z` comment — `actions/checkout@11d5960…` (v4.4.0), `actions/setup-python@a26af69…` (v5.6.0), `actions/upload-artifact@ea165f8…` (v4.6.2), `gitleaks/gitleaks-action@ff98106…` (v2.3.9), `aquasecurity/trivy-action@915b19b…` (v0.28.0); SHAs resolved from each upstream repo's tags via the git proxy. `.github/dependabot.yml` keeps the github-actions + pip ecosystems current and bumps both the SHA and the version comment. This closes the supply-chain gap where a moved tag could swap action code — ADR + `docs/SUPPLY_CHAIN.md`.)_
 - [x] Add hash-locked dependency constraints for reproducible container builds _(`requirements.lock` via `pip-compile --generate-hashes`; the Dockerfile installs it with `--require-hashes`, then the project with `--no-deps`)_
 
 **Done when:** schema changes are migrated safely, replayed or missing sensor telemetry is detectable, stored evidence is tamper-evident, analyst actions are attributable to a named operator, and CI blocks known-vulnerable or secret-leaking changes.
@@ -529,7 +529,7 @@ These requirements apply to **every** roadmap cycle.
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
-| P — Platform Readiness & Integrity Hardening | 🟨 19/20 · CI restored with lint/SAST/dep-audit/secret-scan/Trivy/SBOM + hash-locked builds; only SHA-pinning of actions pending |
+| P — Platform Readiness & Integrity Hardening | ✅ 20/20 · CI restored with lint/SAST/dep-audit/secret-scan/Trivy/SBOM + hash-locked builds; all CI actions pinned to immutable commit SHAs (`# vX.Y.Z` comments) with Dependabot bumping them |
 | C — Network Evidence & Visibility | 🟨 20/26 · SSH client version captured; remaining extensions decided (ADR 0004 Zeek, ADR 0005 fingerprints/PCAP) |
 | D — Sensor Platform & Honeypot Expansion | ✅ Completed |
 | E — Threat Intelligence & CTI | ✅ Completed |

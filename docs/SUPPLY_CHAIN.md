@@ -7,10 +7,30 @@ gunicorn, geoip2, paramiko** — and ships only those (plus their transitive
 closure) in the Docker image (`pip install .`). This page documents the local,
 reproducible tooling that keeps that surface auditable.
 
-CI note: the repository currently ships no GitHub Actions workflow. These
-checks are therefore run **locally** and are reproducible on any developer
-machine; wiring them into a CI workflow is a deployment decision for the
-maintainer.
+CI note: these checks run in GitHub Actions (`.github/workflows/ci.yml`:
+lint, typecheck, test, SAST, dependency-audit, secret-scan, SBOM, container) and
+are also reproducible **locally** on any developer machine via the same `make`
+targets.
+
+### Pinned GitHub Actions (tag-move resistance)
+
+Every action used by the CI workflow is pinned to an **immutable commit SHA**,
+with a trailing `# vX.Y.Z` comment recording the human-readable version:
+
+| Action | Version | Pinned commit |
+|---|---|---|
+| `actions/checkout` | v4.4.0 | `11d5960a326750d5838078e36cf38b85af677262` |
+| `actions/setup-python` | v5.6.0 | `a26af69be951a213d495a4c3e4e4022e16d87065` |
+| `actions/upload-artifact` | v4.6.2 | `ea165f8d65b6e75b540449e92b4886f43607fa02` |
+| `gitleaks/gitleaks-action` | v2.3.9 | `ff98106e4c7b2bc287b24eaf42907196329070c7` |
+| `aquasecurity/trivy-action` | v0.28.0 | `915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2` |
+
+A version tag (`@v4`) is mutable — the upstream owner (or an attacker who
+compromises the account) can move it to point at different code, so a tag pin
+runs whatever that tag resolves to at run time. A commit-SHA pin runs exactly
+the reviewed code and nothing else. `.github/dependabot.yml` keeps the pins
+current: it opens PRs that bump both the SHA and the version comment when a new
+release ships, so immutability does not mean staleness.
 
 ### SBOM (Software Bill of Materials)
 
@@ -91,10 +111,31 @@ quelle (più la loro chiusura transitiva) via `pip install .`. Questa pagina
 documenta gli strumenti locali e riproducibili che mantengono quella superficie
 verificabile.
 
-Nota CI: al momento il repository non include alcun workflow GitHub Actions.
-Questi controlli vengono quindi eseguiti **in locale** e sono riproducibili su
-qualsiasi macchina di sviluppo; integrarli in una CI è una decisione di
-deployment del manutentore.
+Nota CI: questi controlli girano in GitHub Actions (`.github/workflows/ci.yml`:
+lint, typecheck, test, SAST, dependency-audit, secret-scan, SBOM, container) e
+sono anche riproducibili **in locale** su qualsiasi macchina di sviluppo con gli
+stessi target `make`.
+
+### GitHub Actions pinnate (resistenza allo spostamento dei tag)
+
+Ogni action usata dal workflow CI è pinnata a uno **SHA di commit immutabile**,
+con un commento finale `# vX.Y.Z` che registra la versione leggibile:
+
+| Action | Versione | Commit pinnato |
+|---|---|---|
+| `actions/checkout` | v4.4.0 | `11d5960a326750d5838078e36cf38b85af677262` |
+| `actions/setup-python` | v5.6.0 | `a26af69be951a213d495a4c3e4e4022e16d87065` |
+| `actions/upload-artifact` | v4.6.2 | `ea165f8d65b6e75b540449e92b4886f43607fa02` |
+| `gitleaks/gitleaks-action` | v2.3.9 | `ff98106e4c7b2bc287b24eaf42907196329070c7` |
+| `aquasecurity/trivy-action` | v0.28.0 | `915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2` |
+
+Un tag di versione (`@v4`) è mutabile — il proprietario upstream (o un attaccante
+che ne compromette l'account) può spostarlo su codice diverso, quindi un pin a
+tag esegue ciò che quel tag risolve al momento dell'esecuzione. Un pin a SHA di
+commit esegue esattamente il codice revisionato e nient'altro.
+`.github/dependabot.yml` mantiene aggiornati i pin: apre PR che aggiornano sia lo
+SHA sia il commento di versione all'uscita di una nuova release, così
+l'immutabilità non significa obsolescenza.
 
 ### SBOM (distinta dei componenti software)
 

@@ -1,7 +1,7 @@
 version: 2
 updates:
-  # Keep CI action versions current (and, once pinned to commit SHAs, bump the
-  # SHAs) — automated dependency updates for the GitHub Actions ecosystem.
+  # CI actions are pinned to immutable commit SHAs (with a `# vX.Y.Z` comment);
+  # Dependabot bumps both the SHA and the version comment on new releases.
   - package-ecosystem: github-actions
     directory: /
     schedule:
