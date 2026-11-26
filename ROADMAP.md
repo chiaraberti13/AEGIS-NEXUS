@@ -384,7 +384,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Define StorageBackend interface — `src/aegis_nexus/storage_backend.py` (runtime-checkable Protocol)
 - [x] Refactor SQLite backend behind StorageBackend — `Store` is the reference backend, conformance asserted in tests
 - [x] Add optional PostgreSQL backend _(`postgres_backend.PostgresBackend`, psycopg 3, opt-in via the `postgres` extra; SQLite stays default. Core persistence — event ingest/fetch (jsonb, provenance preserved), counters, cases CRUD+list+prune, heartbeats, nonce anti-replay, health, SQL dashboard — verified against real PostgreSQL 16 by the compatibility suite (SQLite+PG) locally and via the CI `postgres:16` service. Rich analytics surface raises `PostgresBackendUnsupported` — ADR 0002.)_
-- [ ] Extend the Cycle P migration strategy to PostgreSQL
+- [x] Extend the Cycle P migration strategy to PostgreSQL _(`apply_pg_migrations`: forward-only, transactional `schema_migrations` ledger replacing `PRAGMA user_version`, each step under a `pg_advisory_xact_lock` (no double-apply), refusing a newer-than-supported DB with `SchemaVersionError`; verified by `tests/test_postgres_migrations.py` against real PostgreSQL — ADR 0002)_
 - [x] Add backend compatibility tests _(behavioural contract suite `tests/test_backend_compatibility.py`: a backend-agnostic, parametrized fixture exercises the `StorageBackend` semantics — provenance-preserving ingest/get round-trip, observable counters, case round-trip, health readiness — green against the reference SQLite backend; a future PostgreSQL backend is wired in by adding one entry to `BACKENDS`. Structural conformance stays in `test_storage_backend.py`.)_
 - [x] Document SQLite vs PostgreSQL deployment profiles — `docs/STORAGE.md`
 
@@ -536,7 +536,7 @@ These requirements apply to **every** roadmap cycle.
 | F — Behavioral Analytics | ✅ Completed |
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
-| H — Platform Health & Storage | 🟨 21/22 · optional PostgreSQL backend (core persistence) implemented + verified cross-backend (SQLite+PG16); only "extend the migration strategy to PostgreSQL" remains (ADR 0002) |
+| H — Platform Health & Storage | ✅ 22/22 · optional PostgreSQL backend (core persistence) + versioned migration ledger, verified cross-backend against real PostgreSQL 16 (ADR 0002); richer Store analytics surface over PG tracked separately |
 | I — Backend Architecture & Maintainability | 🟨 15/17 · storage split done (6 domains in `store_*`); API-route split done (12 domain blueprints, `app.py` ~1833→~977 lines; only the authenticated ingest/identity core remains in the factory by design); remaining: optional service layer, app.js ES modules (ADR 0003) |
 | J — Study Mode | ❌ Removed |
 | L — Geospatial Attack Visualization | ✅ Completed |

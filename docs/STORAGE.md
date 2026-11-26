@@ -38,13 +38,17 @@ real PostgreSQL 16 by the cross-backend compatibility suite
 runs wherever `AEGIS_TEST_POSTGRES_DSN` is set, including the CI `postgres:16`
 service).
 
+Migrations: forward-only with a transactional `schema_migrations` ledger
+(`apply_pg_migrations`), the PostgreSQL equivalent of SQLite's
+`PRAGMA user_version` — each step runs under a session advisory lock so
+concurrent workers never double-apply, and a database written by a newer
+release is refused, not migrated down.
+
 Not yet ported (methods raise `PostgresBackendUnsupported` rather than returning
 silently wrong data): the richer analytical surface (detection/behavioural
 context, filter options, sensor telemetry/health rollups, case evidence
-resolution, case report and timeline) and the migration-version ledger (the PG
-backend uses idempotent `CREATE TABLE IF NOT EXISTS`, not a ported
-`user_version` ledger). For the full console experience run the SQLite profile;
-the remaining work is tracked in ADR 0002.
+resolution, case report and timeline). For the full console experience run the
+SQLite profile; the remaining work is tracked in ADR 0002.
 
 Choosing a backend must never change investigation semantics (the evidence-first
 model, provenance separation and bounded hostile-input handling are backend
@@ -90,13 +94,18 @@ PostgreSQL 16 reale dalla suite di compatibilità cross-backend
 ramo PG gira ovunque sia impostato `AEGIS_TEST_POSTGRES_DSN`, incluso il service
 CI `postgres:16`).
 
+Migrazioni: forward-only con un ledger transazionale `schema_migrations`
+(`apply_pg_migrations`), l'equivalente PostgreSQL del `PRAGMA user_version` di
+SQLite — ogni step gira sotto un advisory lock di sessione così worker
+concorrenti non applicano due volte, e un database scritto da una release più
+recente viene rifiutato, non migrato all'indietro.
+
 Non ancora portato (i metodi sollevano `PostgresBackendUnsupported` invece di
 restituire dati silenziosamente errati): la superficie analitica più ricca
 (context di detection/behavioral, opzioni filtri, rollup telemetria/salute
-sensori, risoluzione evidenze dei casi, report e timeline dei casi) e il ledger
-di versione delle migrazioni (il backend PG usa `CREATE TABLE IF NOT EXISTS`
-idempotente, non un ledger `user_version` portato). Per l'esperienza completa
-della console usa il profilo SQLite; il lavoro residuo è tracciato in ADR 0002.
+sensori, risoluzione evidenze dei casi, report e timeline dei casi). Per
+l'esperienza completa della console usa il profilo SQLite; il lavoro residuo è
+tracciato in ADR 0002.
 
 La scelta del backend non deve mai cambiare la semantica investigativa (il
 modello evidence-first, la separazione di provenance e la gestione bounded

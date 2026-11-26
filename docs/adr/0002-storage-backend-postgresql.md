@@ -80,13 +80,22 @@ leg runs wherever `AEGIS_TEST_POSTGRES_DSN` is set — locally and via the CI
 `postgres:16` service). This is the backend-parity assertion this ADR called
 for, at the core-contract level.
 
+The migration strategy is now ported too: `apply_pg_migrations` maintains a
+transactional `schema_migrations` ledger (replacing SQLite's
+`PRAGMA user_version`), applying forward-only steps each under a session
+advisory lock so concurrent workers never double-apply, and **refusing** a
+database whose version exceeds the latest known migration (`SchemaVersionError`)
+rather than migrating it down. Guarded by `tests/test_postgres_migrations.py`
+(apply-to-latest, idempotence, ledger rows, future-version refusal) against real
+PostgreSQL. So all three storage items — "optional PostgreSQL backend",
+"backend compatibility tests" and "extend the migration strategy to
+PostgreSQL" — are done at the core-persistence level.
+
 Still deferred (methods raise `PostgresBackendUnsupported`, not silently wrong
 data): the richer analytical surface — detection/behavioural context, filter
 options, sensor telemetry/health rollups, case evidence resolution, case report
-and timeline — and the migration-version ledger (the PG backend uses idempotent
-`CREATE TABLE IF NOT EXISTS`, not a ported `user_version` ledger). So of the
-Cycle H cluster, "optional PostgreSQL backend" and "backend compatibility tests"
-are done; "extend the migration strategy to PostgreSQL" remains open.
+and timeline. That is a Store-API-surface extension, independent of the
+storage/migration foundation, and is out of scope for the Cycle H cluster.
 
 ## Notes
 

@@ -29,7 +29,8 @@ from aegis_nexus.store import COLLECTOR_COUNTERS, Store
 # compatibility wherever a Postgres is available (locally or a CI service).
 BACKENDS = ["sqlite", "postgres"]
 _PG_DSN = os.environ.get("AEGIS_TEST_POSTGRES_DSN")
-_PG_TABLES = ("events", "cases", "counters", "sensor_heartbeats", "sensor_nonces")
+_PG_TABLES = ("events", "cases", "counters", "sensor_heartbeats",
+              "sensor_nonces", "schema_migrations")
 
 
 def _make_backend(kind: str, tmp_path) -> StorageBackend:
@@ -39,15 +40,17 @@ def _make_backend(kind: str, tmp_path) -> StorageBackend:
         if not _PG_DSN:
             pytest.skip("AEGIS_TEST_POSTGRES_DSN not set")
         try:
-            import psycopg  # noqa: F401
+            import psycopg
         except ImportError:
             pytest.skip("psycopg not installed")
+        # Clean slate BEFORE instantiating the backend: a prior test may have
+        # left the shared DB in any state (incl. a future ledger version that
+        # the backend would refuse at init).
+        with psycopg.connect(_PG_DSN, autocommit=True) as conn, conn.cursor() as cur:
+            for table in _PG_TABLES:
+                cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
         from aegis_nexus.postgres_backend import PostgresBackend
-        be = PostgresBackend(_PG_DSN)
-        # Per-test isolation on the shared test database.
-        with be._conn.cursor() as cur:
-            cur.execute("TRUNCATE " + ", ".join(_PG_TABLES))
-        return be
+        return PostgresBackend(_PG_DSN)
     raise AssertionError(f"unknown backend {kind!r}")
 
 

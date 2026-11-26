@@ -33,6 +33,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from .migrations import SchemaVersionError
 from .storage_backend import REQUIRED_METHODS
 
 
@@ -44,7 +45,7 @@ def _utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-_SCHEMA = """
+_BASELINE_SQL = """
 CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY,
     timestamp TEXT,
@@ -82,6 +83,74 @@ CREATE TABLE IF NOT EXISTS sensor_nonces (
 """
 
 
+# Forward-only PostgreSQL migrations, mirroring the SQLite strategy
+# (migrations.py): a transactional `schema_migrations` ledger replaces SQLite's
+# PRAGMA user_version. Append a new (version, name, sql) tuple to evolve the
+# schema; never edit or reorder a released migration. Each step runs in its own
+# transaction under a session advisory lock, so concurrent workers re-read the
+# version under the lock and never apply a step twice; a database written by a
+# newer release is refused, not migrated down.
+_PG_MIGRATIONS: tuple[tuple[int, str, str], ...] = (
+    (1, "baseline", _BASELINE_SQL),
+)
+POSTGRES_SCHEMA_VERSION = _PG_MIGRATIONS[-1][0]
+_PG_ADVISORY_LOCK = 0x41454753  # "AEGS" — namespaced lock id for PG migrations
+
+_LEDGER_SQL = """
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    applied_at TEXT NOT NULL
+);
+"""
+
+
+def _schema_version(conn) -> int:
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass('public.schema_migrations') IS NOT NULL AS present")
+        if not cur.fetchone()["present"]:
+            return 0
+        cur.execute("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations")
+        return int(cur.fetchone()["v"])
+
+
+def apply_pg_migrations(conn) -> list[int]:
+    """Bring a PostgreSQL database to the latest schema version; return applied versions.
+
+    Forward-only and idempotent: already-applied steps are skipped. A database
+    whose version exceeds the latest known migration is refused with
+    SchemaVersionError rather than modified.
+    """
+    with conn.cursor() as cur:
+        cur.execute(_LEDGER_SQL)
+    latest = _PG_MIGRATIONS[-1][0]
+    current = _schema_version(conn)
+    if current > latest:
+        raise SchemaVersionError(
+            f"PostgreSQL schema version {current} is newer than supported version {latest}; "
+            "upgrade AEGIS-NEXUS or point at a compatible database"
+        )
+    applied: list[int] = []
+    for version, name, sql in _PG_MIGRATIONS:
+        if version <= current:
+            continue
+        with conn.transaction():
+            with conn.cursor() as cur:
+                # Take the write lock first, then re-read the version under it so
+                # concurrent workers never apply the same step twice.
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", (_PG_ADVISORY_LOCK,))
+                cur.execute("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations")
+                if int(cur.fetchone()["v"]) >= version:
+                    continue
+                cur.execute(sql)
+                cur.execute(
+                    "INSERT INTO schema_migrations(version, name, applied_at) VALUES (%s, %s, %s)",
+                    (version, name, _utc_iso()),
+                )
+        applied.append(version)
+    return applied
+
+
 class PostgresBackend:
     """PostgreSQL-backed core persistence implementing the StorageBackend contract."""
 
@@ -98,14 +167,19 @@ class PostgresBackend:
 
     # -- lifecycle ---------------------------------------------------------
     def _init_schema(self) -> None:
+        # Versioned, forward-only migrations with a transactional ledger.
+        self.schema_version_applied = apply_pg_migrations(self._conn)
+        from .store import COLLECTOR_COUNTERS
         with self._conn.cursor() as cur:
-            cur.execute(_SCHEMA)
-            from .store import COLLECTOR_COUNTERS
             for name in COLLECTOR_COUNTERS:
                 cur.execute(
                     "INSERT INTO counters(name, value) VALUES (%s, 0) ON CONFLICT (name) DO NOTHING",
                     (name,),
                 )
+
+    def schema_version(self) -> int:
+        """Current applied PostgreSQL schema version (0 on a fresh database)."""
+        return _schema_version(self._conn)
 
     def close(self) -> None:
         self._conn.close()
