@@ -145,3 +145,30 @@ def test_filter_options_lists_persisted_dimensions(backend):
     }
     assert "ssh-1" in opts["honeypot"]
     assert "command" in opts["event_type"]
+
+
+def test_detection_context_gathers_same_source_ip_window(backend):
+    from datetime import datetime, timedelta, timezone
+    base = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    ip = "198.51.100.7"
+    prior = backend.ingest(_event(ip=ip, ts=base.isoformat()))
+    anchor = backend.ingest(_event(ip=ip, ts=(base + timedelta(hours=1)).isoformat()))
+    other = backend.ingest(_event(ip="203.0.113.9", ts=(base + timedelta(minutes=30)).isoformat()))
+    ctx = backend.detection_context(anchor, lookback_hours=24)
+    ids = {e["id"] for e in ctx}
+    assert anchor["id"] in ids       # the anchor event itself is always included
+    assert prior["id"] in ids        # same source IP, within the window
+    assert other["id"] not in ids    # different source IP is excluded
+
+
+def test_behavioral_context_excludes_anchor_and_reports_window(backend):
+    from datetime import datetime, timedelta, timezone
+    base = datetime(2026, 4, 1, tzinfo=timezone.utc)
+    older = backend.ingest(_event(ts=base.isoformat()))
+    anchor = backend.ingest(_event(ts=(base + timedelta(days=1)).isoformat()))
+    ctx = backend.behavioral_context(anchor, days=30)
+    ids = {e["id"] for e in ctx["events"]}
+    assert anchor["id"] not in ids   # anchor excluded so it can't train its own baseline
+    assert older["id"] in ids        # earlier event is in the baseline window
+    assert ctx["analysis"]["anchor_event_id"] == anchor["id"]
+    assert ctx["analysis"]["scope"] == "historical_events_excluding_anchor"

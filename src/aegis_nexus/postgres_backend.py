@@ -46,6 +46,16 @@ def _utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_anchor(raw: str) -> datetime | None:
+    try:
+        anchor = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if anchor.tzinfo is None:
+        anchor = anchor.replace(tzinfo=timezone.utc)
+    return anchor.astimezone(timezone.utc)
+
+
 _BASELINE_SQL = """
 CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY,
@@ -162,6 +172,7 @@ class PostgresBackend:
         self._psycopg = psycopg
         self.max_cases = max(1, min(int(max_cases), 1_000_000))
         self.case_retention_days = max(0, min(int(case_retention_days), 3650))
+        self.analytics_max_events = 20_000
         self._ioc_resolver: Callable[[str], dict[str, Any] | None] | None = None
         self._conn = psycopg.connect(dsn, autocommit=True, row_factory=dict_row)
         self._init_schema()
@@ -274,6 +285,86 @@ class PostgresBackend:
                 scope=scope, since=since,
             )
         return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
+
+    def detection_context(self, event: dict[str, Any], *, lookback_hours: int = 24,
+                           source_limit: int = 1000, credential_limit: int = 250) -> list[dict[str, Any]]:
+        """Bounded historical evidence for deterministic detection rules.
+
+        Window anchored to the event timestamp (deterministic for replays).
+        Matches same-source-IP events and same credential fingerprint events;
+        raw secrets are never queried or returned (fingerprints only).
+        """
+        source_ip = str(event.get("source_ip") or (event.get("observed") or {}).get("source_ip") or "")
+        anchor = _parse_anchor(str(event.get("timestamp") or ""))
+        if anchor is None:
+            return [event]
+        bounded_hours = max(1, min(int(lookback_hours), 168))
+        since = (anchor - timedelta(hours=bounded_hours)).isoformat()
+        until = anchor.isoformat()
+        items: list[dict[str, Any]] = []
+        with self._conn.cursor() as cur:
+            if source_ip:
+                cur.execute(
+                    "SELECT document FROM events WHERE source_ip = %s AND timestamp >= %s "
+                    "AND timestamp <= %s ORDER BY timestamp DESC, id DESC LIMIT %s",
+                    (source_ip[:128], since, until, max(1, min(int(source_limit), 2000))),
+                )
+                items.extend(r["document"] for r in cur.fetchall())
+            observed = event.get("observed") if isinstance(event.get("observed"), dict) else {}
+            credential = observed.get("credential") if isinstance(observed.get("credential"), dict) else {}
+            if credential.get("password_complete") is False:
+                fingerprint = str(credential.get("sensor_reported_password_sha256") or "")
+            else:
+                fingerprint = str(credential.get("password_sha256") or "")
+            if fingerprint:
+                cur.execute(
+                    "SELECT document FROM events WHERE timestamp >= %s AND timestamp <= %s AND COALESCE("
+                    "CASE WHEN (document->'observed'->'credential'->>'password_complete') = 'false' "
+                    "THEN document->'observed'->'credential'->>'sensor_reported_password_sha256' "
+                    "ELSE document->'observed'->'credential'->>'password_sha256' END, '') = %s "
+                    "ORDER BY timestamp DESC, id DESC LIMIT %s",
+                    (since, until, fingerprint[:128], max(1, min(int(credential_limit), 1000))),
+                )
+                items.extend(r["document"] for r in cur.fetchall())
+        by_id: dict[str, dict[str, Any]] = {}
+        for item in items:
+            event_id = str(item.get("id") or "")
+            if event_id:
+                by_id[event_id] = item
+        current_id = str(event.get("id") or "")
+        if current_id:
+            by_id[current_id] = event
+        return list(by_id.values())
+
+    def behavioral_context(self, event: dict[str, Any], *, days: int = 30,
+                           limit: int | None = None) -> dict[str, Any]:
+        """Bounded historical baseline ending at the event timestamp, excluding the anchor."""
+        anchor = _parse_anchor(str(event.get("timestamp") or "")) or datetime.now(timezone.utc)
+        bounded_days = max(1, min(int(days), 30))
+        cutoff = (anchor - timedelta(days=bounded_days)).isoformat()
+        bounded_limit = max(100, min(int(limit or self.analytics_max_events), self.analytics_max_events))
+        event_id = str(event.get("id") or "")
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT document FROM events WHERE timestamp >= %s AND timestamp <= %s AND id <> %s "
+                "ORDER BY timestamp DESC, id DESC LIMIT %s",
+                (cutoff, anchor.isoformat(), event_id, bounded_limit + 1),
+            )
+            rows = cur.fetchall()
+        truncated = len(rows) > bounded_limit
+        selected = rows[:bounded_limit]
+        selected.reverse()
+        return {
+            "events": [r["document"] for r in selected],
+            "analysis": {
+                "anchor_event_id": event_id,
+                "anchor_timestamp": anchor.isoformat(),
+                "window_days": bounded_days,
+                "event_limit": bounded_limit,
+                "truncated": truncated,
+                "scope": "historical_events_excluding_anchor",
+            },
+        }
 
     # -- counters ----------------------------------------------------------
     def counters(self) -> dict[str, int]:
@@ -486,12 +577,6 @@ class PostgresBackend:
             f"{name}() is not implemented by the core PostgreSQL backend; "
             "it belongs to Store's rich analytical surface (ADR 0002)."
         )
-
-    def detection_context(self, *a: Any, **k: Any) -> Any:
-        self._unsupported("detection_context")
-
-    def behavioral_context(self, *a: Any, **k: Any) -> Any:
-        self._unsupported("behavioral_context")
 
     def sensor_telemetry_observation(self, *a: Any, **k: Any) -> Any:
         self._unsupported("sensor_telemetry_observation")
