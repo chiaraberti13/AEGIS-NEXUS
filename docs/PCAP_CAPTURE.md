@@ -50,6 +50,18 @@ Captures land under the `aegis-pcap` volume, one subdirectory per decoy. Retriev
 them with your normal volume tooling; they are evidence files, so handle them
 under the same retention/privacy policy as other exports (`docs/PRIVACY.md`).
 
+To confirm live capture works on your own host (e.g. an Ubuntu machine with
+Docker), run the host-only smoke test — it brings up a decoy + its sidecar, sends
+a little traffic, and checks a non-empty `.pcap` was written:
+
+```
+make pcap-smoke                      # SSH decoy (default)
+AEGIS_PCAP_SMOKE_DECOY=web make pcap-smoke
+```
+
+It leaves the stack running for inspection (`make down` to stop). This is not a
+CI gate — it needs a real Docker daemon and raw-socket privileges.
+
 ### Limits and honest caveats
 
 - **Not exercised in CI/unit tests.** Live packet capture needs a privileged
@@ -116,6 +128,18 @@ docker compose -f docker-compose.yml -f docker-compose.pcap.yml --profile pcap -
 Le catture finiscono sotto il volume `aegis-pcap`, una sottodirectory per decoy.
 Sono file di evidenza: trattale con la stessa policy di retention/privacy degli
 altri export (`docs/PRIVACY.md`).
+
+Per confermare che la cattura live funzioni sul tuo host (es. una macchina Ubuntu
+con Docker), esegui lo smoke test host-only — avvia un decoy + il suo sidecar,
+invia un po' di traffico e verifica che sia stato scritto un `.pcap` non vuoto:
+
+```
+make pcap-smoke                      # decoy SSH (default)
+AEGIS_PCAP_SMOKE_DECOY=web make pcap-smoke
+```
+
+Lascia lo stack attivo per l'ispezione (`make down` per fermarlo). Non è un gate
+di CI — richiede un daemon Docker reale e privilegi raw-socket.
 
 ### Limiti e avvertenze oneste
 

@@ -54,6 +54,8 @@ jobs:
       - name: Shell + egress-guard syntax
         run: |
           bash -n scripts/egress_guard.sh
+          bash -n scripts/pcap_smoke.sh
+          sh -n docker/pcap/capture.sh
           bash scripts/egress_guard.sh validate
       - name: Frontend syntax (node --check)
         run: |

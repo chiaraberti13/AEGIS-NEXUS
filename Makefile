@@ -1,4 +1,4 @@
-.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity verify-restore sbom sast audit typecheck lint
+.PHONY: install test run up down ps smoke logs backup egress-validate egress-guard egress-status egress-remove verify-integrity verify-restore sbom sast audit typecheck lint pcap-smoke
 
 install:
 	python -m pip install -e '.[dev]'
@@ -65,3 +65,9 @@ egress-status:
 
 egress-remove:
 	@sudo bash scripts/egress_guard.sh remove
+
+# Host-only manual smoke test for the opt-in PCAP capture sidecars (ADR 0005).
+# Needs a running Docker daemon + real traffic, so it is not a CI gate; run it on
+# a real host (e.g. Ubuntu). Override the decoy with AEGIS_PCAP_SMOKE_DECOY.
+pcap-smoke:
+	@bash scripts/pcap_smoke.sh
