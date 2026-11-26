@@ -113,15 +113,23 @@ hostile-input handling. This keeps JA4-family HTTP/SSH/TLS signals available to
 operators who want them, via a component they chose to deploy, without taking the
 FoxIO licence or patent exposure into the GPLv3 codebase.
 
-**Net effect on the ROADMAP items:**
-- "sensor-native JA4 TLS fingerprints" — **permitted** (BSD-3), implementable on
-  demand if a decoy is extended to capture the TLS ClientHello; low priority
-  while Suricata passthrough covers it.
+**Net effect on the ROADMAP items (both now closed by decision):**
+- "sensor-native JA4 TLS fingerprints" — licence-**permitted** (BSD-3,
+  GPLv3-compatible), but the team **declines to build it now**. Suricata's
+  JA3/JA3S/JA4 passthrough already supplies JA4 as observed evidence, and a
+  native implementation would mean standing up a TLS-terminating decoy that reads
+  the ClientHello — non-trivial new handshake attack surface and ongoing
+  maintenance for marginal analytic gain over the existing passthrough. **Reopen
+  trigger:** a deployment that needs JA4 without running Suricata/Zeek.
 - "HTTP client fingerprints (JA4H)" and HASSH-via-JA4SSH — **declined** as a
   native AEGIS feature under the current GPLv3 + FoxIO-1.1 + patent situation;
-  delivered only through external-producer ingestion. Revisit only if FoxIO
+  delivered only through external-producer ingestion. **Reopen trigger:** FoxIO
   re-licenses these methods under a GPL-compatible, patent-granting licence, or
   the maintainer obtains an OEM licence *and* resolves the GPLv3 relicensing.
+
+Native **HASSH** (Salesforce, BSD-3) is the one SSH-family fingerprint AEGIS
+computes itself, precisely because its licence is GPLv3-compatible; the FoxIO
+JA4+ methods are not, which is the whole reason for the split above.
 
 ### Dedicated-container PCAP capture (BPF, ring-buffer) — deployment infrastructure
 
