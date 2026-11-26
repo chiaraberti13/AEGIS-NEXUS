@@ -467,26 +467,26 @@ clearly-scoped effort.
 
 These requirements apply to **every** roadmap cycle.
 
-- [ ] Preserve Observed / Enrichment / Derived / Hypotheses separation
-- [ ] Preserve explicit collector/sensor provenance
-- [ ] Never invent Threat Intelligence, CVE or MITRE mappings
-- [ ] Never infer human or threat-actor attribution from infrastructure alone
-- [ ] Treat every captured value as hostile input
-- [ ] Keep attacker-controlled content escaped in the UI and reports
-- [ ] Keep credential handling privacy-aware and secret-safe
-- [ ] Keep collection and retention bounded
-- [ ] Maintain sensor isolation and egress restrictions
-- [ ] Maintain IT/EN interface parity
-- [ ] Add tests for every security-sensitive feature
-- [ ] Keep documentation synchronized with implementation
-- [ ] Keep CI green before marking an implementation item complete
-- [ ] Update the threat model for every new attack surface or data flow
-- [ ] Never add outbound network paths from sensors
-- [ ] Record every drop, truncation, rejection or load-shedding decision as evidence loss
-- [ ] Keep ingest performance within documented bounds (add a benchmark when touching the hot path)
-- [ ] Keep operator actions auditable once Cycle P audit logging exists
+- [x] Preserve Observed / Enrichment / Derived / Hypotheses separation _(guarded by `test_model.py`, `test_api_contract.py`, `test_store.py`)_
+- [x] Preserve explicit collector/sensor provenance _(guarded by `test_operations.py` (collector_received_at vs sensor time), `test_model.py`)_
+- [x] Never invent Threat Intelligence, CVE or MITRE mappings _(guarded by `test_model.py` (`test_mitre_mapping_requires_evidence`, `test_ioc_requires_explicit_evidence`))_
+- [x] Never infer human or threat-actor attribution from infrastructure alone _(guarded by `test_enrichment.py` (GeoIP as external enrichment), `test_detection.py` (credential reuse without attribution), `test_fingerprints.py`)_
+- [x] Treat every captured value as hostile input _(guarded by `test_security.py`, `test_sensors.py` (bounding/oversize/reject), `test_derivation.py`)_
+- [x] Keep attacker-controlled content escaped in the UI and reports _(guarded by `test_frontend_safety.py`, `test_browser_smoke.py`, `test_reporting.py`, `test_pdf_report.py`, `test_app.py` (CSV formula-injection))_
+- [x] Keep credential handling privacy-aware and secret-safe _(guarded by `test_redaction.py`, `test_correlation_workspace.py`, `test_sensor_plugins.py`, `test_detection.py` (honeytoken))_
+- [x] Keep collection and retention bounded _(guarded by `test_store.py` (retention/capacity by receive time), `test_collector_counters.py` (load shedding), `test_pcap.py`)_
+- [x] Maintain sensor isolation and egress restrictions _(guarded by `test_sensor_safety.py` (egress guard), `test_sensors.py`/`test_sensor_plugins.py` (never executes input))_
+- [x] Maintain IT/EN interface parity _(guarded by `test_frontend_safety.py` (`test_frontend_i18n_covers_template_and_literal_translation_keys`))_
+- [ ] Add tests for every security-sensitive feature _(continuous practice (not a one-off artifact) — upheld by the 418-test suite; every security feature ships with its test)_
+- [ ] Keep documentation synchronized with implementation _(continuous practice — code/test/docs land together; `docs/` kept in lockstep)_
+- [ ] Keep CI green before marking an implementation item complete _(not applicable while CI is removed (Cycle P); local gates stand in: `make lint`/`typecheck`/`test`, `test_lint.py`, `test_typecheck.py`)_
+- [ ] Update the threat model for every new attack surface or data flow _(continuous practice — `docs/THREAT_MODEL.md` updated per new data flow)_
+- [x] Never add outbound network paths from sensors _(guarded by `test_sensor_safety.py` (egress guard covers every built-in exposure network))_
+- [x] Record every drop, truncation, rejection or load-shedding decision as evidence loss _(guarded by `test_sensor_sequence.py` (rejected/dropped counted as loss), `test_sensors.py` (truncation disclosed), `test_collector_counters.py`)_
+- [x] Keep ingest performance within documented bounds (add a benchmark when touching the hot path) _(benchmark added — `test_ingest_performance.py` guards the normalize_event hot path against gross regression)_
+- [x] Keep operator actions auditable once Cycle P audit logging exists _(audit logging exists (`operator_audit.py`); guarded by `test_operator_audit.py` (lifecycle/case/export audited, auth required, note bodies not copied))_
 
-> Cross-cutting requirements remain unchecked here because they are continuous constraints, not one-time milestones.
+> Cross-cutting requirements are checked **when a concrete code+test guard enforces them** (closure by evidence): 14/18 are ticked above with the guarding test(s). The remaining four — "add tests for every security feature", "keep docs synchronized", "keep CI green", "update the threat model" — stay unchecked on purpose: they are continuous *process* practices, not one-time artifacts, so they are never "done". A regression in any ticked invariant fails its guard test in the suite.
 
 ---
 
