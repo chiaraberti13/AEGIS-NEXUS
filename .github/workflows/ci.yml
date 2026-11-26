@@ -129,7 +129,7 @@ jobs:
           assert d.get("components"), "SBOM has no components"
           print("SBOM OK:", d["specVersion"], len(d["components"]), "components")
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom-cyclonedx
           path: sbom.cdx.json
