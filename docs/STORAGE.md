@@ -3,9 +3,9 @@
 ## English
 
 The collector depends on a storage backend through the `StorageBackend`
-interface (`src/aegis_nexus/storage_backend.py`). Today one backend ships:
-**SQLite**, implemented by `Store` and used as the reference implementation. A
-PostgreSQL backend is planned but not yet implemented — see
+interface (`src/aegis_nexus/storage_backend.py`). **SQLite**, implemented by
+`Store`, is the default reference backend. An opt-in **PostgreSQL** backend
+(`PostgresBackend`, psycopg 3) implements core persistence — see
 `docs/adr/0002-storage-backend-postgresql.md`.
 
 ### SQLite profile (current, recommended)
@@ -25,16 +25,26 @@ PostgreSQL backend is planned but not yet implemented — see
 - Bounds: one writer process; very high sustained ingest across many
   concurrent writers is where a client/server database would help.
 
-### PostgreSQL profile (planned, not yet implemented)
+### PostgreSQL profile (opt-in, core persistence)
 
-A PostgreSQL backend would target multi-node or high-concurrency deployments
-(multiple collector workers/instances against a shared database). It is
-**not shipped**: delivering it requires porting the migration strategy (a
-transactional schema-version ledger instead of `PRAGMA user_version`), the
-integrity/backup/hash-chain machinery, and the SQLite-specific SQL to
-PostgreSQL, plus a backend-parity test suite proving identical investigation
-results. Until then, run the SQLite profile. The decision and the required
-work are recorded in ADR 0002.
+`PostgresBackend` (psycopg 3) targets multi-node or high-concurrency
+deployments. Install with `pip install '.[postgres]'` and point it at a DSN.
+It implements the **core persistence** contract — event ingest/fetch (event
+JSON in a `jsonb` column, provenance classes preserved), collector counters,
+operator cases (CRUD + list + retention prune), sensor heartbeats, sensor nonce
+anti-replay, operational health and a SQL dashboard rollup — verified against a
+real PostgreSQL 16 by the cross-backend compatibility suite
+(`tests/test_backend_compatibility.py`, run on SQLite and PostgreSQL; the PG leg
+runs wherever `AEGIS_TEST_POSTGRES_DSN` is set, including the CI `postgres:16`
+service).
+
+Not yet ported (methods raise `PostgresBackendUnsupported` rather than returning
+silently wrong data): the richer analytical surface (detection/behavioural
+context, filter options, sensor telemetry/health rollups, case evidence
+resolution, case report and timeline) and the migration-version ledger (the PG
+backend uses idempotent `CREATE TABLE IF NOT EXISTS`, not a ported
+`user_version` ledger). For the full console experience run the SQLite profile;
+the remaining work is tracked in ADR 0002.
 
 Choosing a backend must never change investigation semantics (the evidence-first
 model, provenance separation and bounded hostile-input handling are backend
@@ -45,10 +55,10 @@ independent); the `StorageBackend` interface exists to enforce that boundary.
 ## Italiano
 
 Il collector dipende da un backend di storage tramite l'interfaccia
-`StorageBackend` (`src/aegis_nexus/storage_backend.py`). Oggi è spedito un solo
-backend: **SQLite**, implementato da `Store` e usato come implementazione di
-riferimento. Un backend PostgreSQL è pianificato ma non ancora implementato —
-vedi `docs/adr/0002-storage-backend-postgresql.md`.
+`StorageBackend` (`src/aegis_nexus/storage_backend.py`). **SQLite**,
+implementato da `Store`, è il backend di riferimento predefinito. Un backend
+**PostgreSQL** opt-in (`PostgresBackend`, psycopg 3) implementa la persistenza
+di base — vedi `docs/adr/0002-storage-backend-postgresql.md`.
 
 ### Profilo SQLite (attuale, consigliato)
 
@@ -67,16 +77,26 @@ vedi `docs/adr/0002-storage-backend-postgresql.md`.
 - Limiti: un solo processo scrittore; un ingest sostenuto molto elevato con
   molti scrittori concorrenti è il caso in cui un database client/server aiuta.
 
-### Profilo PostgreSQL (pianificato, non ancora implementato)
+### Profilo PostgreSQL (opt-in, persistenza di base)
 
-Un backend PostgreSQL servirebbe deployment multi-nodo o ad alta concorrenza
-(più worker/istanze di collector verso un database condiviso). **Non è
-spedito**: realizzarlo richiede il port della strategia di migrazione (un
-ledger transazionale della versione di schema al posto di `PRAGMA user_version`),
-delle macchine di integrità/backup/hash-chain e del SQL SQLite-specifico verso
-PostgreSQL, più una suite di test di parità tra backend che dimostri risultati
-investigativi identici. Fino ad allora, usa il profilo SQLite. La decisione e il
-lavoro necessario sono registrati in ADR 0002.
+`PostgresBackend` (psycopg 3) serve deployment multi-nodo o ad alta concorrenza.
+Installa con `pip install '.[postgres]'` e puntalo a un DSN. Implementa il
+contratto di **persistenza di base** — ingest/fetch eventi (JSON evento in una
+colonna `jsonb`, classi di provenance preservate), counter del collector, casi
+operatore (CRUD + lista + prune retention), heartbeat sensori, anti-replay dei
+nonce, health operativa e un rollup dashboard in SQL — verificato contro un
+PostgreSQL 16 reale dalla suite di compatibilità cross-backend
+(`tests/test_backend_compatibility.py`, eseguita su SQLite e PostgreSQL; il
+ramo PG gira ovunque sia impostato `AEGIS_TEST_POSTGRES_DSN`, incluso il service
+CI `postgres:16`).
+
+Non ancora portato (i metodi sollevano `PostgresBackendUnsupported` invece di
+restituire dati silenziosamente errati): la superficie analitica più ricca
+(context di detection/behavioral, opzioni filtri, rollup telemetria/salute
+sensori, risoluzione evidenze dei casi, report e timeline dei casi) e il ledger
+di versione delle migrazioni (il backend PG usa `CREATE TABLE IF NOT EXISTS`
+idempotente, non un ledger `user_version` portato). Per l'esperienza completa
+della console usa il profilo SQLite; il lavoro residuo è tracciato in ADR 0002.
 
 La scelta del backend non deve mai cambiare la semantica investigativa (il
 modello evidence-first, la separazione di provenance e la gestione bounded

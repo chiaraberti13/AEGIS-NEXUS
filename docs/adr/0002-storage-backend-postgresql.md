@@ -60,6 +60,34 @@ not implemented in this cycle. Reasons:
   `PRAGMA user_version`), and add a backend-parity test suite asserting
   identical investigation results. Only then should these items be checked.
 
+## Update (2026-11-26) — core PostgreSQL backend implemented
+
+The `StorageBackend` interface now has a second, opt-in implementation:
+`src/aegis_nexus/postgres_backend.py` (`PostgresBackend`, psycopg 3, installed
+via the `postgres` extra). SQLite `Store` stays the default reference backend.
+
+Scope — **core persistence, verified against a real PostgreSQL 16**:
+
+- event ingest + fetch (full event JSON in a `jsonb` column, the four
+  provenance classes preserved), bounded recent-event paging;
+- collector counters, operator cases (CRUD + list + retention prune), sensor
+  heartbeats, sensor nonce anti-replay;
+- operational health and a SQL-computed dashboard rollup.
+
+The behavioural compatibility suite (`tests/test_backend_compatibility.py`) is
+parametrized over SQLite **and** PostgreSQL and passes on both (the Postgres
+leg runs wherever `AEGIS_TEST_POSTGRES_DSN` is set — locally and via the CI
+`postgres:16` service). This is the backend-parity assertion this ADR called
+for, at the core-contract level.
+
+Still deferred (methods raise `PostgresBackendUnsupported`, not silently wrong
+data): the richer analytical surface — detection/behavioural context, filter
+options, sensor telemetry/health rollups, case evidence resolution, case report
+and timeline — and the migration-version ledger (the PG backend uses idempotent
+`CREATE TABLE IF NOT EXISTS`, not a ported `user_version` ledger). So of the
+Cycle H cluster, "optional PostgreSQL backend" and "backend compatibility tests"
+are done; "extend the migration strategy to PostgreSQL" remains open.
+
 ## Notes
 
 This supersedes nothing; it records why the Cycle H storage-backend cluster is

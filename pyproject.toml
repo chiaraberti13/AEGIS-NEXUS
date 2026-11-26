@@ -16,6 +16,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<9"]
+# Optional PostgreSQL backend (Cycle H / ADR 0002). SQLite stays the default;
+# install with `pip install '.[postgres]'` to use PostgresBackend.
+postgres = ["psycopg[binary]>=3.2,<4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

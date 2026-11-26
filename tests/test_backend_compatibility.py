@@ -15,19 +15,39 @@ the "backend compatibility tests" the roadmap calls for.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from aegis_nexus.model import normalize_event
 from aegis_nexus.storage_backend import REQUIRED_METHODS, StorageBackend
 from aegis_nexus.store import COLLECTOR_COUNTERS, Store
 
-# A future backend adds its id here and implements it in `_make_backend`.
-BACKENDS = ["sqlite"]
+# Backends the contract suite runs against. "postgres" runs only when a test
+# PostgreSQL DSN is provided (and psycopg is installed); otherwise it skips, so
+# the suite stays green everywhere while still proving cross-backend
+# compatibility wherever a Postgres is available (locally or a CI service).
+BACKENDS = ["sqlite", "postgres"]
+_PG_DSN = os.environ.get("AEGIS_TEST_POSTGRES_DSN")
+_PG_TABLES = ("events", "cases", "counters", "sensor_heartbeats", "sensor_nonces")
 
 
 def _make_backend(kind: str, tmp_path) -> StorageBackend:
     if kind == "sqlite":
         return Store(str(tmp_path / "aegis.db"))
+    if kind == "postgres":
+        if not _PG_DSN:
+            pytest.skip("AEGIS_TEST_POSTGRES_DSN not set")
+        try:
+            import psycopg  # noqa: F401
+        except ImportError:
+            pytest.skip("psycopg not installed")
+        from aegis_nexus.postgres_backend import PostgresBackend
+        be = PostgresBackend(_PG_DSN)
+        # Per-test isolation on the shared test database.
+        with be._conn.cursor() as cur:
+            cur.execute("TRUNCATE " + ", ".join(_PG_TABLES))
+        return be
     raise AssertionError(f"unknown backend {kind!r}")
 
 
