@@ -188,10 +188,10 @@ These are deliberate design boundaries, not missing features:
 - [x] Improve HTTP header and User-Agent evidence
 - [x] Capture SSH client version string _(observed.network.ssh.client_version, bounded per RFC 4253; tooling hint, never identity)_
 - [ ] Capture SSH KEX/cipher offer lists _(deferred — needs non-private paramiko API; ADR 0005)_
-- [ ] Add HASSH-style SSH client fingerprints (fingerprint = tooling hint, never identity)
-- [ ] Add HTTP client fingerprints (e.g. JA4H) after licence review
+- [ ] Add HASSH-style SSH client fingerprints (fingerprint = tooling hint, never identity) _(deferred — needs non-private paramiko API; a JA4SSH route is additionally declined under the FoxIO 1.1 evaluation — ADR 0005)_
+- [ ] Add HTTP client fingerprints (e.g. JA4H) after licence review _(licence review **done** — ADR 0005: JA4H is under the FoxIO License 1.1, a non-commercial-only licence that is **GPLv3-incompatible**, and the methods are patent-pending, so a native implementation is **declined**; JA4H values remain available by ingesting them from an external producer (Suricata/Zeek) as observed evidence)_
 - [x] Add optional TLS metadata/fingerprints where technically available
-- [ ] Add sensor-native JA4 TLS fingerprints (Suricata JA3/JA3S/JA4 passthrough already exists; review JA4+ licence terms before adoption)
+- [ ] Add sensor-native JA4 TLS fingerprints (Suricata JA3/JA3S/JA4 passthrough already exists) _(licence review **done** — ADR 0005: JA4/TLS is **BSD-3-Clause**, GPLv3-compatible, so a native implementation is **permitted**; kept low-priority on-demand since Suricata passthrough already provides JA4 today, and native capture needs a decoy that reads the TLS ClientHello)_
 - [x] Add DNS indicator evidence where available
 - [x] Design optional passive fingerprint provider interface
 - [x] Evaluate optional Zeek log ingestion (`conn`, `http`, `ssh`, `dns`) with the same provenance model as Suricata _(evaluate)_ — see `docs/adr/0004-zeek-log-ingestion.md` (feasible; implement on demand)
@@ -530,7 +530,7 @@ These requirements apply to **every** roadmap cycle.
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
 | P — Platform Readiness & Integrity Hardening | ✅ 20/20 · CI restored with lint/SAST/dep-audit/secret-scan/Trivy/SBOM + hash-locked builds; all CI actions pinned to immutable commit SHAs (`# vX.Y.Z` comments) with Dependabot bumping them |
-| C — Network Evidence & Visibility | 🟨 20/26 · SSH client version captured; remaining extensions decided (ADR 0004 Zeek, ADR 0005 fingerprints/PCAP) |
+| C — Network Evidence & Visibility | 🟨 20/26 · SSH client version captured; remaining extensions **decided** — JA4+ licence evaluated (ADR 0005: JA4/TLS BSD-3 permitted, JA4H & other FoxIO-1.1 methods declined as native features — GPLv3-incompatible + patent-pending, use Suricata/Zeek ingestion); HASSH needs non-private paramiko API; PCAP sidecar is opt-in deployment infra (ADR 0004 Zeek, ADR 0005) |
 | D — Sensor Platform & Honeypot Expansion | ✅ Completed |
 | E — Threat Intelligence & CTI | ✅ Completed |
 | F — Behavioral Analytics | ✅ Completed |

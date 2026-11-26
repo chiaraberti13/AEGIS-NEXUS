@@ -36,6 +36,8 @@ Suricata EVE records can provide flow duration, byte/packet counters, transport 
 
 `PassiveFingerprintProvider` is an optional provider interface over already observed network metadata. Providers must return exact evidence paths. The interface supports TLS/application fingerprints and bounded TCP-stack hints; it deliberately does not expose a direct operating-system attribution kind. Any future hint remains analysis backed by evidence, not an identity or actor claim.
 
+JA4-family fingerprints follow this same rule by licence as well as by design. Per ADR 0005, AEGIS-NEXUS does not compute the FoxIO JA4+ HTTP/SSH methods (JA4H, JA4SSH, …) natively: those are under the non-commercial-only FoxIO License 1.1, which is incompatible with this project's GPLv3 licence, and the methods are patent-pending. Such fingerprints are consumed only as values emitted by an external producer the operator runs (Suricata JA3/JA3S/JA4 passthrough, Zeek), stored as observed evidence. JA4 (TLS) itself is BSD-3-Clause and could be computed natively if ever needed; it is not today because Suricata already supplies it.
+
 ### Optional bounded PCAP evidence
 
 PCAP evidence mode is disabled by default. When `AEGIS_PCAP_ENABLED=true`, an authenticated operator can attach a PCAP/PCAPNG artifact to an existing AEGIS session or invoke a configured `PcapCaptureProvider`. The default capture provider is disabled: enabling PCAP storage does not grant the collector `NET_RAW`, `NET_ADMIN` or any packet-sniffing capability.
@@ -82,6 +84,8 @@ I record Suricata EVE possono fornire durata flow, contatori byte/pacchetti, met
 ### Fingerprint passivi
 
 `PassiveFingerprintProvider` è un'interfaccia opzionale che opera sui metadata di rete già osservati. I provider devono restituire evidence path esatti. L'interfaccia supporta fingerprint TLS/applicativi e hint bounded sullo stack TCP; volutamente non espone un tipo di attribuzione diretta del sistema operativo. Ogni futuro hint resta analisi supportata da evidenza, non una dichiarazione di identità o actor.
+
+I fingerprint della famiglia JA4 seguono questa stessa regola, anche per licenza oltre che per design. Secondo l'ADR 0005, AEGIS-NEXUS non calcola nativamente i metodi FoxIO JA4+ HTTP/SSH (JA4H, JA4SSH, …): sono sotto la FoxIO License 1.1, una licenza solo-non-commerciale incompatibile con la GPLv3 del progetto, e i metodi sono patent-pending. Tali fingerprint vengono consumati solo come valori emessi da un produttore esterno gestito dall'operatore (passthrough Suricata JA3/JA3S/JA4, Zeek), memorizzati come evidenza osservata. JA4 (TLS) è invece BSD-3-Clause e potrebbe essere calcolato nativamente se mai servisse; oggi non lo è perché Suricata lo fornisce già.
 
 ### Evidenza PCAP opzionale e bounded
 
