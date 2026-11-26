@@ -29,8 +29,8 @@ from aegis_nexus.store import COLLECTOR_COUNTERS, Store
 # compatibility wherever a Postgres is available (locally or a CI service).
 BACKENDS = ["sqlite", "postgres"]
 _PG_DSN = os.environ.get("AEGIS_TEST_POSTGRES_DSN")
-_PG_TABLES = ("events", "cases", "counters", "sensor_heartbeats",
-              "sensor_nonces", "schema_migrations")
+_PG_TABLES = ("case_evidence", "case_history", "events", "cases", "counters",
+              "sensor_heartbeats", "sensor_nonces", "schema_migrations")
 
 
 def _make_backend(kind: str, tmp_path) -> StorageBackend:
@@ -198,3 +198,94 @@ def test_sensor_health_flags_silent_configured_sensor(backend):
     health2 = backend.sensor_health(configured_sensor_ids=["ssh-1"], recent_hours=24)
     active = next(s for s in health2["sensors"] if s["sensor_id"] == "ssh-1")
     assert active["health"] == "healthy"
+
+
+def test_add_case_evidence_links_event_and_rejects_unknown(backend):
+    event = backend.ingest(_event())
+    case = backend.create_case({
+        "title": "Evidence case", "summary": "", "status": "open",
+        "severity": "medium", "tags": [],
+    })
+    # A real event can be linked; the evidence reference is resolved & available.
+    updated = backend.add_case_evidence(case["id"], "event", event["id"])
+    assert updated is not None
+    linked = [e for e in updated["evidence"] if e["evidence_id"] == event["id"]]
+    assert len(linked) == 1
+    assert linked[0]["available"] is True
+    assert linked[0]["summary"]["id"] == event["id"]
+    # Idempotent: linking the same evidence twice does not duplicate it.
+    again = backend.add_case_evidence(case["id"], "event", event["id"])
+    assert sum(1 for e in again["evidence"] if e["evidence_id"] == event["id"]) == 1
+    # A reference to telemetry that does not exist is refused, never faked.
+    with pytest.raises(ValueError):
+        backend.add_case_evidence(case["id"], "event", "event_does_not_exist")
+    # An unknown case id yields None (not an exception).
+    assert backend.add_case_evidence("case_missing", "event", event["id"]) is None
+
+
+def test_case_report_counts_available_and_unavailable_evidence(backend):
+    event = backend.ingest(_event())
+    case = backend.create_case({
+        "title": "Report case", "summary": "sum", "status": "open",
+        "severity": "high", "tags": ["report"],
+    })
+    backend.add_case_evidence(case["id"], "event", event["id"])
+    report = backend.case_report(case["id"])
+    assert report is not None
+    assert report["report_type"] == "investigation_case"
+    assert report["case"]["id"] == case["id"]
+    assert report["case"]["classification_provenance"] == "analyst"
+    assert report["statistics"]["evidence_references"] == 1
+    assert report["statistics"]["available_references"] == 1
+    assert report["statistics"]["unavailable_references"] == 0
+    assert report["limitations"]            # provenance caveats are always present
+    assert backend.case_report("case_missing") is None
+
+
+def test_case_timeline_merges_analyst_actions_and_observed_time(backend):
+    from datetime import datetime, timezone
+    observed_ts = datetime(2026, 5, 1, tzinfo=timezone.utc).isoformat()
+    event = backend.ingest(_event(ts=observed_ts))
+    case = backend.create_case({
+        "title": "Timeline case", "summary": "", "status": "open",
+        "severity": "low", "tags": [],
+    })
+    backend.add_case_evidence(case["id"], "event", event["id"])
+    timeline = backend.case_timeline(case["id"])
+    assert timeline is not None
+    assert timeline["schema_version"] == "1.0"
+    kinds = {e["kind"] for e in timeline["entries"]}
+    # case lifecycle (created) + evidence link (analyst) + observed sensor time.
+    assert "case.created" in kinds
+    assert "evidence.linked" in kinds
+    assert "evidence.observed" in kinds
+    observed = next(e for e in timeline["entries"] if e["kind"] == "evidence.observed")
+    assert observed["provenance"] == "observed"
+    assert observed["timestamp"] == observed_ts
+    # Entries are chronologically ordered and never exceed the cap.
+    stamps = [str(e["timestamp"]) for e in timeline["entries"]]
+    assert stamps == sorted(stamps)
+    assert timeline["entry_count"] == len(timeline["entries"]) <= 1000
+    assert backend.case_timeline("case_missing") is None
+
+
+def test_case_evidence_ioc_resolved_via_injected_resolver(backend):
+    # IOC evidence is a derived artifact resolved by the injected resolver;
+    # this proves add/report work identically on both backends for the `ioc`
+    # kind, without either backend needing an IOC table.
+    backend.set_ioc_resolver(lambda eid: {
+        "id": eid, "type": "ipv4", "value": "203.0.113.7",
+        "classification": "scanner", "first_seen": "2026-01-01T00:00:00+00:00",
+        "last_seen": "2026-01-02T00:00:00+00:00", "occurrences": 3,
+    } if eid == "ioc_known" else None)
+    case = backend.create_case({
+        "title": "IOC case", "summary": "", "status": "open",
+        "severity": "medium", "tags": [],
+    })
+    updated = backend.add_case_evidence(case["id"], "ioc", "ioc_known")
+    ioc = next(e for e in updated["evidence"] if e["evidence_type"] == "ioc")
+    assert ioc["available"] is True
+    assert ioc["summary"]["evidence_provenance"] == "derived_artifact"
+    # An IOC the resolver cannot derive is refused.
+    with pytest.raises(ValueError):
+        backend.add_case_evidence(case["id"], "ioc", "ioc_unknown")

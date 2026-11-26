@@ -13,8 +13,8 @@ import os
 import pytest
 
 _PG_DSN = os.environ.get("AEGIS_TEST_POSTGRES_DSN")
-_PG_TABLES = ("events", "cases", "counters", "sensor_heartbeats",
-              "sensor_nonces", "schema_migrations")
+_PG_TABLES = ("case_evidence", "case_history", "events", "cases", "counters",
+              "sensor_heartbeats", "sensor_nonces", "schema_migrations")
 
 
 def _require_pg():

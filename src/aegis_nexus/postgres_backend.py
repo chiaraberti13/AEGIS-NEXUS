@@ -4,22 +4,24 @@ A concrete :class:`~aegis_nexus.storage_backend.StorageBackend` implementation
 backed by PostgreSQL (via psycopg 3). SQLite ``Store`` stays the default
 reference backend; this backend is opt-in (`pip install '.[postgres]'`).
 
-Scope — **core persistence**, verified by the behavioural compatibility suite
-(`tests/test_backend_compatibility.py`) against a real PostgreSQL:
+Scope — the **full StorageBackend contract**, every method verified by the
+behavioural compatibility suite (`tests/test_backend_compatibility.py`) against
+a real PostgreSQL:
 
 - event ingest + fetch (full event JSON in a ``jsonb`` column, provenance
-  classes preserved), bounded recent-event paging;
-- collector counters, operator cases (CRUD + list), sensor heartbeats, sensor
-  nonce anti-replay, case retention pruning;
-- operational health and a basic dashboard rollup computed in SQL.
+  classes preserved), bounded recent-event paging, filter options;
+- collector counters, operator cases (CRUD + list + retention prune + evidence
+  references, report and timeline), sensor heartbeats, sensor nonce anti-replay;
+- detection and behavioural context windows, sensor telemetry/health rollups;
+- operational health and a dashboard rollup computed in SQL.
 
-The richer analytical surface that ``Store`` grows over SQLite — detection and
-behavioural context windows, filter options, sensor telemetry/health rollups,
-case evidence resolution, case report and timeline — is **not** reimplemented
-here; those methods raise :class:`PostgresBackendUnsupported` with a clear
-message rather than returning silently wrong data. Extending them is tracked by
-ADR 0002. This keeps the claim honest: Postgres is a verified core-persistence
-backend, not yet a drop-in replacement for the full Store API surface.
+A few capabilities stay SQLite-only because the PG core backend intentionally
+does not model those domains: per-sensor event *sequencing* (PG reports sensors
+unsequenced), and ``session``/``alert`` *case evidence* kinds (no sessions/alerts
+tables here, so such references cannot be verified and are refused/unavailable,
+never faked). These are honestly reported, not silent wrong answers. The
+:class:`PostgresBackendUnsupported` exception is retained as a stable symbol for
+any future deferral but is no longer raised. Extensions are tracked by ADR 0002.
 
 Security/invariants: parameterized SQL only (no string interpolation of
 values); the event document is stored and returned as-is, so the four
@@ -93,6 +95,34 @@ CREATE TABLE IF NOT EXISTS sensor_nonces (
 );
 """
 
+# v2 — richer case schema: evidence references and lifecycle history as their
+# own tables (mirroring the SQLite `case_evidence` / `case_history` tables in
+# migrations.py), so case evidence/report/timeline can be served without
+# collapsing their provenance into the case document JSONB. Tags stay in the
+# case `document` (unlike SQLite's `case_tags`), and analyst notes are an
+# SQLite-only Store extension (no `add_case_note` in the StorageBackend
+# contract), so `case_notes` is intentionally not created here. ON DELETE
+# CASCADE lets `delete_case` drop a case's children in one statement.
+_CASE_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS case_evidence (
+    id BIGSERIAL PRIMARY KEY,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    evidence_type TEXT NOT NULL,
+    evidence_id TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    UNIQUE (case_id, evidence_type, evidence_id)
+);
+CREATE INDEX IF NOT EXISTS case_evidence_case_idx ON case_evidence (case_id);
+CREATE TABLE IF NOT EXISTS case_history (
+    id BIGSERIAL PRIMARY KEY,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    timestamp TEXT NOT NULL,
+    action TEXT NOT NULL,
+    detail JSONB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS case_history_case_idx ON case_history (case_id);
+"""
+
 
 # Forward-only PostgreSQL migrations, mirroring the SQLite strategy
 # (migrations.py): a transactional `schema_migrations` ledger replaces SQLite's
@@ -103,6 +133,7 @@ CREATE TABLE IF NOT EXISTS sensor_nonces (
 # newer release is refused, not migrated down.
 _PG_MIGRATIONS: tuple[tuple[int, str, str], ...] = (
     (1, "baseline", _BASELINE_SQL),
+    (2, "case_schema", _CASE_SCHEMA_SQL),
 )
 POSTGRES_SCHEMA_VERSION = _PG_MIGRATIONS[-1][0]
 _PG_ADVISORY_LOCK = 0x41454753  # "AEGS" — namespaced lock id for PG migrations
@@ -381,56 +412,134 @@ class PostgresBackend:
             )
 
     # -- cases -------------------------------------------------------------
+    # The case "document" JSONB holds only the analyst-authored core fields
+    # (title/status/severity/tags/…). Evidence references and lifecycle history
+    # live in their own tables (migration v2) and are assembled into the view by
+    # get_case, exactly as the SQLite Store joins its child tables — so the raw
+    # document is never polluted with resolved evidence/history copies.
+    def _case_doc(self, case_id: str) -> dict[str, Any] | None:
+        """Raw stored case document (core fields only), or None if absent."""
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT document FROM cases WHERE id = %s", (case_id,))
+            row = cur.fetchone()
+        return dict(row["document"]) if row else None
+
+    def _case_log(self, case_id: str, action: str, detail: dict[str, Any]) -> None:
+        from psycopg.types.json import Jsonb
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO case_history(case_id, timestamp, action, detail) VALUES (%s,%s,%s,%s)",
+                (case_id, _utc_iso(), action[:64], Jsonb(detail)),
+            )
+
+    def _case_history(self, case_id: str) -> list[dict[str, Any]]:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, timestamp, action, detail FROM case_history "
+                "WHERE case_id = %s ORDER BY id ASC LIMIT 500",
+                (case_id,),
+            )
+            # psycopg returns JSONB as a Python object already; default to {}.
+            return [
+                {**dict(r), "detail": r["detail"] if isinstance(r["detail"], dict) else {}}
+                for r in cur.fetchall()
+            ]
+
     def create_case(self, data: dict[str, Any]) -> dict[str, Any]:
         from psycopg.types.json import Jsonb
+        self.prune_cases()
         with self._conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) AS n FROM cases")
             if int(cur.fetchone()["n"]) >= self.max_cases:
                 raise ValueError("case_capacity")
-        case_id = str(uuid.uuid4())
+        case_id = "case_" + uuid.uuid4().hex[:20]
         now = _utc_iso()
+        status = data.get("status", "open")
         doc = {
             **data,
             "id": case_id,
             "created_at": now,
             "updated_at": now,
-            "status": data.get("status", "open"),
+            "closed_at": now if status == "closed" else None,
+            "status": status,
+            "tags": list(data.get("tags", [])),
         }
         with self._conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO cases (id, created_at, status, document) VALUES (%s,%s,%s,%s)",
-                (case_id, now, doc["status"], Jsonb(doc)),
+                (case_id, now, status, Jsonb(doc)),
             )
-        return doc
+        self._case_log(case_id, "created", {
+            "status": status,
+            "severity": data.get("severity"),
+            "classification_provenance": "analyst",
+        })
+        return self.get_case(case_id) or doc
 
     def get_case(self, case_id: str) -> dict[str, Any] | None:
+        doc = self._case_doc(case_id)
+        if doc is None:
+            return None
         with self._conn.cursor() as cur:
-            cur.execute("SELECT document FROM cases WHERE id = %s", (case_id,))
-            row = cur.fetchone()
-        return row["document"] if row else None
+            cur.execute(
+                "SELECT id, case_id, evidence_type, evidence_id, added_at "
+                "FROM case_evidence WHERE case_id = %s ORDER BY added_at ASC, id ASC",
+                (case_id,),
+            )
+            evidence_rows = cur.fetchall()
+        result = dict(doc)
+        result["tags"] = list(doc.get("tags") or [])
+        result["evidence"] = [self._resolve_case_evidence(r) for r in evidence_rows]
+        # Analyst notes are an SQLite-only Store extension (no add_case_note in
+        # the StorageBackend contract); the core PG backend never writes them.
+        result["notes"] = []
+        result["history"] = self._case_history(case_id)
+        result["classification_provenance"] = "analyst"
+        result["evidence_provenance"] = "telemetry_reference"
+        return result
 
     def update_case(self, case_id: str, data: dict[str, Any]) -> dict[str, Any] | None:
         from psycopg.types.json import Jsonb
-        current = self.get_case(case_id)
+        current = self._case_doc(case_id)
         if current is None:
             return None
-        updated = {**current, **data, "id": case_id, "updated_at": _utc_iso()}
+        now = _utc_iso()
+        changed: dict[str, Any] = {}
+        updated = dict(current)
+        for key in ("title", "summary", "status", "severity", "priority",
+                    "owner", "conclusion", "hypotheses"):
+            if key in data:
+                updated[key] = data[key]
+                changed[key] = data[key]
+        if data.get("status") == "closed" and current.get("status") != "closed":
+            updated["closed_at"] = now
+        elif "status" in data and data["status"] != "closed" and current.get("status") == "closed":
+            updated["closed_at"] = None
+        if "tags" in data:
+            updated["tags"] = list(data["tags"])
+            changed["tags"] = updated["tags"]
+        updated["id"] = case_id
+        updated["updated_at"] = now
         with self._conn.cursor() as cur:
             cur.execute(
                 "UPDATE cases SET status = %s, document = %s WHERE id = %s",
                 (updated.get("status"), Jsonb(updated), case_id),
             )
-        return updated
+        if changed:
+            changed["classification_provenance"] = "analyst"
+            self._case_log(case_id, "updated", changed)
+        return self.get_case(case_id)
 
     def delete_case(self, case_id: str) -> str:
-        current = self.get_case(case_id)
+        current = self._case_doc(case_id)
         if current is None:
             return "not_found"
         if current.get("status") != "closed":
             return "case_not_closed"
+        # ON DELETE CASCADE removes the case's evidence/history rows too.
         with self._conn.cursor() as cur:
             cur.execute("DELETE FROM cases WHERE id = %s", (case_id,))
-        return case_id
+        return "deleted"
 
     def list_cases(self, *, limit: int = 100, q: str | None = None,
                    status: str | None = None, **_: Any) -> list[dict[str, Any]]:
@@ -695,25 +804,238 @@ class PostgresBackend:
             "sensor_replay_rejections": counters.get("sensor_replay_rejections", 0),
         }
 
-    # -- not implemented in the core backend (ADR 0002) --------------------
-    def _unsupported(self, name: str) -> Any:
-        raise PostgresBackendUnsupported(
-            f"{name}() is not implemented by the core PostgreSQL backend; "
-            "it belongs to Store's rich analytical surface (ADR 0002)."
-        )
+    # -- case evidence / report / timeline ---------------------------------
+    def _resolve_case_evidence(self, row: dict[str, Any]) -> dict[str, Any]:
+        """Resolve one evidence reference to a summary, mirroring Store.
 
-    def add_case_evidence(self, *a: Any, **k: Any) -> Any:
-        self._unsupported("add_case_evidence")
+        Availability means the referenced telemetry is still derivable/present
+        in this backend, never a threat-intelligence verdict. The PG core
+        backend stores no `sessions` or `alerts` domain, so those evidence
+        kinds stay unavailable here (summary None) — honestly reported, not
+        faked.
+        """
+        item = dict(row)
+        evidence_type = item["evidence_type"]
+        evidence_id = item["evidence_id"]
+        item["available"] = False
+        item["summary"] = None
+        if evidence_type == "ioc":
+            resolver = self._ioc_resolver
+            if resolver is not None:
+                try:
+                    ioc = resolver(evidence_id)
+                except Exception:
+                    ioc = None
+                if ioc:
+                    item["available"] = True
+                    item["summary"] = {
+                        "id": ioc.get("id"),
+                        "type": ioc.get("type"),
+                        "value": ioc.get("value"),
+                        "classification": ioc.get("classification"),
+                        "first_seen": ioc.get("first_seen"),
+                        "last_seen": ioc.get("last_seen"),
+                        "occurrences": ioc.get("occurrences"),
+                        "evidence_provenance": "derived_artifact",
+                    }
+            return item
+        if evidence_type == "event":
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, timestamp, event_type, severity, source_ip, "
+                    "session_id, honeypot, document FROM events WHERE id = %s",
+                    (evidence_id,),
+                )
+                event = cur.fetchone()
+            if event:
+                observed = (event.get("document") or {}).get("observed") or {}
+                item["available"] = True
+                item["summary"] = {
+                    "id": event["id"],
+                    "timestamp": event["timestamp"],
+                    "event_type": event["event_type"],
+                    "severity": event["severity"],
+                    "source_ip": event["source_ip"],
+                    "session_id": event["session_id"],
+                    "honeypot": event["honeypot"],
+                    "service": observed.get("service"),
+                    "protocol": observed.get("protocol"),
+                    "destination_port": observed.get("destination_port"),
+                }
+        # evidence_type in ("session", "alert"): no such domain in the PG core
+        # backend → left unavailable (summary None).
+        return item
 
-    def case_report(self, *a: Any, **k: Any) -> Any:
-        self._unsupported("case_report")
+    @staticmethod
+    def _evidence_observed_timestamp(evidence: dict[str, Any]) -> str | None:
+        summary = evidence.get("summary")
+        if not isinstance(summary, dict):
+            return None
+        for key in ("timestamp", "first_seen", "started_at"):
+            value = summary.get(key)
+            if value:
+                return str(value)
+        return None
 
-    def case_timeline(self, *a: Any, **k: Any) -> Any:
-        self._unsupported("case_timeline")
+    def add_case_evidence(self, case_id: str, evidence_type: str, evidence_id: str) -> dict[str, Any] | None:
+        # Validate derived-IOC existence up front via the injected resolver
+        # (read-only), mirroring Store.
+        ioc_available = None
+        if evidence_type == "ioc":
+            resolver = self._ioc_resolver
+            if resolver is not None:
+                try:
+                    ioc_available = resolver(evidence_id)
+                except Exception:
+                    ioc_available = None
+        if self._case_doc(case_id) is None:
+            return None
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM case_evidence WHERE case_id=%s AND evidence_type=%s AND evidence_id=%s",
+                (case_id, evidence_type, evidence_id),
+            )
+            if cur.fetchone():
+                return self.get_case(case_id)
+            cur.execute("SELECT COUNT(*) AS n FROM case_evidence WHERE case_id=%s", (case_id,))
+            if int(cur.fetchone()["n"]) >= 1000:
+                raise ValueError("case_evidence_limit")
+        if evidence_type == "event":
+            with self._conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM events WHERE id = %s", (evidence_id,))
+                available: Any = cur.fetchone()
+        elif evidence_type == "ioc":
+            available = ioc_available
+        else:
+            # session / alert are not domains of the PG core backend, so their
+            # existence cannot be verified here; refuse rather than link an
+            # unverifiable reference.
+            available = None
+        if not available:
+            raise ValueError("evidence_not_found")
+        now = _utc_iso()
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO case_evidence(case_id, evidence_type, evidence_id, added_at) "
+                "VALUES (%s,%s,%s,%s) ON CONFLICT (case_id, evidence_type, evidence_id) DO NOTHING",
+                (case_id, evidence_type, evidence_id, now),
+            )
+            inserted = cur.rowcount
+        if inserted:
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE cases SET document = jsonb_set(document, '{updated_at}', to_jsonb(%s::text)) "
+                    "WHERE id = %s",
+                    (now, case_id),
+                )
+            self._case_log(case_id, "evidence_added", {
+                "type": evidence_type, "id": evidence_id, "provenance": "telemetry_reference",
+            })
+        return self.get_case(case_id)
+
+    def case_report(self, case_id: str) -> dict[str, Any] | None:
+        case = self.get_case(case_id)
+        if not case:
+            return None
+        available = sum(1 for item in case["evidence"] if item["available"])
+        unavailable = len(case["evidence"]) - available
+        return {
+            "report_type": "investigation_case",
+            "generated_at": _utc_iso(),
+            "case": {
+                "id": case["id"],
+                "title": case.get("title"),
+                "status": case.get("status"),
+                "severity": case.get("severity"),
+                "priority": case.get("priority"),
+                "owner": case.get("owner"),
+                "summary": case.get("summary"),
+                "conclusion": case.get("conclusion", ""),
+                "hypotheses": case.get("hypotheses", ""),
+                "tags": case["tags"],
+                "created_at": case.get("created_at"),
+                "updated_at": case.get("updated_at"),
+                "closed_at": case.get("closed_at"),
+                "classification_provenance": "analyst",
+            },
+            "evidence": case["evidence"],
+            "notes": [
+                {
+                    "id": note["id"],
+                    "created_at": note["created_at"],
+                    "body": note["body"],
+                    "provenance": "analyst_note",
+                }
+                for note in case["notes"]
+            ],
+            "history": case["history"],
+            "statistics": {
+                "evidence_references": len(case["evidence"]),
+                "available_references": available,
+                "unavailable_references": unavailable,
+                "notes": len(case["notes"]),
+            },
+            "limitations": [
+                "Case status, severity, summary, tags and notes are analyst classifications or annotations, not observed telemetry.",
+                "Evidence entries are references to source telemetry and do not extend its configured retention period.",
+                "Unavailable evidence means the source telemetry is no longer present or accessible in the current dataset.",
+                "IP, geolocation, ASN and external reputation context do not establish human identity or attribution.",
+            ],
+        }
+
+    def case_timeline(self, case_id: str) -> dict[str, Any] | None:
+        """Unified, chronologically ordered case timeline (see Store.case_timeline)."""
+        case = self.get_case(case_id)
+        if case is None:
+            return None
+        entries: list[dict[str, Any]] = []
+        for item in case.get("history", []):
+            entries.append({
+                "timestamp": item.get("timestamp"),
+                "kind": "case." + str(item.get("action") or "event"),
+                "provenance": "analyst",
+                "detail": item.get("detail") or {},
+            })
+        for note in case.get("notes", []):
+            entries.append({
+                "timestamp": note.get("created_at"),
+                "kind": "note.added",
+                "provenance": "analyst",
+                "detail": {"note_id": note.get("id")},
+            })
+        for evidence in case.get("evidence", []):
+            ref = {"evidence_type": evidence.get("evidence_type"), "evidence_id": evidence.get("evidence_id")}
+            entries.append({
+                "timestamp": evidence.get("added_at"),
+                "kind": "evidence.linked",
+                "provenance": "analyst",
+                "detail": ref,
+            })
+            observed = self._evidence_observed_timestamp(evidence)
+            if observed:
+                entries.append({
+                    "timestamp": observed,
+                    "kind": "evidence.observed",
+                    "provenance": "observed",
+                    "detail": ref,
+                })
+        entries = [entry for entry in entries if entry.get("timestamp")]
+        entries.sort(key=lambda entry: str(entry["timestamp"]))
+        return {
+            "case_id": case_id,
+            "schema_version": "1.0",
+            "entry_count": len(entries),
+            "entries": entries[:1000],
+            "provenance_note": (
+                "observed = sensor-reported evidence time; analyst = investigation "
+                "actions on the case. Timestamps are taken as recorded, never "
+                "re-derived or inferred."
+            ),
+        }
 
 
-# Sanity: every method named in the contract exists on this class (presence,
-# even where the body raises PostgresBackendUnsupported).
+# Sanity: every method named in the contract exists on this class (all now
+# implemented; the behavioural compatibility suite verifies their semantics).
 assert all(hasattr(PostgresBackend, _m) for _m in REQUIRED_METHODS), (
     "PostgresBackend is missing a StorageBackend contract method"
 )

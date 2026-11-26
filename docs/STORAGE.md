@@ -44,14 +44,21 @@ Migrations: forward-only with a transactional `schema_migrations` ledger
 concurrent workers never double-apply, and a database written by a newer
 release is refused, not migrated down.
 
-Analytics surface, ported incrementally and verified on SQLite and PostgreSQL:
-`page_events` (filters + time window + cursor paging), `filter_options`,
-`detection_context`, `behavioral_context`, `sensor_telemetry_observation` and
-`sensor_health` are implemented. Not yet ported (methods raise
-`PostgresBackendUnsupported` rather than returning silently wrong data): the case
-report/timeline/evidence methods, which need the richer case schema ported
-first. For the full console experience run the SQLite profile; the remaining
-work is tracked in ADR 0002.
+Analytics surface, verified on SQLite and PostgreSQL: `page_events` (filters +
+time window + cursor paging), `filter_options`, `detection_context`,
+`behavioral_context`, `sensor_telemetry_observation` and `sensor_health`.
+
+The case surface is now ported too (migration v2 adds `case_evidence` and
+`case_history` tables): `add_case_evidence`, `case_report` and `case_timeline`
+behave as on SQLite, so **all 26 `StorageBackend` contract methods are
+implemented on PostgreSQL** — no method returns "unsupported". Two capabilities
+stay SQLite-only by design and are reported honestly, never faked: per-sensor
+event *sequencing* (PG reports sensors unsequenced) and the `session`/`alert`
+case-evidence kinds (the PG core backend models no sessions/alerts domain, so
+such references are refused rather than fabricated). For the full session/alert
+investigation surface in the console, run the SQLite profile; otherwise
+PostgreSQL is a verified drop-in for the whole storage contract. Tracked in ADR
+0002.
 
 Choosing a backend must never change investigation semantics (the evidence-first
 model, provenance separation and bounded hostile-input handling are backend
@@ -103,14 +110,23 @@ SQLite — ogni step gira sotto un advisory lock di sessione così worker
 concorrenti non applicano due volte, e un database scritto da una release più
 recente viene rifiutato, non migrato all'indietro.
 
-Superficie analitica, portata in modo incrementale e verificata su SQLite e
-PostgreSQL: `page_events` (filtri + finestra temporale + paginazione a cursore),
-`filter_options`, `detection_context`, `behavioral_context`,
-`sensor_telemetry_observation` e `sensor_health` sono implementati. Non ancora
-portato (i metodi sollevano `PostgresBackendUnsupported` invece di restituire
-dati silenziosamente errati): i metodi report/timeline/evidenze dei casi, che
-richiedono prima il port dello schema casi più ricco. Per l'esperienza completa
-della console usa il profilo SQLite; il lavoro residuo è tracciato in ADR 0002.
+Superficie analitica, verificata su SQLite e PostgreSQL: `page_events` (filtri +
+finestra temporale + paginazione a cursore), `filter_options`,
+`detection_context`, `behavioral_context`, `sensor_telemetry_observation` e
+`sensor_health`.
+
+Anche la superficie dei casi è ora portata (la migrazione v2 aggiunge le tabelle
+`case_evidence` e `case_history`): `add_case_evidence`, `case_report` e
+`case_timeline` si comportano come su SQLite, quindi **tutti i 26 metodi del
+contratto `StorageBackend` sono implementati su PostgreSQL** — nessun metodo
+restituisce "non supportato". Due funzionalità restano SQLite-only per scelta e
+sono riportate onestamente, mai inventate: la *sequenziazione* degli eventi per
+sensore (PG riporta i sensori come unsequenced) e i tipi di evidenza
+`session`/`alert` (il backend PG core non modella i domini sessioni/alert, quindi
+tali riferimenti vengono rifiutati invece che fabbricati). Per la superficie
+investigativa completa di sessioni/alert nella console usa il profilo SQLite;
+altrimenti PostgreSQL è un drop-in verificato per l'intero contratto di storage.
+Tracciato in ADR 0002.
 
 La scelta del backend non deve mai cambiare la semantica investigativa (il
 modello evidence-first, la separazione di provenance e la gestione bounded

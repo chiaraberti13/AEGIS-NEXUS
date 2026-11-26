@@ -103,13 +103,39 @@ and the sensor rollups `sensor_telemetry_observation` + `sensor_health` (per
 honeypot event aggregation + heartbeat freshness; per-sensor event sequencing is
 an SQLite-only feature, so PG reports sensors unsequenced).
 
-Still deferred (methods raise `PostgresBackendUnsupported`, not silently wrong
-data): the case evidence/report/timeline methods (`add_case_evidence`,
-`case_report`, `case_timeline`). These need the richer case schema —
-case_evidence / case_history / case_notes, plus sessions and alerts — ported to
-PostgreSQL first. That schema-plus-logic port is the remaining Store-API-surface
-extension, independent of the storage/migration foundation, tracked here outside
-the closed Cycle H cluster.
+## Update (2026-11-26) — full StorageBackend contract implemented on PostgreSQL
+
+The case evidence/report/timeline methods — the last deferred cluster — are now
+implemented, so **every one of the 26 `StorageBackend` contract methods is
+implemented on PostgreSQL** and no method raises `PostgresBackendUnsupported`
+any more (the exception type is kept as a stable symbol for future deferrals).
+
+Migration **v2** (`case_schema`) adds the richer case tables mirroring the
+SQLite schema: `case_evidence` (evidence references, `UNIQUE(case_id,
+evidence_type, evidence_id)`) and `case_history` (lifecycle log, `detail` as
+`jsonb`), both `ON DELETE CASCADE` from `cases`. Analyst **notes** are an
+SQLite-only Store extension (`add_case_note` is not in the contract), so
+`case_notes` is intentionally not created; `get_case` reports `notes: []`. Case
+**tags** stay inside the case `document` JSONB (not a separate table). `get_case`
+now assembles the full view (document core + tags + resolved evidence +
+history) exactly as the SQLite Store joins its child tables, while the stored
+document keeps only the analyst-authored core fields.
+
+`add_case_evidence`, `case_report` and `case_timeline` mirror Store's behaviour
+and provenance labelling (observed vs analyst timestamps; the same limitations
+caveats; IOC evidence resolved on the fly via the injected derived-IOC
+resolver). All verified on SQLite **and** PostgreSQL by the parametrized
+compatibility suite (event evidence, idempotent linking, unknown-evidence
+refusal, report statistics, timeline ordering/provenance, IOC resolution).
+
+Two capabilities remain SQLite-only **by design**, honestly reported rather than
+faked: per-sensor event *sequencing* (PG reports sensors unsequenced), and the
+`session`/`alert` case-evidence kinds — the PG core backend models no
+sessions/alerts domain, so such references cannot be verified and are
+refused (`evidence_not_found`) / reported unavailable, never fabricated. The
+console's full session/alert investigation surface therefore still wants the
+SQLite profile; PostgreSQL is now a verified drop-in for the entire storage
+contract otherwise.
 
 ## Notes
 
