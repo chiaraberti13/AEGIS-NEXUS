@@ -161,14 +161,14 @@ These are deliberate design boundaries, not missing features:
 > them into a CI workflow is a maintainer decision pending the reinstated
 > pipeline.
 
-- [ ] Add lint/format checks to CI (e.g. `ruff`)
-- [ ] Add dependency vulnerability scanning to CI (e.g. `pip-audit`)
-- [ ] Add Python SAST to CI (e.g. `bandit`) with a reviewed baseline
-- [ ] Add secret scanning to CI (e.g. `gitleaks`)
-- [ ] Add container image vulnerability scanning (e.g. Trivy) for the built image
-- [ ] Generate an SBOM (CycloneDX) for each build
-- [ ] Pin GitHub Actions by commit SHA and enable automated dependency updates
-- [ ] Add hash-locked dependency constraints for reproducible container builds
+- [x] Add lint/format checks to CI (e.g. `ruff`) _(`.github/workflows/ci.yml` job `lint`: `ruff check src tests scripts`)_
+- [x] Add dependency vulnerability scanning to CI (e.g. `pip-audit`) _(job `dependency-audit`: `pip-audit` over the hash-locked `requirements.lock`; found + triaged PYSEC-2026-2858, see SUPPLY_CHAIN.md)_
+- [x] Add Python SAST to CI (e.g. `bandit`) with a reviewed baseline _(job `sast`: `bandit -r src --baseline .bandit-baseline.json`)_
+- [x] Add secret scanning to CI (e.g. `gitleaks`) _(job `secret-scan`: `gitleaks/gitleaks-action` over full history)_
+- [x] Add container image vulnerability scanning (e.g. Trivy) for the built image _(job `container`: Trivy scan of the built image, CRITICAL/HIGH, ignore-unfixed)_
+- [x] Generate an SBOM (CycloneDX) for each build _(job `sbom`: CycloneDX via `scripts/generate_sbom.py --reproducible`, uploaded as an artifact)_
+- [ ] Pin GitHub Actions by commit SHA and enable automated dependency updates _(automated updates done — `.github/dependabot.yml` for github-actions + pip; SHA-pinning still pending: actions are currently pinned by major tag and Dependabot is set to bump them — the tag→SHA conversion needs resolving the action SHAs)_
+- [x] Add hash-locked dependency constraints for reproducible container builds _(`requirements.lock` via `pip-compile --generate-hashes`; the Dockerfile installs it with `--require-hashes`, then the project with `--no-deps`)_
 
 **Done when:** schema changes are migrated safely, replayed or missing sensor telemetry is detectable, stored evidence is tamper-evident, analyst actions are attributable to a named operator, and CI blocks known-vulnerable or secret-leaking changes.
 
@@ -479,7 +479,7 @@ These requirements apply to **every** roadmap cycle.
 - [x] Maintain IT/EN interface parity _(guarded by `test_frontend_safety.py` (`test_frontend_i18n_covers_template_and_literal_translation_keys`))_
 - [ ] Add tests for every security-sensitive feature _(continuous practice (not a one-off artifact) — upheld by the 418-test suite; every security feature ships with its test)_
 - [ ] Keep documentation synchronized with implementation _(continuous practice — code/test/docs land together; `docs/` kept in lockstep)_
-- [ ] Keep CI green before marking an implementation item complete _(not applicable while CI is removed (Cycle P); local gates stand in: `make lint`/`typecheck`/`test`, `test_lint.py`, `test_typecheck.py`)_
+- [ ] Keep CI green before marking an implementation item complete _(CI restored — `.github/workflows/ci.yml`; continuous process practice: keep it green before completing an item)_
 - [ ] Update the threat model for every new attack surface or data flow _(continuous practice — `docs/THREAT_MODEL.md` updated per new data flow)_
 - [x] Never add outbound network paths from sensors _(guarded by `test_sensor_safety.py` (egress guard covers every built-in exposure network))_
 - [x] Record every drop, truncation, rejection or load-shedding decision as evidence loss _(guarded by `test_sensor_sequence.py` (rejected/dropped counted as loss), `test_sensors.py` (truncation disclosed), `test_collector_counters.py`)_
@@ -529,7 +529,7 @@ These requirements apply to **every** roadmap cycle.
 | Foundation | ✅ Completed |
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
-| P — Platform Readiness & Integrity Hardening | 🟨 12/20 · local quality tooling done; CI wiring deferred (CI removed) |
+| P — Platform Readiness & Integrity Hardening | 🟨 19/20 · CI restored with lint/SAST/dep-audit/secret-scan/Trivy/SBOM + hash-locked builds; only SHA-pinning of actions pending |
 | C — Network Evidence & Visibility | 🟨 20/26 · SSH client version captured; remaining extensions decided (ADR 0004 Zeek, ADR 0005 fingerprints/PCAP) |
 | D — Sensor Platform & Honeypot Expansion | ✅ Completed |
 | E — Threat Intelligence & CTI | ✅ Completed |

@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Keep CI action versions current (and, once pinned to commit SHAs, bump the
+  # SHAs) — automated dependency updates for the GitHub Actions ecosystem.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+
+  # Keep the hash-locked runtime dependencies current; Dependabot regenerates
+  # requirements.lock (with hashes) and pyproject constraints.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps

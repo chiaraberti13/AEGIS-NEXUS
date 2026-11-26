@@ -73,6 +73,14 @@ noise from build/test tooling that is not shipped. CVEs reported only for
 packages that are absent from the SBOM (pytest, setuptools, wheel, …) do not
 affect the shipped artifact.
 
+CI audits the hash-locked closure (`pip-audit --requirement requirements.lock`).
+
+#### Accepted dependency advisories (triage)
+
+| Advisory | Package | Decision | Rationale |
+|---|---|---|---|
+| `PYSEC-2026-2858` | paramiko 4.0.0 | **accepted, no fix released** | "rsakey.py allows the SHA-1 algorithm." paramiko runs **server-side in the SSH decoy** (a honeypot that deliberately accepts any client, with an ephemeral generated host key) — it is never used as a client verifying trusted signatures, so SHA-1 in `rsakey.py` is not exploitable in the honeypot threat model. No fixed release exists yet (fix is only upstream commit `a448945`). Re-evaluate and drop the ignore when a fixed paramiko release ships. Pinned with `--ignore-vuln` in CI. |
+
 ---
 
 ## Italiano
