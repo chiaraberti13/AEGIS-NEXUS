@@ -169,8 +169,12 @@ jobs:
           docker compose -f docker-compose.yml config >/dev/null
           docker compose -f docker-compose.yml -f docker-compose.geoip.yml config >/dev/null
           docker compose -f docker-compose.yml -f docker-compose.threat-context.yml config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.pcap.yml --profile pcap config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.pcap.yml --profile pcap --profile generic config >/dev/null
       - name: Verify sensor/collector network isolation (all built-in decoys)
         run: docker compose --profile generic -f docker-compose.yml config --format json | python scripts/verify_compose_isolation.py
+      - name: Verify PCAP capture-sidecar isolation (opt-in overlay)
+        run: docker compose -f docker-compose.yml -f docker-compose.pcap.yml --profile pcap --profile generic config --format json | python scripts/verify_compose_isolation.py
       - name: Trivy image vulnerability scan
         uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # v0.28.0
         with:

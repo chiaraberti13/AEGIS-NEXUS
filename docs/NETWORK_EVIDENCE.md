@@ -57,6 +57,8 @@ PCAP evidence mode is disabled by default. When `AEGIS_PCAP_ENABLED=true`, an au
 
 Every retained artifact has a generated storage name, strict `AEGIS_PCAP_MAX_BYTES` limit, `AEGIS_PCAP_RETENTION_DAYS`, `AEGIS_PCAP_MAX_FILES`, SHA-256 fingerprint and explicit session ID. Downloads verify size and SHA-256 before returning evidence. Original upload filenames are never used as filesystem paths.
 
+Full packet capture (as opposed to this in-app artifact storage) is available as a separate opt-in deployment pattern: per-decoy `tcpdump` sidecars that share each decoy's network namespace and hold `CAP_NET_RAW` while the decoy keeps `cap_drop: ALL`. See `docs/PCAP_CAPTURE.md` and ADR 0005; it is never enabled by default and the collector/decoys gain no raw-socket capability.
+
 ### Privacy and safety
 
 All network metadata passes through the same hostile-input normalization and bounded-storage rules as other telemetry. HTTP values are captured with sensor-side limits and truncation provenance. PCAP may contain sensitive payloads, so it is opt-in, operator-only, bounded and independently retained. Byte/packet counters alone never imply payload retention.
@@ -118,6 +120,8 @@ I fingerprint della famiglia JA4 seguono questa stessa regola, anche per licenza
 La modalità PCAP è disabilitata per default. Con `AEGIS_PCAP_ENABLED=true`, un operatore autenticato può associare un artefatto PCAP/PCAPNG a una sessione AEGIS esistente oppure invocare un `PcapCaptureProvider` configurato. Il capture provider predefinito è disabilitato: abilitare lo storage PCAP non assegna al collector `NET_RAW`, `NET_ADMIN` o capacità di sniffing.
 
 Ogni artefatto conservato usa un nome storage generato, limite rigido `AEGIS_PCAP_MAX_BYTES`, `AEGIS_PCAP_RETENTION_DAYS`, `AEGIS_PCAP_MAX_FILES`, fingerprint SHA-256 e session ID esplicito. Il download verifica dimensione e SHA-256 prima di restituire l'evidenza. I filename originali dell'upload non vengono mai usati come path filesystem.
+
+La cattura full-packet (distinta da questo storage di artefatti in-app) è disponibile come pattern di deployment opt-in separato: sidecar `tcpdump` per-decoy che condividono il netns di ogni decoy e tengono `CAP_NET_RAW` mentre il decoy resta `cap_drop: ALL`. Vedi `docs/PCAP_CAPTURE.md` e l'ADR 0005; non è mai abilitato per default e collector/decoy non acquisiscono capacità raw-socket.
 
 ### Privacy e sicurezza
 

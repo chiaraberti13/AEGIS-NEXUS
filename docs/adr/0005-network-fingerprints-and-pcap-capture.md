@@ -4,7 +4,8 @@
 - Date: 2026-11-24 · **Updated 2026-11-26** — (1) SSH KEXINIT offer lists +
   native HASSH (Salesforce, BSD-3) implemented; (2) JA4+ licence evaluation
   completed (JA4/TLS permitted under BSD-3; JA4H and other FoxIO-License-1.1
-  methods declined as native features, GPLv3-incompatible + patent-pending)
+  methods declined as native features, GPLv3-incompatible + patent-pending);
+  (3) dedicated-container PCAP capture provided as an opt-in Compose overlay
 - Context: the remaining open Cycle C ("Network Evidence & Visibility") items:
   SSH client version + KEX/cipher offers and HASSH fingerprints; HTTP (JA4H)
   and TLS (JA4) fingerprints; and dedicated-container PCAP capture (BPF,
@@ -126,14 +127,27 @@ FoxIO licence or patent exposure into the GPLv3 codebase.
 
 Bounded PCAP capture already exists in-app (size/retention limits, SHA-256,
 session association, authenticated+audited attachment download — ADR-adjacent,
-done). Running capture in a **dedicated container** with `CAP_NET_RAW` only
-(never inside a decoy), restricted by BPF to decoy ports, with a ring-buffer
-hard disk cap, is deployment/infrastructure work that requires a privileged
-capture sidecar and cannot be built or verified inside this project's unit-test
-environment. Decision: provide it as a documented, opt-in Compose/deployment
-pattern when a deployment needs full packet capture; the collector-side bounds
-and provenance already hold. It must never grant a decoy `CAP_NET_RAW` or add an
-outbound path to a sensor.
+done). The dedicated-container capture is now **provided as an opt-in Compose
+overlay** (`docker-compose.pcap.yml` + `docker/pcap/`, docs in
+`docs/PCAP_CAPTURE.md`): one `tcpdump` sidecar per decoy that **shares the
+decoy's network namespace** (`network_mode: "service:<decoy>"`) so it sees only
+that decoy's own traffic (non-promiscuous, BPF-filtered to the decoy's ports),
+holds **`CAP_NET_RAW` in the sidecar while the decoy keeps `cap_drop: ALL`**,
+runs read-only + `no-new-privileges`, drops to `nobody` after opening the socket,
+and writes a bounded ring buffer (hard disk cap) to a dedicated volume. The
+isolation invariants are machine-checked by `scripts/verify_compose_isolation.py`
+(each `*-pcap` sidecar adds exactly `CAP_NET_RAW` and nothing else, shares a
+decoy netns, owns no network/ports; no decoy carries any `cap_add`), wired into
+CI alongside the Compose-config validation and the image build.
+
+This is deployment infrastructure: **live capture cannot be exercised in the
+project's unit-test environment**, so CI validates config, isolation and image
+build but does not prove packets are captured — that is verified in a real
+deployment. The pattern never grants a decoy `CAP_NET_RAW`; the only network path
+a sidecar has is the decoy's own (an exposure net + an `internal` management
+net), and the capture process opens no outbound connections — hard egress
+guarantees remain the operator's host/VLAN perimeter control, as for the decoys
+themselves.
 
 ## Consequences
 
@@ -146,10 +160,13 @@ outbound path to a sensor.
   (Salesforce HASSH, BSD-3), via a fail-safe snapshot of paramiko's
   `remote_kex_init`. A JA4SSH-based route stays declined under the FoxIO 1.1
   evaluation above; HASSH does not need it.
-- Dedicated-container PCAP capture remains documented opt-in deployment
-  infrastructure (below).
-- No unverified fingerprinting or capture code is shipped, no FoxIO-licensed code
-  enters the GPLv3 repository, and no sensor gains new capability or egress.
+- Dedicated-container PCAP capture is **provided** as an opt-in Compose overlay
+  (`docker-compose.pcap.yml`, `docker/pcap/`, `docs/PCAP_CAPTURE.md`), with the
+  capture capability isolated in per-decoy sidecars and the isolation invariants
+  CI-checked. Live capture stays a deployment-verified concern, not a unit test.
+- No unverified fingerprinting code is shipped, no FoxIO-licensed code enters the
+  GPLv3 repository, and **no decoy gains `CAP_NET_RAW` or a new egress path** —
+  the capture capability lives only in the opt-in sidecar's own container.
 
 ## Notes
 

@@ -196,9 +196,9 @@ These are deliberate design boundaries, not missing features:
 - [x] Design optional passive fingerprint provider interface
 - [x] Evaluate optional Zeek log ingestion (`conn`, `http`, `ssh`, `dns`) with the same provenance model as Suricata _(evaluate)_ — see `docs/adr/0004-zeek-log-ingestion.md` (feasible; implement on demand)
 - [x] Add optional bounded PCAP capture mode
-- [ ] Run PCAP capture in a dedicated capture container (`CAP_NET_RAW` only, never inside decoys)
-- [ ] Restrict capture with BPF filters to decoy ports/interfaces
-- [ ] Use ring-buffer capture so disk usage has a hard upper bound
+- [x] Run PCAP capture in a dedicated capture container (`CAP_NET_RAW` only, never inside decoys) _(opt-in overlay `docker-compose.pcap.yml` + `docker/pcap/`: one tcpdump sidecar per decoy sharing the decoy netns via `network_mode: service:<decoy>`; the sidecar holds `CAP_NET_RAW`, the decoy keeps `cap_drop: ALL`; read-only + `no-new-privileges`, drops to `nobody`. Isolation invariants CI-checked by `scripts/verify_compose_isolation.py`. Live capture is deployment-verified, not unit-testable — `docs/PCAP_CAPTURE.md`, ADR 0005)_
+- [x] Restrict capture with BPF filters to decoy ports/interfaces _(each sidecar captures non-promiscuously (`tcpdump -p`) with a BPF filter scoped to its decoy's listening port(s); sharing the decoy netns means only that decoy's own traffic is visible — ADR 0005)_
+- [x] Use ring-buffer capture so disk usage has a hard upper bound _(tcpdump `-C`/`-W` ring of `AEGIS_PCAP_RING_FILES`×`AEGIS_PCAP_RING_MB` MB per decoy, oldest overwritten; snaplen bounded; values validated/clamped in `docker/pcap/capture.sh` — ADR 0005)_
 - [x] Add PCAP size limits
 - [x] Add PCAP retention limits
 - [x] Hash retained PCAP evidence with SHA-256
@@ -530,7 +530,7 @@ These requirements apply to **every** roadmap cycle.
 | A — SOC Detection & Alerting | ✅ Completed |
 | B — Correlation & Investigation 2.0 | ✅ Completed |
 | P — Platform Readiness & Integrity Hardening | ✅ 20/20 · CI restored with lint/SAST/dep-audit/secret-scan/Trivy/SBOM + hash-locked builds; all CI actions pinned to immutable commit SHAs (`# vX.Y.Z` comments) with Dependabot bumping them |
-| C — Network Evidence & Visibility | 🟨 22/26 · SSH client version + KEXINIT offer lists + native **HASSH** captured (`observed.network.ssh`, bounded, tooling hint); JA4+ licence evaluated (ADR 0005: JA4/TLS BSD-3 permitted, JA4H & other FoxIO-1.1 methods declined as native features — GPLv3-incompatible + patent-pending, use Suricata/Zeek ingestion); remaining: native JA4 TLS (low-priority, Suricata covers it) + PCAP sidecar (opt-in deployment infra) — ADR 0004/0005 |
+| C — Network Evidence & Visibility | 🟨 25/26 · SSH client version + KEXINIT offer lists + native **HASSH** captured (`observed.network.ssh`, bounded, tooling hint); dedicated **PCAP capture sidecars** shipped as an opt-in overlay (per-decoy netns-sharing, `CAP_NET_RAW` in sidecar only, BPF-scoped, ring-buffered, CI isolation-checked); JA4+ licence evaluated (ADR 0005: JA4/TLS BSD-3 permitted, JA4H & other FoxIO-1.1 methods declined — GPLv3-incompatible + patent-pending, use Suricata/Zeek ingestion). Only remaining: native JA4 TLS (low-priority, Suricata covers it) — ADR 0004/0005 |
 | D — Sensor Platform & Honeypot Expansion | ✅ Completed |
 | E — Threat Intelligence & CTI | ✅ Completed |
 | F — Behavioral Analytics | ✅ Completed |

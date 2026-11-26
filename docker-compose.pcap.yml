@@ -1,0 +1,131 @@
+# Opt-in dedicated PCAP capture sidecars (ADR 0005).
+#
+# Include this overlay explicitly to enable packet capture, e.g.:
+#   docker compose -f docker-compose.yml -f docker-compose.pcap.yml --profile pcap up
+# (add `--profile generic` as well to also capture the generic-tcp decoy).
+#
+# Each sidecar is a SEPARATE, single-purpose container (docker/pcap/Dockerfile:
+# tcpdump only) that shares one decoy's network namespace via
+# `network_mode: "service:<decoy>"`. That is how the capability boundary is kept:
+#   * the sidecar holds CAP_NET_RAW; the decoy keeps `cap_drop: ALL` and never
+#     gains a capture capability;
+#   * sharing the netns means the sidecar sees ONLY that decoy's own traffic
+#     (capture is non-promiscuous, `-p`), nothing lateral;
+#   * a BPF filter further restricts capture to the decoy's listening port(s);
+#   * tcpdump writes a bounded ring buffer (AEGIS_PCAP_RING_FILES files of
+#     AEGIS_PCAP_RING_MB MB) to a dedicated volume, so disk use has a hard cap;
+#   * the container is read-only, no-new-privileges, all caps dropped but
+#     NET_RAW, and tcpdump drops to `nobody` once its socket is open.
+#
+# This is deployment infrastructure: it cannot be exercised in the project's
+# unit-test environment, only config- and isolation-validated. See
+# docs/PCAP_CAPTURE.md.
+
+x-pcap-sidecar: &pcap-sidecar
+  build:
+    context: .
+    dockerfile: docker/pcap/Dockerfile
+  read_only: true
+  tmpfs:
+    - /tmp:size=8m,noexec,nosuid,nodev
+  cap_drop: ["ALL"]
+  cap_add: ["NET_RAW"]
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 32
+  mem_limit: 128m
+  cpus: 0.25
+  restart: unless-stopped
+  volumes:
+    - aegis-pcap:/capture
+
+x-pcap-env: &pcap-env
+  AEGIS_PCAP_SNAPLEN: ${AEGIS_PCAP_SNAPLEN:-262144}
+  AEGIS_PCAP_RING_MB: ${AEGIS_PCAP_RING_MB:-50}
+  AEGIS_PCAP_RING_FILES: ${AEGIS_PCAP_RING_FILES:-10}
+
+services:
+  ssh-pcap:
+    <<: *pcap-sidecar
+    profiles: ["pcap"]
+    network_mode: "service:ssh-decoy"
+    depends_on: [ssh-decoy]
+    environment:
+      <<: *pcap-env
+      AEGIS_PCAP_SENSOR: ssh-decoy-01
+      AEGIS_PCAP_BPF: "tcp port 2222"
+
+  web-pcap:
+    <<: *pcap-sidecar
+    profiles: ["pcap"]
+    network_mode: "service:web-decoy"
+    depends_on: [web-decoy]
+    environment:
+      <<: *pcap-env
+      AEGIS_PCAP_SENSOR: web-decoy-01
+      AEGIS_PCAP_BPF: "tcp port 8080"
+
+  legacy-pcap:
+    <<: *pcap-sidecar
+    profiles: ["pcap"]
+    network_mode: "service:legacy-decoy"
+    depends_on: [legacy-decoy]
+    environment:
+      <<: *pcap-env
+      AEGIS_PCAP_SENSOR: legacy-decoy-01
+      AEGIS_PCAP_BPF: "tcp port 2121 or tcp port 2122"
+
+  smtp-pcap:
+    <<: *pcap-sidecar
+    profiles: ["pcap"]
+    network_mode: "service:smtp-decoy"
+    depends_on: [smtp-decoy]
+    environment:
+      <<: *pcap-env
+      AEGIS_PCAP_SENSOR: smtp-decoy-01
+      AEGIS_PCAP_BPF: "tcp port 2525"
+
+  redis-pcap:
+    <<: *pcap-sidecar
+    profiles: ["pcap"]
+    network_mode: "service:redis-decoy"
+    depends_on: [redis-decoy]
+    environment:
+      <<: *pcap-env
+      AEGIS_PCAP_SENSOR: redis-decoy-01
+      AEGIS_PCAP_BPF: "tcp port 6379"
+
+  mysql-pcap:
+    <<: *pcap-sidecar
+    profiles: ["pcap"]
+    network_mode: "service:mysql-decoy"
+    depends_on: [mysql-decoy]
+    environment:
+      <<: *pcap-env
+      AEGIS_PCAP_SENSOR: mysql-decoy-01
+      AEGIS_PCAP_BPF: "tcp port 3306"
+
+  smb-pcap:
+    <<: *pcap-sidecar
+    profiles: ["pcap"]
+    network_mode: "service:smb-decoy"
+    depends_on: [smb-decoy]
+    environment:
+      <<: *pcap-env
+      AEGIS_PCAP_SENSOR: smb-decoy-01
+      AEGIS_PCAP_BPF: "tcp port 445"
+
+  # The generic-tcp decoy is itself opt-in (profile "generic"); its capture
+  # sidecar is tied to that same profile so it only appears when the decoy does.
+  generic-pcap:
+    <<: *pcap-sidecar
+    profiles: ["generic"]
+    network_mode: "service:generic-tcp-decoy"
+    depends_on: [generic-tcp-decoy]
+    environment:
+      <<: *pcap-env
+      AEGIS_PCAP_SENSOR: generic-tcp-decoy-01
+      AEGIS_PCAP_BPF: "tcp port 9000"
+
+volumes:
+  aegis-pcap:
