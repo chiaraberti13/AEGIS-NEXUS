@@ -485,20 +485,144 @@ class PostgresBackend:
             )
             return cur.rowcount == 1
 
-    def record_sensor_heartbeat(self, sensor_id: str, *, sensor_timestamp: str | None = None,
-                                event_sequence: Any = None, **_: Any) -> dict[str, Any]:
+    def record_sensor_heartbeat(self, sensor_id: str, sensor_timestamp: str | None = None,
+                                collector_received_at: str | None = None,
+                                event_sequence: Any = None) -> dict[str, Any]:
         from psycopg.types.json import Jsonb
-        now = _utc_iso()
-        doc = {"sensor_id": sensor_id, "last_seen_at": now,
-               "sensor_timestamp": sensor_timestamp, "event_sequence": event_sequence}
+        bounded = str(sensor_id)[:96]
+        if not bounded:
+            raise ValueError("sensor_id is required")
+        received = collector_received_at or _utc_iso()
+        bounded_ts = str(sensor_timestamp)[:64] if sensor_timestamp else None
+        doc = {"sensor_id": bounded, "sensor_timestamp": bounded_ts,
+               "collector_received_at": received, "status": "healthy",
+               "event_sequence": event_sequence}
         with self._conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO sensor_heartbeats(sensor_id, last_seen_at, document) VALUES (%s,%s,%s)
                    ON CONFLICT (sensor_id) DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at,
                        document = EXCLUDED.document""",
-                (str(sensor_id), now, Jsonb(doc)),
+                (bounded, received, Jsonb(doc)),
             )
-        return doc
+        return {"sensor_id": bounded, "sensor_timestamp": bounded_ts,
+                "collector_received_at": received, "status": "healthy"}
+
+    def _blank_sensor(self, sensor_id: str, configured: bool = False) -> dict[str, Any]:
+        return {
+            "sensor_id": sensor_id, "configured": configured,
+            "last_received_at": None, "latest_event_timestamp": None,
+            "total_events": 0, "recent_events": 0,
+            "last_heartbeat_at": None, "sensor_heartbeat_timestamp": None,
+            "heartbeat_state": "never",
+        }
+
+    def sensor_telemetry_observation(self, configured_sensor_ids=None, recent_hours: int = 24,
+                                     heartbeat_stale_seconds: int = 180) -> dict[str, Any]:
+        bounded_hours = max(1, min(int(recent_hours), 720))
+        since = (datetime.now(timezone.utc) - timedelta(hours=bounded_hours)).isoformat()
+        observed: dict[str, dict[str, Any]] = {}
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT honeypot, MAX(collector_received_at) AS last_received_at, "
+                "MAX(timestamp) AS latest_event_timestamp, COUNT(*) AS total_events, "
+                "SUM(CASE WHEN collector_received_at >= %s THEN 1 ELSE 0 END) AS recent_events "
+                "FROM events GROUP BY honeypot",
+                (since,),
+            )
+            for row in cur.fetchall():
+                sid = str(row["honeypot"])
+                observed[sid] = {
+                    **self._blank_sensor(sid),
+                    "last_received_at": row["last_received_at"],
+                    "latest_event_timestamp": row["latest_event_timestamp"],
+                    "total_events": int(row["total_events"] or 0),
+                    "recent_events": int(row["recent_events"] or 0),
+                }
+            cur.execute("SELECT sensor_id, last_seen_at, document FROM sensor_heartbeats")
+            heartbeats = cur.fetchall()
+        now = datetime.now(timezone.utc)
+        stale_after = max(30, min(int(heartbeat_stale_seconds), 86400))
+        for row in heartbeats:
+            sid = str(row["sensor_id"])
+            item = observed.setdefault(sid, self._blank_sensor(sid))
+            received = str(row["last_seen_at"])
+            try:
+                received_dt = datetime.fromisoformat(received.replace("Z", "+00:00"))
+                age = max(0, int((now - received_dt.astimezone(timezone.utc)).total_seconds()))
+            except (TypeError, ValueError):
+                age = stale_after + 1
+            item["last_heartbeat_at"] = received
+            item["sensor_heartbeat_timestamp"] = (row["document"] or {}).get("sensor_timestamp")
+            item["heartbeat_age_seconds"] = age
+            item["heartbeat_state"] = "healthy" if age <= stale_after else "stale"
+        configured = {str(s)[:96] for s in (configured_sensor_ids or []) if str(s)}
+        for sid in configured:
+            observed.setdefault(sid, self._blank_sensor(sid, configured=True))["configured"] = True
+        # The core PG backend does not track per-sensor event sequence numbers
+        # (an SQLite-only feature), so every sensor is reported unsequenced.
+        for item in observed.values():
+            item["event_sequence"] = {"state": "unsequenced"}
+        items = [observed[key] for key in sorted(observed, key=str.casefold)]
+        return {
+            "recent_hours": bounded_hours,
+            "configured_sensors": len(configured),
+            "configured_with_recent_telemetry": sum(
+                1 for i in items if i["configured"] and i["recent_events"] > 0),
+            "configured_with_healthy_heartbeat": sum(
+                1 for i in items if i["configured"] and i["heartbeat_state"] == "healthy"),
+            "heartbeat_stale_seconds": stale_after,
+            "sensors_with_sequence_gaps": 0,
+            "missing_sequenced_events": 0,
+            "observed_sensor_ids": len(items),
+            "items": items,
+            "interpretation": (
+                "Heartbeat state uses collector receipt time. Per-sensor event "
+                "sequencing is not tracked by the PostgreSQL backend, so sensors "
+                "are reported unsequenced."
+            ),
+        }
+
+    def sensor_health(self, configured_sensor_ids=None, recent_hours: int = 24,
+                      heartbeat_stale_seconds: int = 180) -> dict[str, Any]:
+        observation = self.sensor_telemetry_observation(
+            configured_sensor_ids=configured_sensor_ids,
+            recent_hours=recent_hours,
+            heartbeat_stale_seconds=heartbeat_stale_seconds,
+        )
+        hours = observation["recent_hours"]
+        sensors: list[dict[str, Any]] = []
+        silent: list[str] = []
+        for item in observation["items"]:
+            recent = int(item.get("recent_events") or 0)
+            heartbeat = item.get("heartbeat_state")
+            gaps = (item.get("event_sequence") or {}).get("state") == "gaps_detected"
+            if item.get("configured") and recent == 0 and heartbeat in {"stale", "never"}:
+                state = "silent"
+            elif gaps or heartbeat == "stale":
+                state = "degraded"
+            else:
+                state = "healthy"
+            sensors.append({
+                **item,
+                "last_event_at": item.get("latest_event_timestamp"),
+                "event_rate_per_hour": round(recent / hours, 3) if hours else 0.0,
+                "sequence_gaps": gaps,
+                "health": state,
+            })
+            if state == "silent":
+                silent.append(str(item.get("sensor_id")))
+        sensors.sort(key=lambda entry: str(entry.get("sensor_id")).casefold())
+        return {
+            "recent_hours": hours,
+            "observation": observation,
+            "sensors": sensors,
+            "silent_sensors": silent,
+            "silent_count": len(silent),
+            "interpretation": (
+                "A configured sensor is 'silent' when it has sent no telemetry in "
+                "the window and its heartbeat is stale or absent."
+            ),
+        }
 
     def operational_health(self, min_free_bytes: int = 67_108_864) -> dict[str, Any]:
         try:
@@ -577,12 +701,6 @@ class PostgresBackend:
             f"{name}() is not implemented by the core PostgreSQL backend; "
             "it belongs to Store's rich analytical surface (ADR 0002)."
         )
-
-    def sensor_telemetry_observation(self, *a: Any, **k: Any) -> Any:
-        self._unsupported("sensor_telemetry_observation")
-
-    def sensor_health(self, *a: Any, **k: Any) -> Any:
-        self._unsupported("sensor_health")
 
     def add_case_evidence(self, *a: Any, **k: Any) -> Any:
         self._unsupported("add_case_evidence")

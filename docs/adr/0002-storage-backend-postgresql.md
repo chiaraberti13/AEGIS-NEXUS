@@ -97,15 +97,19 @@ suite. Implemented on PostgreSQL so far: `page_events` (filters on persisted
 columns, time window, opaque cursor paging via the shared `pagination` module),
 `filter_options` (persisted columns + jsonb-derived dimensions),
 `detection_context` (same-source-IP and credential-fingerprint evidence in a
-timestamp-anchored window; fingerprints only, never raw secrets) and
-`behavioral_context` (historical baseline ending at the anchor, excluding it).
+timestamp-anchored window; fingerprints only, never raw secrets),
+`behavioral_context` (historical baseline ending at the anchor, excluding it),
+and the sensor rollups `sensor_telemetry_observation` + `sensor_health` (per
+honeypot event aggregation + heartbeat freshness; per-sensor event sequencing is
+an SQLite-only feature, so PG reports sensors unsequenced).
 
 Still deferred (methods raise `PostgresBackendUnsupported`, not silently wrong
-data): sensor telemetry/health rollups, and the case evidence/report/timeline
-methods (which also need the richer case schema — case_evidence/history/notes,
-sessions, alerts — ported first). That is a Store-API-surface extension,
-independent of the storage/migration foundation, and is tracked here, out of the
-closed Cycle H cluster.
+data): the case evidence/report/timeline methods (`add_case_evidence`,
+`case_report`, `case_timeline`). These need the richer case schema —
+case_evidence / case_history / case_notes, plus sessions and alerts — ported to
+PostgreSQL first. That schema-plus-logic port is the remaining Store-API-surface
+extension, independent of the storage/migration foundation, tracked here outside
+the closed Cycle H cluster.
 
 ## Notes
 

@@ -46,12 +46,12 @@ release is refused, not migrated down.
 
 Analytics surface, ported incrementally and verified on SQLite and PostgreSQL:
 `page_events` (filters + time window + cursor paging), `filter_options`,
-`detection_context` and `behavioral_context` are implemented. Not yet ported
-(methods raise `PostgresBackendUnsupported` rather than returning silently wrong
-data): sensor telemetry/health rollups, and the case report/timeline/evidence
-methods (which also need the richer case schema ported first). For the full
-console experience run the SQLite profile; the remaining work is tracked in
-ADR 0002.
+`detection_context`, `behavioral_context`, `sensor_telemetry_observation` and
+`sensor_health` are implemented. Not yet ported (methods raise
+`PostgresBackendUnsupported` rather than returning silently wrong data): the case
+report/timeline/evidence methods, which need the richer case schema ported
+first. For the full console experience run the SQLite profile; the remaining
+work is tracked in ADR 0002.
 
 Choosing a backend must never change investigation semantics (the evidence-first
 model, provenance separation and bounded hostile-input handling are backend
@@ -105,12 +105,12 @@ recente viene rifiutato, non migrato all'indietro.
 
 Superficie analitica, portata in modo incrementale e verificata su SQLite e
 PostgreSQL: `page_events` (filtri + finestra temporale + paginazione a cursore),
-`filter_options`, `detection_context` e `behavioral_context` sono implementati.
-Non ancora portato (i metodi sollevano `PostgresBackendUnsupported` invece di
-restituire dati silenziosamente errati): i rollup telemetria/salute sensori e i
-metodi report/timeline/evidenze dei casi (che richiedono prima il port dello
-schema casi più ricco). Per l'esperienza completa della console usa il profilo
-SQLite; il lavoro residuo è tracciato in ADR 0002.
+`filter_options`, `detection_context`, `behavioral_context`,
+`sensor_telemetry_observation` e `sensor_health` sono implementati. Non ancora
+portato (i metodi sollevano `PostgresBackendUnsupported` invece di restituire
+dati silenziosamente errati): i metodi report/timeline/evidenze dei casi, che
+richiedono prima il port dello schema casi più ricco. Per l'esperienza completa
+della console usa il profilo SQLite; il lavoro residuo è tracciato in ADR 0002.
 
 La scelta del backend non deve mai cambiare la semantica investigativa (il
 modello evidence-first, la separazione di provenance e la gestione bounded

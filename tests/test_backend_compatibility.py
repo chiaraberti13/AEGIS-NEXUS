@@ -172,3 +172,29 @@ def test_behavioral_context_excludes_anchor_and_reports_window(backend):
     assert older["id"] in ids        # earlier event is in the baseline window
     assert ctx["analysis"]["anchor_event_id"] == anchor["id"]
     assert ctx["analysis"]["scope"] == "historical_events_excluding_anchor"
+
+
+def test_sensor_telemetry_observation_reports_configured_and_heartbeat(backend):
+    backend.ingest(_event())  # honeypot "ssh-1"
+    backend.record_sensor_heartbeat("ssh-1")
+    obs = backend.sensor_telemetry_observation(configured_sensor_ids=["ssh-1"], recent_hours=24)
+    assert obs["configured_sensors"] == 1
+    item = next(i for i in obs["items"] if i["sensor_id"] == "ssh-1")
+    assert item["configured"] is True
+    assert item["recent_events"] >= 1
+    assert item["heartbeat_state"] == "healthy"
+    assert item["event_sequence"]["state"] == "unsequenced"
+
+
+def test_sensor_health_flags_silent_configured_sensor(backend):
+    # A configured sensor with no telemetry and no heartbeat is "silent".
+    health = backend.sensor_health(configured_sensor_ids=["ghost-sensor"], recent_hours=24)
+    ghost = next(s for s in health["sensors"] if s["sensor_id"] == "ghost-sensor")
+    assert ghost["health"] == "silent"
+    assert "ghost-sensor" in health["silent_sensors"]
+    # An active sensor (events + fresh heartbeat) is healthy, not silent.
+    backend.ingest(_event())
+    backend.record_sensor_heartbeat("ssh-1")
+    health2 = backend.sensor_health(configured_sensor_ids=["ssh-1"], recent_hours=24)
+    active = next(s for s in health2["sensors"] if s["sensor_id"] == "ssh-1")
+    assert active["health"] == "healthy"
