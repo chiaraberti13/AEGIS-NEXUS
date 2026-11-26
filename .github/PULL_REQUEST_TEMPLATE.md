@@ -6,11 +6,11 @@
 
 ## References
 
-<!-- Relevant issue, roadmap or documentation. -->
+<!-- Relevant issue or documentation. -->
 
 ## Common checks
 
-- [ ] Described the problem, solution and relevant issue or roadmap item.
+- [ ] Described the problem, solution and relevant issue or documentation.
 - [ ] Listed verification commands or steps, outcomes and omitted checks with reasons.
 - [ ] Considered security, privacy, accessibility and compatibility; explained non-applicable aspects.
 - [ ] Updated English documentation and both READMEs where affected.

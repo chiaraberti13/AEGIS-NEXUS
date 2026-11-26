@@ -15,14 +15,85 @@
 
 > An evidence-first bilingual honeypot and SOC analysis platform for attack monitoring, investigation, threat research and cybersecurity learning.
 
-<p align="center"><a href="ROADMAP.md">Roadmap</a> · <a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Data provenance</a> · <a href="docs/NETWORK_EVIDENCE.md">Network evidence</a> · <a href="docs/PRIVACY.md">Privacy & retention</a> · <a href="docs/INVESTIGATION.md">Investigation</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">Licence</a></p>
+<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Data provenance</a> · <a href="docs/NETWORK_EVIDENCE.md">Network evidence</a> · <a href="docs/PRIVACY.md">Privacy &amp; retention</a> · <a href="docs/INVESTIGATION.md">Investigation</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">Licence</a></p>
 
 > [!IMPORTANT]
-> Deploy honeypot sensors only on infrastructure you own or are explicitly authorized to monitor. Review the security, privacy and isolation documentation before exposing decoys to the Internet.
+> Deploy honeypot sensors only on infrastructure you own or are explicitly authorized to monitor. Running the decoys **only on your own computer** (the default in this guide) is always fine. Before exposing anything to the Internet, read the security, privacy and isolation documentation.
 
 ---
 
-## 📖 What AEGIS-NEXUS is
+## 🌱 New here? Read this first
+
+**What is a honeypot?** A honeypot is a fake, deliberately weak service (a fake SSH login, a fake website, …) whose only job is to *get attacked*. Nobody real should ever use it, so **every connection it receives is suspicious** — and that is exactly what makes it a clean source of attack data.
+
+**What does AEGIS-NEXUS do?** It runs several of these fake services ("decoys"), safely records what attackers try — the usernames and passwords they guess, the commands they type, the requests they send — and gives you a web dashboard (a mini "SOC console") to explore and investigate that activity. Crucially, it **never runs the attacker's commands**; it only records them.
+
+**Who is it for?**
+- 🎓 People **learning** cybersecurity who want real-looking attack data to practice on.
+- 🛡️ **Blue teams / SOC analysts** who want a small, self-contained lab to monitor and investigate.
+- 🔬 **Researchers** studying attacker behaviour.
+
+**Is it safe to run?** Yes, when you run it **on your own machine** as shown below: the decoys are emulated (they don't give an attacker a real shell), the containers are locked down, and nothing captured is sent to any third party. Risk only appears when you deliberately expose it to the Internet — that's an advanced step covered in the security docs.
+
+👉 **Just want to try it?** Jump to the [5-minute quick start](#-quick-start-in-5-minutes). New to the vocabulary? See [Words in plain English](#-words-in-plain-english).
+
+## ⏱️ Quick start (in 5 minutes)
+
+This runs everything **locally on your computer**. You only need [Docker](https://docs.docker.com/get-docker/) installed and running.
+
+```bash
+# 1. Get the code
+git clone https://github.com/chiaraberti13/AEGIS-NEXUS.git
+cd AEGIS-NEXUS
+
+# 2. Create your settings file
+cp .env.example .env
+
+# 3. Generate 4 random secret keys (run this 4 times) and paste them into .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+
+# 4. Start everything
+docker compose up -d --build
+
+# 5. Check it's healthy (should print {"status":"ok"})
+curl -fsS http://127.0.0.1:8600/health
+```
+
+In step 3, put a different generated value on each of these lines in `.env`:
+
+```text
+AEGIS_SSH_SENSOR_API_KEY=<random-secret-1>
+AEGIS_WEB_SENSOR_API_KEY=<random-secret-2>
+AEGIS_LEGACY_SENSOR_API_KEY=<random-secret-3>
+AEGIS_OPERATOR_API_KEY=<random-secret-4>
+```
+
+Now open **http://127.0.0.1:8600** in your browser and, when asked, paste your `AEGIS_OPERATOR_API_KEY`. That's the SOC console. 🎉
+
+Want to see data appear? Generate some safe, local test traffic (see [Try it out](#-try-it-out)), then watch it show up in the **Live Feed**. When you're done:
+
+```bash
+docker compose down        # stop (keeps your data)
+```
+
+> Stuck? See [Common problems](#-common-problems-troubleshooting).
+
+## 🧩 Words in plain English
+
+| Term | What it means here |
+|---|---|
+| **Decoy / honeypot sensor** | A fake service (SSH, web, FTP, Telnet) that exists only to be attacked and record the attempt. |
+| **Collector** | The central service that receives what the decoys record, checks it and stores it. |
+| **SOC console** | The web dashboard you open in the browser to look at and investigate the activity. ("SOC" = Security Operations Centre.) |
+| **Telemetry** | The data the decoys capture about a connection (who connected, what they tried). |
+| **Event** | One recorded thing that happened — a login attempt, a command, a web request. |
+| **Session** | A group of related events from the same visitor, stitched together. |
+| **Provenance** | *Where a piece of information comes from.* AEGIS always keeps "what was observed" separate from "what we guessed". |
+| **Enrichment** | Extra context added later, e.g. the country/network an IP belongs to. It's context, **not** proof of who did it. |
+| **IOC** | "Indicator of Compromise" — a reusable artefact like a URL, domain or file hash seen in the attack. |
+| **Suricata** | A popular network-intrusion detection tool AEGIS can optionally read data from. |
+
+## 📖 What AEGIS-NEXUS is (the longer version)
 
 AEGIS-NEXUS is a **Honeypot + SOC Analysis + Threat Research + Cybersecurity Learning Lab**. It exposes deliberately limited SSH, web, FTP and Telnet decoys, collects hostile telemetry through authenticated sensor channels and turns it into an investigation workflow without executing attacker-supplied commands or payloads.
 
@@ -31,7 +102,7 @@ The central design rule is provenance: **observed data, external enrichment, der
 ## ✨ Key capabilities
 
 - Isolated SSH, web, FTP and Telnet decoys with per-sensor secrets, signed telemetry and single-use request nonces.
-- Flask/Gunicorn collector with bounded JSON ingestion, rate limits, hostile-input validation and SQLite persistence.
+- Flask/Gunicorn collector with bounded JSON ingestion, rate limits, hostile-input validation and SQLite persistence (optional PostgreSQL backend).
 - Session correlation using explicit decoy connection IDs or Suricata flow identity when available, with temporal fallback.
 - SOC dashboard with global search and filters, Live Feed, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, payloads, IDS alerts, IOC, MITRE/CVE and temporal heatmaps.
 - Interactive Attack Map based only on stored geolocation enrichment.
@@ -40,9 +111,10 @@ The central design rule is provenance: **observed data, external enrichment, der
 - Offline GeoIP/ASN enrichment from operator-supplied MaxMind MMDB files.
 - Offline exact-match threat context from an operator-supplied JSON feed; captured indicators are never sent to third-party services.
 - Deterministic IOC/artifact extraction from observed commands and payloads without automatically labelling values as malicious.
-- Native Suricata EVE JSON ingestion.
+- Native Suricata EVE JSON ingestion (incl. JA3/JA3S/JA4 and JA4H fingerprint values passed through as observed evidence).
+- SSH client HASSH fingerprint and KEXINIT offer lists captured as bounded, observed tooling hints — never identity.
 - Versioned network evidence with socket/HTTP/Suricata provenance, flow duration/counters, bounded HTTP metadata, TLS/DNS evidence and an investigation panel.
-- Optional operator-only bounded PCAP evidence with per-file/capacity/retention limits, SHA-256 integrity verification and explicit session association; elevated capture privileges remain disabled by default.
+- Optional operator-only bounded PCAP evidence, plus an opt-in dedicated packet-capture sidecar pattern (see [`docs/PCAP_CAPTURE.md`](docs/PCAP_CAPTURE.md)); elevated capture privileges remain disabled by default.
 - Bilingual IT/EN interface through central i18n dictionaries.
 - Hardened containers: non-root runtime, read-only filesystems, dropped capabilities, `no-new-privileges`, resource limits and separate management networks.
 - Per-sensor management CIDR binding: built-in decoy identities are accepted only from their expected internal subnet, while sensor trust zones cannot reach operator/UI APIs.
@@ -50,7 +122,9 @@ The central design rule is provenance: **observed data, external enrichment, der
 - Evidence Integrity with separate collector metadata, truncation/redaction indicators and credential fingerprints computed from the original value before storage bounds.
 - Time/capacity retention, online SQLite backups, readiness checks and bounded historical pagination.
 
-## 🗺️ Architecture Diagram
+## 🗺️ Architecture diagram
+
+> You can safely skip this picture on a first read — it shows how the pieces connect once everything is running.
 
 ```mermaid
 flowchart LR
@@ -125,7 +199,7 @@ The backup service shares only the persistent `aegis-data` volume and runs with 
 
 ## 🧭 Investigation model
 
-AEGIS keeps four provenance classes distinct:
+AEGIS keeps four provenance classes distinct — this is the heart of the project:
 
 1. **Observed** — facts captured directly by a decoy or IDS.
 2. **Enrichment** — external/local context with source and timestamp provenance.
@@ -138,19 +212,21 @@ The normal analyst flow is:
 
 See [Investigation workflow](docs/INVESTIGATION.md) for the complete evidence model.
 
-## 🚀 Installation Guide
+## 🚀 Full installation (step by step)
+
+The [quick start](#-quick-start-in-5-minutes) above is enough to try AEGIS. This section explains each step in a bit more detail.
 
 ### 1. Prerequisites
 
-Recommended deployment:
+You need, on your computer:
 
-- Git
-- Docker Engine / Docker Desktop
-- Docker Compose v2 (`docker compose version` must work)
-- free host ports `2222`, `8080`, `2121`, `2323` and local port `8600`
-- for the CLI examples: `curl`, an OpenSSH client and `nc`/netcat
+- **Docker Engine / Docker Desktop**, running.
+- **Docker Compose v2** — check with `docker compose version` (note the space; it must print a version).
+- **Git** to download the code.
+- Free host ports `2222`, `8080`, `2121`, `2323` and local port `8600` (if one is taken, see [Common problems](#-common-problems-troubleshooting)).
+- For the command-line examples: `curl`, an SSH client and `nc`/netcat.
 
-Python 3.12+ is required for direct local development and when running the included host-side Python utilities, such as the Suricata forwarder.
+Python 3.12+ is only needed for local development or the host-side helper scripts (such as the Suricata forwarder), not for the normal Docker deployment.
 
 ### 2. Clone the repository
 
@@ -165,13 +241,13 @@ cd AEGIS-NEXUS
 cp .env.example .env
 ```
 
-Generate a different high-entropy value for **each** sensor and for the operator account:
+`.env` is your private settings file (it is never committed). Generate a different high-entropy value for **each** sensor and for the operator account:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Run the command four times and place different values in `.env`:
+Run it four times and place different values in `.env`:
 
 ```text
 AEGIS_SSH_SENSOR_API_KEY=<random-secret-1>
@@ -180,7 +256,7 @@ AEGIS_LEGACY_SENSOR_API_KEY=<random-secret-3>
 AEGIS_OPERATOR_API_KEY=<random-secret-4>
 ```
 
-Keep `AEGIS_INGEST_API_KEY` empty when using the default per-sensor allowlist. Set `AEGIS_SURICATA_SENSOR_API_KEY` only if you ingest Suricata telemetry. Do not commit `.env`.
+These keys are how the decoys prove their identity to the collector, and how *you* log into the console. Keep `AEGIS_INGEST_API_KEY` empty when using the default per-sensor allowlist. Set `AEGIS_SURICATA_SENSOR_API_KEY` only if you ingest Suricata telemetry. Do not commit `.env`.
 
 ### 4. Build and start AEGIS-NEXUS
 
@@ -208,11 +284,7 @@ A healthy collector returns:
 
 ### 5. Open the SOC console
 
-Open:
-
-**http://127.0.0.1:8600**
-
-When prompted, enter the value of `AEGIS_OPERATOR_API_KEY` from your `.env`. The browser stores it only in `sessionStorage`; closing the session or using the lock button removes it. The authenticated operator identity is shown in the console header. For multi-analyst deployments you can issue per-analyst keys via `AEGIS_OPERATOR_KEYS` alongside the single lab key — see [`docs/OPERATIONS.md`](docs/OPERATIONS.md). Alert-lifecycle changes, case changes, exports and PCAP/artifact access are recorded in an append-only operator audit log attributed to that identity — see [`docs/AUDIT_LOG.md`](docs/AUDIT_LOG.md).
+Open **http://127.0.0.1:8600** and, when prompted, enter the value of `AEGIS_OPERATOR_API_KEY` from your `.env`. The browser stores it only in `sessionStorage`; closing the session or using the lock button removes it. The authenticated operator identity is shown in the console header. For multi-analyst deployments you can issue per-analyst keys via `AEGIS_OPERATOR_KEYS` alongside the single lab key — see [`docs/OPERATIONS.md`](docs/OPERATIONS.md). Alert-lifecycle changes, case changes, exports and PCAP/artifact access are recorded in an append-only operator audit log — see [`docs/AUDIT_LOG.md`](docs/AUDIT_LOG.md).
 
 ## 🔌 Default ports
 
@@ -226,11 +298,11 @@ When prompted, enter the value of `AEGIS_OPERATOR_API_KEY` from your `.env`. The
 
 The sensor ports can be changed with `AEGIS_PUBLIC_*_PORT` variables. Unlike the console, sensors are not loopback-bound by default: restrict exposure with firewall/NAT policy. Keep the operator console private; for remote access use TLS and perimeter controls such as the example in `deploy/nginx.conf.example`.
 
-## 🎮 Usage Instructions
+## 🎮 Try it out
 
 ### Generate safe local telemetry
 
-Use only test credentials and test data. Never type real passwords into a honeypot.
+Use only test credentials and test data. **Never type real passwords into a honeypot.**
 
 SSH:
 
@@ -271,7 +343,22 @@ The resulting events appear in the Live Feed and become available to search, ses
 
 The Live Feed shows recent telemetry. In the Investigation view use **Load older events** to append previous matching events without losing the current search/filter scope. Pagination uses stable opaque cursors rather than offsets.
 
-## 🌍 Optional local GeoIP / ASN enrichment
+## 🆘 Common problems (troubleshooting)
+
+| Symptom | Likely cause & fix |
+|---|---|
+| `docker compose version` fails or "command not found" | Docker Compose v2 isn't installed/updated. Install Docker Desktop, or the `docker-compose-v2` package on Linux. |
+| `Cannot connect to the Docker daemon` | Docker isn't running. Start Docker Desktop, or on Linux `sudo systemctl start docker`. |
+| `curl http://127.0.0.1:8600/health` doesn't answer | Containers may still be building/starting — wait a few seconds and retry, or check `docker compose logs collector`. |
+| `port is already allocated` / `address already in use` | Another program uses that port. Stop it, or change the decoy ports with `AEGIS_PUBLIC_*_PORT` in `.env`. |
+| Console asks for a key and rejects it | You pasted the wrong value — it must equal `AEGIS_OPERATOR_API_KEY` in your `.env` (not a sensor key). |
+| `error ... AEGIS_SSH_SENSOR_API_KEY` on startup | A required key in `.env` is empty. Fill in all four keys from step 3. |
+| No data in the Live Feed | Generate some test traffic (see [Try it out](#-try-it-out)); events appear within a second or two. |
+| Permission denied running `docker` on Linux | Add your user to the `docker` group (`sudo usermod -aG docker "$USER"`) then log out and back in. |
+
+Still stuck? Open collector logs with `docker compose logs -f collector`, or [report a problem](https://github.com/chiaraberti13/AEGIS-NEXUS/issues/new/choose).
+
+## 🌍 Optional: local GeoIP / ASN enrichment
 
 AEGIS can use operator-supplied MaxMind GeoIP2/GeoLite2 MMDB files without sending captured IPs to an external API.
 
@@ -283,7 +370,7 @@ docker compose -f docker-compose.yml -f docker-compose.geoip.yml up -d --build
 
 See [Local enrichment](docs/ENRICHMENT.md).
 
-## 🔎 Optional local Threat Context
+## 🔎 Optional: local threat context
 
 AEGIS can exact-match observed IPs and derived URL/domain/hash artifacts against a local JSON feed. Matches remain external context and do not automatically change severity, create CVEs/MITRE mappings or attribute an actor.
 
@@ -305,7 +392,7 @@ docker compose \
   up -d --build
 ```
 
-## 🛡️ Suricata ingestion
+## 🛡️ Optional: Suricata ingestion
 
 Set an independent `AEGIS_SURICATA_SENSOR_API_KEY` in `.env`. The included helper is a host-side Python utility: install the package first (`python -m pip install -e .`), then forward EVE JSON records:
 
@@ -314,7 +401,7 @@ export AEGIS_SURICATA_SENSOR_API_KEY="<suricata-secret-configured-in-.env>"
 python scripts/send_suricata_event.py --file /var/log/suricata/eve.json --sensor suricata-01
 ```
 
-Suricata alerts are stored as observed IDS telemetry. AEGIS does not invent MITRE or CVE mappings from a signature alone.
+Suricata alerts are stored as observed IDS telemetry. AEGIS does not invent MITRE or CVE mappings from a signature alone. TLS (JA3/JA3S/JA4) and HTTP (JA4H) fingerprint *values* that Suricata/Zeek compute are preserved as observed evidence — AEGIS never computes those proprietary fingerprints itself (see [`docs/NETWORK_EVIDENCE.md`](docs/NETWORK_EVIDENCE.md)).
 
 ## ⚙️ Operations
 
@@ -371,6 +458,7 @@ AEGIS-NEXUS/
 ├── docker-compose.yml                  default hardened stack
 ├── docker-compose.geoip.yml            optional local GeoIP/ASN mount
 ├── docker-compose.threat-context.yml   optional local threat-feed mount
+├── docker-compose.pcap.yml             optional dedicated PCAP capture sidecars
 ├── deploy/                             reverse-proxy example
 ├── docs/                               security, privacy, operations and investigation docs
 ├── scripts/                            backup, Suricata forwarding and utilities
