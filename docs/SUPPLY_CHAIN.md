@@ -59,21 +59,33 @@ python scripts/generate_sbom.py --reproducible --output sbom.json
 
 `.bandit-baseline.json` is a reviewed bandit baseline: every finding it contains
 has been analysed and accepted as safe or by-design, so `make sast` reports only
-**new** findings introduced after the baseline.
+**new** findings introduced after the baseline. Regenerate it with
+`bandit -r src -f json -o .bandit-baseline.json` after a refactor that moves
+accepted findings between modules, and re-review the diff before committing.
 
 Accepted findings and why they are safe:
 
 - **B608 (SQL built with f-strings):** the interpolated part is always an
   identifier taken from a fixed allowlist or module constant (e.g.
-  `_EVENT_FILTERS`, `HASHED_COLUMNS`), and all values are bound with `?`
-  placeholders and length-limited. No attacker input reaches a SQL identifier.
-- **B101 (assert):** the two asserts are redundant type-narrowing hints after an
-  explicit validation that already raised on invalid input, not validation of
-  hostile input.
+  `_EVENT_FILTERS`, `HASHED_COLUMNS`, the PostgreSQL backend's `_FILTER_EXPR`,
+  or a fixed `WHERE`/`ORDER BY` fragment), and all values are bound with
+  placeholders (`?` for SQLite, `%s` for psycopg) and length-limited. No
+  attacker input reaches a SQL identifier. These live in the SQLite store
+  modules (`store_events.py`, `store_sessions.py`, `store_cases.py`,
+  `store_analytics.py` — extracted from `store.py`) and in
+  `postgres_backend.py`.
+- **B101 (assert):** redundant type-narrowing hints after an explicit validation
+  that already raised on invalid input, plus module-load contract checks (e.g.
+  `postgres_backend.py` asserting every `StorageBackend` method is present) — not
+  validation of hostile input.
 - **B104 (bind 0.0.0.0):** by design — a honeypot sensor must be reachable;
   isolation is enforced by the Docker networks and the egress guard.
 - **B310 (urlopen):** the URL is the operator-configured collector endpoint,
-  never attacker-controlled.
+  never attacker-controlled (`forwarding.py`; scheme validated, `# noqa: S310`).
+- **B110 (try/except/pass):** best-effort event forwarding in `forwarding.py`
+  must never crash or block the collector on a downstream/logging error, so a
+  failed optional forward is swallowed after being logged — it is not hiding a
+  security check.
 
 ```
 make sast                 # bandit -r src --baseline .bandit-baseline.json
@@ -164,21 +176,33 @@ python scripts/generate_sbom.py --reproducible --output sbom.json
 
 `.bandit-baseline.json` è una baseline bandit rivista: ogni finding che contiene
 è stato analizzato e accettato come sicuro o by-design, così `make sast` segnala
-solo i finding **nuovi** introdotti dopo la baseline.
+solo i finding **nuovi** introdotti dopo la baseline. Rigenerala con
+`bandit -r src -f json -o .bandit-baseline.json` dopo un refactor che sposta
+finding accettati tra moduli, rivedendo il diff prima del commit.
 
 Finding accettati e perché sono sicuri:
 
 - **B608 (SQL con f-string):** la parte interpolata è sempre un identificatore
   preso da una allowlist fissa o da una costante di modulo (es. `_EVENT_FILTERS`,
-  `HASHED_COLUMNS`) e tutti i valori sono parametrizzati con `?` e limitati in
-  lunghezza. Nessun input dell'attaccante raggiunge un identificatore SQL.
-- **B101 (assert):** i due assert sono *type-narrowing* ridondanti dopo una
-  validazione esplicita che ha già sollevato su input invalido, non validazioni
-  di input ostile.
+  `HASHED_COLUMNS`, il `_FILTER_EXPR` del backend PostgreSQL, o un frammento
+  `WHERE`/`ORDER BY` fisso) e tutti i valori sono parametrizzati con placeholder
+  (`?` per SQLite, `%s` per psycopg) e limitati in lunghezza. Nessun input
+  dell'attaccante raggiunge un identificatore SQL. Vivono nei moduli dello store
+  SQLite (`store_events.py`, `store_sessions.py`, `store_cases.py`,
+  `store_analytics.py` — estratti da `store.py`) e in `postgres_backend.py`.
+- **B101 (assert):** *type-narrowing* ridondanti dopo una validazione esplicita
+  che ha già sollevato su input invalido, più controlli di contratto a load-time
+  (es. `postgres_backend.py` che verifica la presenza di ogni metodo
+  `StorageBackend`) — non validazioni di input ostile.
 - **B104 (bind 0.0.0.0):** by-design — un sensore honeypot deve essere
   raggiungibile; l'isolamento è garantito dalle reti Docker e dall'egress guard.
 - **B310 (urlopen):** l'URL è l'endpoint del collector configurato
-  dall'operatore, mai controllato dall'attaccante.
+  dall'operatore, mai controllato dall'attaccante (`forwarding.py`; schema
+  validato, `# noqa: S310`).
+- **B110 (try/except/pass):** l'inoltro eventi best-effort in `forwarding.py`
+  non deve mai far crashare o bloccare il collector per un errore a valle o di
+  logging, quindi un inoltro opzionale fallito viene assorbito dopo il log — non
+  nasconde un controllo di sicurezza.
 
 ```
 make sast                 # bandit -r src --baseline .bandit-baseline.json

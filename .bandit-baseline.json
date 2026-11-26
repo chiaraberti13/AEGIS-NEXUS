@@ -1,17 +1,17 @@
 {
   "errors": [],
-  "generated_at": "2026-11-23T19:48:42Z",
+  "generated_at": "2026-11-26T16:29:56Z",
   "metrics": {
     "_totals": {
-      "CONFIDENCE.HIGH": 5,
+      "CONFIDENCE.HIGH": 8,
       "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 25,
+      "CONFIDENCE.MEDIUM": 31,
       "CONFIDENCE.UNDEFINED": 0,
       "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 3,
-      "SEVERITY.MEDIUM": 27,
+      "SEVERITY.LOW": 5,
+      "SEVERITY.MEDIUM": 34,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 12094,
+      "loc": 15039,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -31,13 +31,169 @@
     "src/aegis_nexus/alerts.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 2,
+      "CONFIDENCE.MEDIUM": 4,
       "CONFIDENCE.UNDEFINED": 0,
       "SEVERITY.HIGH": 0,
       "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 2,
+      "SEVERITY.MEDIUM": 4,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 189,
+      "loc": 348,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_activity.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 72,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_alerts.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 91,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_analytics.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 64,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_cases.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 163,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_detection_mgmt.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 94,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_detections.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 33,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_iocs.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 78,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_ips.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 33,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_observability.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 93,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_pcap.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 104,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_reports.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 311,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/api_status.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 35,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -50,7 +206,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 1448,
+      "loc": 887,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -63,7 +219,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 56,
+      "loc": 111,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -102,7 +258,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 91,
+      "loc": 104,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -223,6 +379,19 @@
       "nosec": 0,
       "skipped_tests": 0
     },
+    "src/aegis_nexus/detection_coverage.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 154,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
     "src/aegis_nexus/detection_suppression.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
@@ -262,6 +431,19 @@
       "nosec": 0,
       "skipped_tests": 0
     },
+    "src/aegis_nexus/evidence_bundle.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 71,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
     "src/aegis_nexus/fingerprints.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
@@ -272,6 +454,19 @@
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
       "loc": 50,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/forwarding.py": {
+      "CONFIDENCE.HIGH": 2,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 1,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 228,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -297,7 +492,33 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 1,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 183,
+      "loc": 182,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/logging_config.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 51,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/metrics.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 73,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -310,7 +531,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 506,
+      "loc": 546,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -336,7 +557,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 137,
+      "loc": 151,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -379,6 +600,32 @@
       "nosec": 0,
       "skipped_tests": 0
     },
+    "src/aegis_nexus/pdf.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 91,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/postgres_backend.py": {
+      "CONFIDENCE.HIGH": 1,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 3,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 1,
+      "SEVERITY.MEDIUM": 3,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 915,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
     "src/aegis_nexus/quarantine.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
@@ -392,6 +639,19 @@
       "nosec": 0,
       "skipped_tests": 0
     },
+    "src/aegis_nexus/redaction.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 65,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
     "src/aegis_nexus/reporting.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
@@ -401,7 +661,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 308,
+      "loc": 384,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -622,7 +882,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 1,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 239,
+      "loc": 294,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -639,20 +899,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "src/aegis_nexus/store.py": {
-      "CONFIDENCE.HIGH": 0,
-      "CONFIDENCE.LOW": 0,
-      "CONFIDENCE.MEDIUM": 7,
-      "CONFIDENCE.UNDEFINED": 0,
-      "SEVERITY.HIGH": 0,
-      "SEVERITY.LOW": 0,
-      "SEVERITY.MEDIUM": 7,
-      "SEVERITY.UNDEFINED": 0,
-      "loc": 1894,
-      "nosec": 0,
-      "skipped_tests": 0
-    },
-    "src/aegis_nexus/study.py": {
+    "src/aegis_nexus/soc_summary.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -661,7 +908,111 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 368,
+      "loc": 88,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/storage_backend.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 56,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/store.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 1,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 881,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/store_analytics.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 3,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 3,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 434,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/store_cases.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 2,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 2,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 487,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/store_common.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 19,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/store_events.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 1,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 212,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/store_relations.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 186,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "src/aegis_nexus/store_sessions.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 1,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 175,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -720,7 +1071,7 @@
   },
   "results": [
     {
-      "code": "117                 rows = conn.execute(\n118                     f\"SELECT id,session_id,derived FROM events WHERE id IN ({placeholders})\",\n119                     event_ids,\n",
+      "code": "122                 rows = conn.execute(\n123                     f\"SELECT id,session_id,derived FROM events WHERE id IN ({placeholders})\",\n124                     event_ids,\n",
       "col_offset": 22,
       "end_col_offset": 76,
       "filename": "src/aegis_nexus/alerts.py",
@@ -731,16 +1082,16 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 118,
+      "line_number": 123,
       "line_range": [
-        118
+        123
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
       "test_id": "B608",
       "test_name": "hardcoded_sql_expressions"
     },
     {
-      "code": "168             rows = conn.execute(\n169                 f\"SELECT * FROM alerts{where} ORDER BY last_seen DESC,id DESC LIMIT ?\", params\n170             ).fetchall()\n",
+      "code": "173             rows = conn.execute(\n174                 f\"SELECT * FROM alerts{where} ORDER BY last_seen DESC,id DESC LIMIT ?\", params\n175             ).fetchall()\n",
       "col_offset": 18,
       "end_col_offset": 38,
       "filename": "src/aegis_nexus/alerts.py",
@@ -751,9 +1102,54 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 169,
+      "line_number": 174,
       "line_range": [
-        169
+        174
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "237             rows = conn.execute(\n238                 f\"\"\"\n239                 SELECT rule_id, rule_version, status, disposition,\n240                        COUNT(*) AS alerts, SUM(occurrence_count) AS occurrences\n241                 FROM alerts{where}\n242                 GROUP BY rule_id, rule_version, status, disposition\n243                 \"\"\",\n244                 params,\n",
+      "col_offset": 20,
+      "end_col_offset": 27,
+      "filename": "src/aegis_nexus/alerts.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 238,
+      "line_range": [
+        238,
+        239,
+        240,
+        241,
+        242,
+        243
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "336             rows = conn.execute(\n337                 f\"SELECT created_at, acknowledged_at, closed_at FROM alerts{where}\", params\n338             ).fetchall()\n",
+      "col_offset": 18,
+      "end_col_offset": 75,
+      "filename": "src/aegis_nexus/alerts.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 337,
+      "line_range": [
+        337
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
       "test_id": "B608",
@@ -865,7 +1261,48 @@
       "test_name": "hardcoded_sql_expressions"
     },
     {
-      "code": "163                 rows = conn.execute(\n164                     f\"\"\"\n165                     SELECT DISTINCT alert_id FROM alert_evidence\n166                     WHERE evidence_type='event' AND evidence_id IN ({placeholders})\n167                     \"\"\",\n168                     event_ids,\n",
+      "code": "122         )\n123         with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - scheme validated\n124             response.read(1)\n",
+      "col_offset": 13,
+      "end_col_offset": 66,
+      "filename": "src/aegis_nexus/forwarding.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 22,
+        "link": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.",
+      "line_number": 123,
+      "line_range": [
+        123
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_calls.html#b310-urllib-urlopen",
+      "test_id": "B310",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "234                 self._logger.warning(\"aegis-forwarding: %s\", message)\n235             except Exception:\n236                 pass\n237 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "src/aegis_nexus/forwarding.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 235,
+      "line_range": [
+        235,
+        236
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "162                 rows = conn.execute(\n163                     f\"\"\"\n164                     SELECT DISTINCT alert_id FROM alert_evidence\n165                     WHERE evidence_type='event' AND evidence_id IN ({placeholders})\n166                     \"\"\",\n167                     event_ids,\n",
       "col_offset": 24,
       "end_col_offset": 68,
       "filename": "src/aegis_nexus/ioc.py",
@@ -876,12 +1313,12 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 164,
+      "line_number": 163,
       "line_range": [
+        163,
         164,
         165,
-        166,
-        167
+        166
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
       "test_id": "B608",
@@ -930,6 +1367,91 @@
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
       "test_id": "B608",
       "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "302             cur.execute(\n303                 f\"SELECT id, timestamp, document FROM events{where} \"\n304                 \"ORDER BY timestamp DESC, id DESC LIMIT %s\",\n305                 tuple(params),\n",
+      "col_offset": 18,
+      "end_col_offset": 60,
+      "filename": "src/aegis_nexus/postgres_backend.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 303,
+      "line_range": [
+        303,
+        304
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "554             cur.execute(\n555                 f\"SELECT document FROM cases{where} ORDER BY created_at DESC LIMIT %s\",\n556                 tuple(params),\n",
+      "col_offset": 18,
+      "end_col_offset": 44,
+      "filename": "src/aegis_nexus/postgres_backend.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 555,
+      "line_range": [
+        555
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "789                 cur.execute(\n790                     f\"SELECT {expr} AS value, COUNT(*) AS n FROM events \"\n791                     f\"WHERE timestamp >= %s AND {expr} IS NOT NULL AND ({expr})::text <> '' \"\n792                     f\"GROUP BY {expr} ORDER BY n DESC, value ASC LIMIT 100\",\n793                     (since,),\n",
+      "col_offset": 22,
+      "end_col_offset": 29,
+      "filename": "src/aegis_nexus/postgres_backend.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 790,
+      "line_range": [
+        790,
+        791,
+        792
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "1038 # implemented; the behavioural compatibility suite verifies their semantics).\n1039 assert all(hasattr(PostgresBackend, _m) for _m in REQUIRED_METHODS), (\n1040     \"PostgresBackend is missing a StorageBackend contract method\"\n1041 )\n",
+      "col_offset": 0,
+      "end_col_offset": 1,
+      "filename": "src/aegis_nexus/postgres_backend.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+      "line_number": 1039,
+      "line_range": [
+        1039,
+        1040,
+        1041
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+      "test_id": "B101",
+      "test_name": "assert_used"
     },
     {
       "code": "42     enabled: bool = True\n43     bind_host: str = \"0.0.0.0\"\n44     ports: dict[str, int] = field(default_factory=dict)\n",
@@ -1132,7 +1654,7 @@
       "test_name": "hardcoded_bind_all_interfaces"
     },
     {
-      "code": "238             enabled=os.getenv(\"AEGIS_SSH_ENABLED\", \"true\").lower() in {\"1\", \"true\", \"yes\"},\n239             bind_host=os.getenv(\"AEGIS_SSH_BIND\", \"0.0.0.0\"),\n240             ports={\"ssh\": int(os.getenv(\"AEGIS_SSH_PORT\", \"2222\"))},\n",
+      "code": "297             enabled=os.getenv(\"AEGIS_SSH_ENABLED\", \"true\").lower() in {\"1\", \"true\", \"yes\"},\n298             bind_host=os.getenv(\"AEGIS_SSH_BIND\", \"0.0.0.0\"),\n299             ports={\"ssh\": int(os.getenv(\"AEGIS_SSH_PORT\", \"2222\"))},\n",
       "col_offset": 50,
       "end_col_offset": 59,
       "filename": "src/aegis_nexus/sensors/ssh_decoy.py",
@@ -1143,9 +1665,9 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Possible binding to all interfaces.",
-      "line_number": 239,
+      "line_number": 298,
       "line_range": [
-        239
+        298
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b104_hardcoded_bind_all_interfaces.html",
       "test_id": "B104",
@@ -1192,7 +1714,7 @@
       "test_name": "hardcoded_bind_all_interfaces"
     },
     {
-      "code": "206             stored = conn.execute(\n207                 f\"SELECT {', '.join(HASHED_COLUMNS)} FROM events WHERE id=?\", (event[\"id\"],)\n208             ).fetchone()\n",
+      "code": "207             stored = conn.execute(\n208                 f\"SELECT {', '.join(HASHED_COLUMNS)} FROM events WHERE id=?\", (event[\"id\"],)\n209             ).fetchone()\n",
       "col_offset": 18,
       "end_col_offset": 25,
       "filename": "src/aegis_nexus/store.py",
@@ -1203,59 +1725,19 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 207,
+      "line_number": 208,
       "line_range": [
-        207
+        208
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
       "test_id": "B608",
       "test_name": "hardcoded_sql_expressions"
     },
     {
-      "code": "347             rows = conn.execute(\n348                 f\"SELECT * FROM events{where} ORDER BY timestamp DESC, id DESC LIMIT ?\",\n349                 params,\n",
-      "col_offset": 18,
-      "end_col_offset": 38,
-      "filename": "src/aegis_nexus/store.py",
-      "issue_confidence": "MEDIUM",
-      "issue_cwe": {
-        "id": 89,
-        "link": "https://cwe.mitre.org/data/definitions/89.html"
-      },
-      "issue_severity": "MEDIUM",
-      "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 348,
-      "line_range": [
-        348
-      ],
-      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
-      "test_id": "B608",
-      "test_name": "hardcoded_sql_expressions"
-    },
-    {
-      "code": "525             rows = conn.execute(\n526                 f\"SELECT * FROM sessions{where} ORDER BY last_seen DESC, id DESC LIMIT ?\",\n527                 params,\n",
-      "col_offset": 18,
-      "end_col_offset": 40,
-      "filename": "src/aegis_nexus/store.py",
-      "issue_confidence": "MEDIUM",
-      "issue_cwe": {
-        "id": 89,
-        "link": "https://cwe.mitre.org/data/definitions/89.html"
-      },
-      "issue_severity": "MEDIUM",
-      "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 526,
-      "line_range": [
-        526
-      ],
-      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
-      "test_id": "B608",
-      "test_name": "hardcoded_sql_expressions"
-    },
-    {
-      "code": "776             rows = conn.execute(\n777                 f\"\"\"\n778                 SELECT cases.*,\n779                     (SELECT COUNT(*) FROM case_evidence ce WHERE ce.case_id=cases.id) AS evidence_count,\n780                     (SELECT COUNT(*) FROM case_notes cn WHERE cn.case_id=cases.id) AS note_count\n781                 FROM cases\n782                 {where}\n783                 ORDER BY updated_at DESC\n784                 LIMIT ?\n785                 \"\"\",\n786                 params,\n",
+      "code": "60             rows = conn.execute(\n61                 f\"\"\"\n62                 SELECT source_ip, latitude, longitude, country, asn, severity,\n63                        session_id, timestamp, enrichment\n64                 FROM events WHERE {where}\n65                 ORDER BY timestamp DESC LIMIT ?\n66                 \"\"\",\n67                 params,\n",
       "col_offset": 20,
-      "end_col_offset": 16,
-      "filename": "src/aegis_nexus/store.py",
+      "end_col_offset": 34,
+      "filename": "src/aegis_nexus/store_analytics.py",
       "issue_confidence": "MEDIUM",
       "issue_cwe": {
         "id": 89,
@@ -1263,47 +1745,24 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 777,
+      "line_number": 61,
       "line_range": [
-        777,
-        778,
-        779,
-        780,
-        781,
-        782,
-        783,
-        784,
-        785
+        61,
+        62,
+        63,
+        64,
+        65,
+        66
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
       "test_id": "B608",
       "test_name": "hardcoded_sql_expressions"
     },
     {
-      "code": "886                 params.append(case_id)\n887                 conn.execute(f\"UPDATE cases SET {', '.join(fields)} WHERE id=?\", params)\n888             if \"tags\" in data:\n",
-      "col_offset": 31,
-      "end_col_offset": 48,
-      "filename": "src/aegis_nexus/store.py",
-      "issue_confidence": "MEDIUM",
-      "issue_cwe": {
-        "id": 89,
-        "link": "https://cwe.mitre.org/data/definitions/89.html"
-      },
-      "issue_severity": "MEDIUM",
-      "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 887,
-      "line_range": [
-        887
-      ],
-      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
-      "test_id": "B608",
-      "test_name": "hardcoded_sql_expressions"
-    },
-    {
-      "code": "1427                 rows = conn.execute(\n1428                     f\"\"\"\n1429                     SELECT {column} AS value, COUNT(*) AS count\n1430                     FROM events\n1431                     WHERE timestamp >= ? AND {column} IS NOT NULL AND {column} != ''\n1432                     GROUP BY {column}\n1433                     ORDER BY count DESC, value ASC\n1434                     LIMIT 100\n1435                     \"\"\",\n1436                     (since,),\n",
+      "code": "193                 rows = conn.execute(\n194                     f\"\"\"\n195                     SELECT {column} AS value, COUNT(*) AS count\n196                     FROM events\n197                     WHERE timestamp >= ? AND {column} IS NOT NULL AND {column} != ''\n198                     GROUP BY {column}\n199                     ORDER BY count DESC, value ASC\n200                     LIMIT 100\n201                     \"\"\",\n202                     (since,),\n",
       "col_offset": 24,
       "end_col_offset": 27,
-      "filename": "src/aegis_nexus/store.py",
+      "filename": "src/aegis_nexus/store_analytics.py",
       "issue_confidence": "MEDIUM",
       "issue_cwe": {
         "id": 89,
@@ -1311,26 +1770,26 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 1428,
+      "line_number": 194,
       "line_range": [
-        1428,
-        1429,
-        1430,
-        1431,
-        1432,
-        1433,
-        1434,
-        1435
+        194,
+        195,
+        196,
+        197,
+        198,
+        199,
+        200,
+        201
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
       "test_id": "B608",
       "test_name": "hardcoded_sql_expressions"
     },
     {
-      "code": "1497             rows = conn.execute(\n1498                 f\"SELECT * FROM events WHERE {where} ORDER BY timestamp DESC LIMIT ?\",\n1499                 params,\n",
+      "code": "263             rows = conn.execute(\n264                 f\"SELECT * FROM events WHERE {where} ORDER BY timestamp DESC LIMIT ?\",\n265                 params,\n",
       "col_offset": 18,
       "end_col_offset": 45,
-      "filename": "src/aegis_nexus/store.py",
+      "filename": "src/aegis_nexus/store_analytics.py",
       "issue_confidence": "MEDIUM",
       "issue_cwe": {
         "id": 89,
@@ -1338,9 +1797,97 @@
       },
       "issue_severity": "MEDIUM",
       "issue_text": "Possible SQL injection vector through string-based query construction.",
-      "line_number": 1498,
+      "line_number": 264,
       "line_range": [
-        1498
+        264
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "145             rows = conn.execute(\n146                 f\"\"\"\n147                 SELECT cases.*,\n148                     (SELECT COUNT(*) FROM case_evidence ce WHERE ce.case_id=cases.id) AS evidence_count,\n149                     (SELECT COUNT(*) FROM case_notes cn WHERE cn.case_id=cases.id) AS note_count\n150                 FROM cases\n151                 {where}\n152                 ORDER BY updated_at DESC\n153                 LIMIT ?\n154                 \"\"\",\n155                 params,\n",
+      "col_offset": 20,
+      "end_col_offset": 16,
+      "filename": "src/aegis_nexus/store_cases.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 146,
+      "line_range": [
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "282                 params.append(case_id)\n283                 conn.execute(f\"UPDATE cases SET {', '.join(fields)} WHERE id=?\", params)\n284             if \"tags\" in data:\n",
+      "col_offset": 31,
+      "end_col_offset": 48,
+      "filename": "src/aegis_nexus/store_cases.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 283,
+      "line_range": [
+        283
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "77             rows = conn.execute(\n78                 f\"SELECT * FROM events{where} ORDER BY timestamp DESC, id DESC LIMIT ?\",\n79                 params,\n",
+      "col_offset": 18,
+      "end_col_offset": 38,
+      "filename": "src/aegis_nexus/store_events.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 78,
+      "line_range": [
+        78
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "49             rows = conn.execute(\n50                 f\"SELECT * FROM sessions{where} ORDER BY last_seen DESC, id DESC LIMIT ?\",\n51                 params,\n",
+      "col_offset": 18,
+      "end_col_offset": 40,
+      "filename": "src/aegis_nexus/store_sessions.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 50,
+      "line_range": [
+        50
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
       "test_id": "B608",
