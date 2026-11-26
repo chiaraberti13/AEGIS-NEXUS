@@ -385,7 +385,7 @@ These are deliberate design boundaries, not missing features:
 - [x] Refactor SQLite backend behind StorageBackend — `Store` is the reference backend, conformance asserted in tests
 - [ ] Add optional PostgreSQL backend
 - [ ] Extend the Cycle P migration strategy to PostgreSQL
-- [ ] Add backend compatibility tests
+- [x] Add backend compatibility tests _(behavioural contract suite `tests/test_backend_compatibility.py`: a backend-agnostic, parametrized fixture exercises the `StorageBackend` semantics — provenance-preserving ingest/get round-trip, observable counters, case round-trip, health readiness — green against the reference SQLite backend; a future PostgreSQL backend is wired in by adding one entry to `BACKENDS`. Structural conformance stays in `test_storage_backend.py`.)_
 - [x] Document SQLite vs PostgreSQL deployment profiles — `docs/STORAGE.md`
 
 > **PostgreSQL backend deferred** (see `docs/adr/0002-storage-backend-postgresql.md`). The `StorageBackend` interface is defined with SQLite (`Store`) as the verified reference implementation, and the SQLite vs PostgreSQL deployment profiles are documented. The remaining three items — the PostgreSQL backend, porting the migration strategy to PostgreSQL, and backend-parity tests — require a PostgreSQL server and a verified rewrite of the SQLite-specific migration/integrity/hash-chain SQL; they are not shipped unverified (the project does not declare a component safe without verification). No current deployment needs multi-node storage.
@@ -536,7 +536,7 @@ These requirements apply to **every** roadmap cycle.
 | F — Behavioral Analytics | ✅ Completed |
 | K — Detection Engineering & SIEM Interoperability | ✅ Completed |
 | G — Cases, Reporting & SOC Workflow | ✅ Completed |
-| H — Platform Health & Storage | 🟨 19/22 · PostgreSQL backend deferred (ADR 0002) |
+| H — Platform Health & Storage | 🟨 20/22 · backend-compatibility contract suite in place (runs on SQLite, ready for a 2nd backend); PostgreSQL backend + its migrations deferred (ADR 0002) |
 | I — Backend Architecture & Maintainability | 🟨 15/17 · storage split done (6 domains in `store_*`); API-route split done (12 domain blueprints, `app.py` ~1833→~977 lines; only the authenticated ingest/identity core remains in the factory by design); remaining: optional service layer, app.js ES modules (ADR 0003) |
 | J — Study Mode | ❌ Removed |
 | L — Geospatial Attack Visualization | ✅ Completed |
