@@ -20,9 +20,22 @@ The `ssh` section carries `client_version`, the SSH client identification string
 (e.g. `SSH-2.0-OpenSSH_8.9p1`) observed during the handshake and emitted on a
 `connection.identified` event. It is attacker-controlled, so it is bounded to
 the 255-byte limit of RFC 4253 §4.2 and any truncation is disclosed under
-`sensor_capture`. It is strictly a tooling hint: AEGIS never treats it as
-attacker identity and never derives a fingerprint claim from it. Full
-KEX/cipher offer lists (HASSH) are not captured — see ADR 0005.
+`sensor_capture`.
+
+The same event also carries the client's `SSH_MSG_KEXINIT` **offer lists** —
+`kex_algorithms`, `server_host_key_algorithms`, `encryption_algorithms`,
+`mac_algorithms`, `compression_algorithms` (client-to-server direction) — and a
+`hassh` digest with the `hassh_algorithms` string it was computed from. HASSH is
+the Salesforce fingerprint `md5(kex;enc_c2s;mac_c2s;comp_c2s)` (BSD-3-Clause, not
+JA4+), useful for clustering attacker SSH tooling regardless of the spoofable
+version banner. The offer lists are attacker-influenced, so each list is bounded
+(≤ 128 algorithms, each ≤ 64 chars) and the collector re-enforces those bounds
+independently; if the lists exceed the caps they are truncated (disclosed under
+`sensor_capture`) and `hassh` is omitted, because a digest over truncated lists
+would not match any real client. Everything here is strictly a **tooling hint**:
+AEGIS never treats the banner, the offer lists or the HASSH as attacker identity,
+and never promotes them to an enrichment or derived verdict. See ADR 0005 for
+why the JA4+ HTTP/SSH methods are *not* computed natively (licence/patent).
 
 ### Collection boundaries
 
@@ -68,10 +81,23 @@ La sezione `ssh` contiene `client_version`, la stringa di identificazione del
 client SSH (es. `SSH-2.0-OpenSSH_8.9p1`) osservata durante l'handshake ed
 emessa con un evento `connection.identified`. È controllata dall'attaccante,
 quindi viene limitata ai 255 byte previsti dalla RFC 4253 §4.2 e ogni
-troncamento è dichiarato sotto `sensor_capture`. È solo un indizio operativo:
-AEGIS non la tratta mai come identità dell'attaccante e non ne deriva alcun
-fingerprint. Le offer-list complete KEX/cipher (HASSH) non vengono catturate —
-vedi ADR 0005.
+troncamento è dichiarato sotto `sensor_capture`.
+
+Lo stesso evento riporta anche le **offer-list** del `SSH_MSG_KEXINIT` del client
+— `kex_algorithms`, `server_host_key_algorithms`, `encryption_algorithms`,
+`mac_algorithms`, `compression_algorithms` (direzione client→server) — e un
+digest `hassh` con la stringa `hassh_algorithms` da cui è calcolato. HASSH è il
+fingerprint Salesforce `md5(kex;enc_c2s;mac_c2s;comp_c2s)` (BSD-3-Clause, non
+JA4+), utile a raggruppare il tooling SSH dell'attaccante indipendentemente dal
+banner di versione (falsificabile). Le offer-list sono influenzate
+dall'attaccante, quindi ogni lista è limitata (≤ 128 algoritmi, ciascuno ≤ 64
+caratteri) e il collector rimpone gli stessi bound in modo indipendente; se
+superano i limiti vengono troncate (dichiarato sotto `sensor_capture`) e `hassh`
+viene omesso, perché un digest su liste troncate non corrisponderebbe a nessun
+client reale. Tutto qui è solo un **indizio operativo**: AEGIS non tratta mai il
+banner, le offer-list o l'HASSH come identità dell'attaccante e non li promuove a
+verdetto di enrichment o derived. Vedi ADR 0005 per il motivo per cui i metodi
+JA4+ HTTP/SSH *non* sono calcolati nativamente (licenza/brevetto).
 
 ### Confini della raccolta
 

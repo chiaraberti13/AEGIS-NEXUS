@@ -1,9 +1,10 @@
 # ADR 0005 — Cycle C remaining items: client fingerprints and dedicated PCAP capture
 
 - Status: **Accepted** (decisions recorded; items implemented on demand / when unblocked)
-- Date: 2026-11-24 · **Updated 2026-11-26** — JA4+ licence evaluation completed
-  (JA4/TLS permitted under BSD-3; JA4H and other FoxIO-License-1.1 methods
-  declined as native features, GPLv3-incompatible + patent-pending)
+- Date: 2026-11-24 · **Updated 2026-11-26** — (1) SSH KEXINIT offer lists +
+  native HASSH (Salesforce, BSD-3) implemented; (2) JA4+ licence evaluation
+  completed (JA4/TLS permitted under BSD-3; JA4H and other FoxIO-License-1.1
+  methods declined as native features, GPLv3-incompatible + patent-pending)
 - Context: the remaining open Cycle C ("Network Evidence & Visibility") items:
   SSH client version + KEX/cipher offers and HASSH fingerprints; HTTP (JA4H)
   and TLS (JA4) fingerprints; and dedicated-container PCAP capture (BPF,
@@ -14,19 +15,38 @@
 Each remaining item is decided here so none is left dangling. None is shipped
 unverified or over a boundary the project forbids.
 
-### SSH client version + KEX/cipher offers, HASSH — implement on demand
+### SSH client version + KEX/cipher offers, HASSH — implemented (2026-11-26)
 
-The SSH client **version string** is readily available server-side
-(`paramiko.Transport.remote_version`). The full client **KEX/cipher/MAC/
-compression offer lists** needed for a HASSH fingerprint are parsed by paramiko
-during negotiation but are not exposed through a stable public API, so a HASSH
-implementation would depend on paramiko internals and be version-fragile.
+The SSH client **version string** was already captured
+(`paramiko.Transport.remote_version` → `observed.network.ssh.client_version`).
+The client **KEX/cipher/MAC/compression offer lists** and the **HASSH**
+fingerprint are now captured too.
 
-Decision: defer until it can be done without relying on private paramiko state
-(e.g. a thin, well-tested KEXINIT capture hook, or a paramiko release that
-exposes the offers). When implemented, the fingerprint is a **tooling hint,
-never identity**, recorded as `observed`/`observed.network` with provenance and
-bounded hostile-input handling, with isolation and mapping tests.
+paramiko does not expose the peer's offer lists through a public API, but it does
+keep the peer's raw `SSH_MSG_KEXINIT` bytes in `remote_kex_init` while parsing
+them (it clears the field once the key exchange completes, so it is gone by the
+time `start_server` returns). `CapturingSSHTransport` overrides the private
+`_parse_kex_init` to call the real parser and snapshot that buffer; the decoy
+then parses the snapshot with the **public** `paramiko.Message` API. This touches
+exactly one private name, and does so fail-safe: if a future paramiko renames or
+drops `_parse_kex_init`/`remote_kex_init`, the override simply does not run, the
+snapshot stays unset, HASSH is skipped, and the decoy keeps working — no crash,
+never a wrong fingerprint.
+
+HASSH follows the Salesforce definition `md5(kex;enc_c2s;mac_c2s;comp_c2s)` over
+the client offer lists. **Salesforce HASSH is BSD-3-Clause** (not part of the
+FoxIO JA4+ suite), so it is GPLv3-compatible — unlike JA4SSH, which is a
+FoxIO-License-1.1 method and stays declined per the evaluation below. The offer
+lists and digest are recorded as `observed.network.ssh` (`kex_algorithms`,
+`server_host_key_algorithms`, `encryption_algorithms`, `mac_algorithms`,
+`compression_algorithms`, `hassh`, `hassh_algorithms`) — a **tooling hint, never
+identity**. The lists are attacker-influenced, so each is bounded (≤128
+algorithms × ≤64 chars) and `validate_network_evidence` re-enforces those caps on
+the collector side (fail-closed); when the lists exceed the caps they are
+truncated (disclosed under `sensor_capture`) and HASSH is omitted, since a digest
+over truncated lists would match no real client. Guarded by `tests/test_sensors.py`
+(capture, bounding, fail-safe, HASSH vector) and collector-side validation tests
+in `tests/test_network_evidence.py`.
 
 ### HTTP (JA4H) and TLS (JA4) fingerprints — licence evaluation (2026-11-26)
 
@@ -122,9 +142,10 @@ outbound path to a sensor.
   FoxIO-License-1.1 methods are **declined** as native AEGIS-NEXUS features
   (GPLv3-incompatible non-commercial licence + patent-pending methods) and are
   supported only via external-producer (Suricata/Zeek) value ingestion.
-- The HASSH item (KEX/cipher offers) remains deferred on the paramiko-private-API
-  ground above; a JA4SSH-based route is additionally subject to the same FoxIO
-  1.1 decline.
+- The HASSH item (KEX/cipher offer lists + HASSH) is **implemented** natively
+  (Salesforce HASSH, BSD-3), via a fail-safe snapshot of paramiko's
+  `remote_kex_init`. A JA4SSH-based route stays declined under the FoxIO 1.1
+  evaluation above; HASSH does not need it.
 - Dedicated-container PCAP capture remains documented opt-in deployment
   infrastructure (below).
 - No unverified fingerprinting or capture code is shipped, no FoxIO-licensed code

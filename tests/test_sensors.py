@@ -3,6 +3,9 @@ import io
 import socket
 import threading
 
+import paramiko
+
+from aegis_nexus.network_evidence import MAX_SSH_ALGORITHMS
 from aegis_nexus.sensors.legacy import FTPDataHandler, FTPHandler, _readline, _readline_with_status
 from aegis_nexus.sensors.server import BoundedThreadingTCPServer
 from aegis_nexus.sensors.ssh_decoy import (
@@ -14,6 +17,31 @@ from aegis_nexus.sensors.ssh_decoy import (
     _read_command,
 )
 from aegis_nexus.sensors import web_decoy
+
+
+def _ssh_kexinit_bytes(kex, host_key, encryption, mac, compression) -> bytes:
+    """Craft a raw SSH_MSG_KEXINIT payload as paramiko stores in remote_kex_init."""
+    message = paramiko.Message()
+    message.add_byte(bytes((20,)))  # SSH_MSG_KEXINIT
+    message.add_bytes(b"\x00" * 16)  # cookie
+    message.add_list(kex)
+    message.add_list(host_key)
+    message.add_list(encryption)  # client_to_server
+    message.add_list(encryption)  # server_to_client
+    message.add_list(mac)         # client_to_server
+    message.add_list(mac)         # server_to_client
+    message.add_list(compression)  # client_to_server
+    message.add_list(compression)  # server_to_client
+    message.add_boolean(False)    # first_kex_packet_follows
+    message.add_int(0)            # reserved
+    return message.asbytes()
+
+
+class _FakeKexTransport:
+    """Minimal stand-in exposing only the captured-KEXINIT attribute we read."""
+
+    def __init__(self, raw: bytes | None) -> None:
+        self._captured_remote_kex_init = raw
 
 
 def test_ssh_commands_are_emulated_not_executed():
@@ -174,6 +202,92 @@ def test_ssh_client_version_survives_event_normalization():
         }
     )
     assert event["observed"]["network"]["ssh"]["client_version"] == "SSH-2.0-libssh_0.10.6"
+
+
+def test_ssh_hassh_and_offer_lists_are_observed_network_evidence():
+    raw = _ssh_kexinit_bytes(
+        ["curve25519-sha256"], ["ssh-ed25519"], ["aes128-ctr"],
+        ["hmac-sha2-256"], ["none"],
+    )
+    observed = _identification_observed(
+        "203.0.113.60", "s-hassh", "SSH-2.0-OpenSSH_9.6p1", 51000,
+        transport_obj=_FakeKexTransport(raw),
+    )
+    ssh = observed["network"]["ssh"]
+    # The client's offered KEXINIT lists are recorded verbatim (observed),
+    # client-to-server direction for enc/mac/compression — a tooling hint.
+    assert ssh["kex_algorithms"] == ["curve25519-sha256"]
+    assert ssh["server_host_key_algorithms"] == ["ssh-ed25519"]
+    assert ssh["encryption_algorithms"] == ["aes128-ctr"]
+    assert ssh["mac_algorithms"] == ["hmac-sha2-256"]
+    assert ssh["compression_algorithms"] == ["none"]
+    # HASSH = md5(kex;enc_c2s;mac_c2s;comp_c2s) over the client offer lists.
+    assert ssh["hassh_algorithms"] == "curve25519-sha256;aes128-ctr;hmac-sha2-256;none"
+    assert ssh["hassh"] == "e97d07603350d1111ec2b64bf25413c9"
+    assert (
+        hashlib.md5(ssh["hassh_algorithms"].encode(), usedforsecurity=False).hexdigest()
+        == ssh["hassh"]
+    )
+    # Still a tooling hint under observed.network — never identity/derived.
+    assert ssh["client_version"] == "SSH-2.0-OpenSSH_9.6p1"
+    assert "enrichment" not in observed and "derived" not in observed
+
+
+def test_ssh_hassh_absent_when_no_kexinit_captured():
+    # Fail-safe: if the KEXINIT could not be captured (e.g. a future paramiko
+    # renames the internal hook), only the banner is recorded — no fabricated
+    # fingerprint, and the decoy keeps working.
+    observed = _identification_observed(
+        "203.0.113.61", "s-nokex", "SSH-2.0-Go", 51001,
+        transport_obj=_FakeKexTransport(None),
+    )
+    assert observed["network"]["ssh"] == {"client_version": "SSH-2.0-Go"}
+
+
+def test_ssh_kexinit_offer_lists_are_bounded_and_skip_hassh_when_truncated():
+    big_kex = [f"kex-{i}" for i in range(MAX_SSH_ALGORITHMS + 25)]
+    raw = _ssh_kexinit_bytes(
+        big_kex, ["ssh-ed25519"], ["aes128-ctr"], ["hmac-sha2-256"], ["none"],
+    )
+    observed = _identification_observed(
+        "203.0.113.62", "s-big", "SSH-2.0-flooder", 51002,
+        transport_obj=_FakeKexTransport(raw),
+    )
+    ssh = observed["network"]["ssh"]
+    # Offer list is clamped to the shared cap...
+    assert len(ssh["kex_algorithms"]) == MAX_SSH_ALGORITHMS
+    # ...and a HASSH over truncated lists is NOT presented (it would match no
+    # real client); the loss is disclosed, never silent.
+    assert "hassh" not in ssh
+    assert observed["sensor_capture"]["truncated"] is True
+    assert any(
+        entry.get("path") == "observed.network.ssh.algorithms"
+        for entry in observed["sensor_capture"]["truncated_fields"]
+    )
+
+
+def test_ssh_hassh_survives_event_normalization():
+    from aegis_nexus.model import normalize_event
+
+    raw = _ssh_kexinit_bytes(
+        ["curve25519-sha256"], ["ssh-ed25519"], ["aes128-ctr"],
+        ["hmac-sha2-256"], ["none"],
+    )
+    observed = _identification_observed(
+        "203.0.113.63", "s-norm", "SSH-2.0-OpenSSH_9.6p1", 51003,
+        transport_obj=_FakeKexTransport(raw),
+    )
+    event = normalize_event({
+        "honeypot": "ssh-decoy-01",
+        "event_type": "connection.identified",
+        "severity": "info",
+        "observed": observed,
+    })
+    ssh = event["observed"]["network"]["ssh"]
+    # The collector accepts and preserves the fingerprint (it stays within the
+    # bounds validate_network_evidence independently enforces).
+    assert ssh["hassh"] == "e97d07603350d1111ec2b64bf25413c9"
+    assert ssh["kex_algorithms"] == ["curve25519-sha256"]
 
 
 def test_web_decoy_captures_bounded_http_headers_as_network_evidence(monkeypatch):

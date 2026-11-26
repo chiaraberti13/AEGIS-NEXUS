@@ -11,7 +11,11 @@ import paramiko
 from .base import SensorCapabilities, SensorConfig
 from .capture import attach_capture_metadata, bounded_text, mark_truncation
 from .client import SensorClient
-from ..network_evidence import make_network_evidence
+from ..network_evidence import (
+    MAX_SSH_ALGORITHM_LENGTH,
+    MAX_SSH_ALGORITHMS,
+    make_network_evidence,
+)
 from .server import BoundedThreadingTCPServer
 from .persona import load_persona
 from .registry import register_sensor
@@ -20,6 +24,108 @@ HOST_KEY = paramiko.RSAKey.generate(2048)
 MAX_COMMAND = 512
 # RFC 4253 §4.2 caps the SSH identification string at 255 bytes.
 MAX_SSH_IDENTIFICATION = 255
+# SSH_MSG_KEXINIT message type (RFC 4253 §12).
+_SSH_MSG_KEXINIT = 20
+
+
+class CapturingSSHTransport(paramiko.Transport):
+    """paramiko Transport that snapshots the peer's raw KEXINIT for HASSH.
+
+    paramiko stores the peer's raw ``SSH_MSG_KEXINIT`` bytes in
+    ``remote_kex_init`` while parsing it, then clears the field once the key
+    exchange completes — so it is unavailable after ``start_server`` returns.
+    We override the (private) ``_parse_kex_init`` to call the real parser and
+    then keep a copy. If a future paramiko renames that method, this override
+    simply never runs and ``_captured_remote_kex_init`` stays unset: HASSH is
+    then skipped (fail-safe), never wrong, and the decoy keeps working.
+    """
+
+    _captured_remote_kex_init: bytes | None = None
+
+    def _parse_kex_init(self, m):  # type: ignore[override]
+        super()._parse_kex_init(m)
+        try:
+            raw = self.remote_kex_init
+            self._captured_remote_kex_init = bytes(raw) if raw else None
+        except Exception:
+            self._captured_remote_kex_init = None
+
+
+def _bounded_algorithms(raw_list: list[str]) -> tuple[list[str], bool]:
+    """Bound a KEXINIT name-list to the shared caps; report if it was truncated."""
+    bounded: list[str] = []
+    truncated = False
+    for name in raw_list:
+        if not name:  # paramiko yields [''] for an empty name-list
+            continue
+        if len(bounded) >= MAX_SSH_ALGORITHMS:
+            truncated = True
+            break
+        if len(name) > MAX_SSH_ALGORITHM_LENGTH:
+            name = name[:MAX_SSH_ALGORITHM_LENGTH]
+            truncated = True
+        bounded.append(name)
+    return bounded, truncated
+
+
+def _ssh_kex_fingerprint(transport: paramiko.Transport, audit: dict) -> dict | None:
+    """Parse the captured client KEXINIT into bounded offer lists + a HASSH.
+
+    Returns an ``observed.network.ssh`` fragment or ``None``. Everything is
+    wrapped so a parsing surprise never propagates into the decoy's handler:
+    the worst case is no fingerprint, never a crash. HASSH follows the
+    Salesforce definition (``md5(kex;enc_c2s;mac_c2s;comp_c2s)``, client offer
+    lists) and is a tooling hint, never identity. HASSH is only emitted when the
+    offer lists fit within the caps untruncated, so a stored HASSH is always
+    comparable with other tools' values.
+    """
+    try:
+        raw = getattr(transport, "_captured_remote_kex_init", None)
+        if not isinstance(raw, (bytes, bytearray)) or not raw:
+            return None
+        message = paramiko.Message(bytes(raw))
+        if message.get_byte() != bytes((_SSH_MSG_KEXINIT,)):
+            return None
+        message.get_bytes(16)  # cookie
+        lists = [message.get_list() for _ in range(8)]
+        kex, host_key, enc_c2s, _enc_s2c, mac_c2s, _mac_s2c, comp_c2s, _comp_s2c = lists
+        kex_b, t_kex = _bounded_algorithms(kex)
+        host_key_b, t_host = _bounded_algorithms(host_key)
+        enc_b, t_enc = _bounded_algorithms(enc_c2s)
+        mac_b, t_mac = _bounded_algorithms(mac_c2s)
+        comp_b, t_comp = _bounded_algorithms(comp_c2s)
+        if not kex_b:
+            return None  # not a sane KEXINIT — a real client always offers a KEX
+        ssh_extra: dict = {
+            "kex_algorithms": kex_b,
+            "server_host_key_algorithms": host_key_b,
+            "encryption_algorithms": enc_b,
+            "mac_algorithms": mac_b,
+            "compression_algorithms": comp_b,
+        }
+        if any((t_kex, t_host, t_enc, t_mac, t_comp)):
+            # Offer lists exceeded the caps: store the bounded lists, disclose the
+            # loss, and skip HASSH — a digest over truncated lists would not match
+            # any real client and must not be presented as a fingerprint.
+            original = sum(len(x) for x in (kex, host_key, enc_c2s, mac_c2s, comp_c2s))
+            captured = sum(len(x) for x in (kex_b, host_key_b, enc_b, mac_b, comp_b))
+            mark_truncation(
+                audit,
+                "observed.network.ssh.algorithms",
+                original_length=original,
+                captured_length=captured,
+            )
+        else:
+            hassh_algorithms = ";".join(
+                (",".join(kex_b), ",".join(enc_b), ",".join(mac_b), ",".join(comp_b))
+            )
+            ssh_extra["hassh"] = hashlib.md5(
+                hassh_algorithms.encode("utf-8"), usedforsecurity=False
+            ).hexdigest()
+            ssh_extra["hassh_algorithms"] = hassh_algorithms
+        return ssh_extra
+    except Exception:
+        return None
 
 def _base_observed(
     source_ip: str,
@@ -58,14 +164,17 @@ def _identification_observed(
     source_port: int | None = None,
     *,
     destination_port: int | None = None,
+    transport_obj: paramiko.Transport | None = None,
 ) -> dict:
-    """Observed evidence for the attacker's SSH client identification banner.
+    """Observed evidence for the attacker's SSH client identification + HASSH.
 
-    The identification string is attacker-controlled: it is bounded per
-    RFC 4253 and recorded strictly as an ``observed`` tooling hint under
-    ``observed.network.ssh.client_version`` — never as attacker identity, and
-    never a fingerprint claim. Evidence loss (truncation) is disclosed via the
-    standard capture-metadata audit, like every other hostile sensor field.
+    The identification string and the KEXINIT offer lists are both
+    attacker-controlled: they are bounded and recorded strictly as ``observed``
+    tooling hints under ``observed.network.ssh`` (``client_version``, the
+    offered ``*_algorithms`` lists, and the ``hassh`` digest) — never as
+    attacker identity, and never a verdict. Evidence loss (truncation) is
+    disclosed via the standard capture-metadata audit, like every other hostile
+    sensor field.
     """
     audit: dict = {}
     bounded_version = bounded_text(
@@ -86,11 +195,18 @@ def _identification_observed(
     if source_port is not None:
         observed["source_port"] = int(source_port)
         transport["source_port"] = int(source_port)
+    ssh_block: dict = {}
+    if bounded_version:
+        ssh_block["client_version"] = bounded_version
+    if transport_obj is not None:
+        kex_fingerprint = _ssh_kex_fingerprint(transport_obj, audit)
+        if kex_fingerprint:
+            ssh_block.update(kex_fingerprint)
     observed["network"] = make_network_evidence(
         "sensor_socket",
         "application",
         transport=transport,
-        ssh={"client_version": bounded_version},
+        ssh=ssh_block or None,
     )
     attach_capture_metadata(observed, audit)
     return observed
@@ -219,14 +335,15 @@ class SSHHandler(socketserver.BaseRequestHandler):
             "connection",
             _base_observed(source_ip, sensor_session_id, source_port, destination_port=destination_port),
         )
-        transport = paramiko.Transport(self.request)
+        transport = CapturingSSHTransport(self.request)
         transport.local_version = PERSONA.ssh_version
         transport.add_server_key(HOST_KEY)
         server = AegisSSHServer(self.sensor, source_ip, source_port, destination_port, sensor_session_id)
         try:
             transport.start_server(server=server)
             client_version = getattr(transport, "remote_version", "") or ""
-            if client_version:
+            has_kex = bool(getattr(transport, "_captured_remote_kex_init", None))
+            if client_version or has_kex:
                 self.sensor.emit(
                     "connection.identified",
                     _identification_observed(
@@ -235,6 +352,7 @@ class SSHHandler(socketserver.BaseRequestHandler):
                         client_version,
                         source_port,
                         destination_port=destination_port,
+                        transport_obj=transport,
                     ),
                 )
             channel = transport.accept(10)

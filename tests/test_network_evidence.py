@@ -3,6 +3,7 @@ import pytest
 from aegis_nexus.model import EventValidationError, normalize_event
 from aegis_nexus.network_evidence import (
     NETWORK_EVIDENCE_SCHEMA_VERSION,
+    NetworkEvidenceValidationError,
     make_network_evidence,
     suricata_flow_evidence,
 )
@@ -77,3 +78,101 @@ def test_suricata_flow_evidence_captures_available_counters_and_duration():
     assert network["transport"]["source_port"] == 50123
     assert network["transport"]["destination_port"] == 22
     assert network["transport"]["protocol"] == "tcp"
+
+
+def test_ssh_hassh_and_offer_lists_pass_validation_and_normalization():
+    network = make_network_evidence(
+        "sensor_socket",
+        "application",
+        transport={"protocol": "tcp", "destination_port": 22},
+        ssh={
+            "client_version": "SSH-2.0-OpenSSH_9.6p1",
+            "kex_algorithms": ["curve25519-sha256"],
+            "encryption_algorithms": ["aes128-ctr"],
+            "mac_algorithms": ["hmac-sha2-256"],
+            "compression_algorithms": ["none"],
+            "hassh": "e97d07603350d1111ec2b64bf25413c9",
+            "hassh_algorithms": "curve25519-sha256;aes128-ctr;hmac-sha2-256;none",
+        },
+    )
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "connection.identified",
+        "severity": "info",
+        "observed": {"source_ip": "203.0.113.70", "network": network},
+    })
+    assert event["observed"]["network"]["ssh"]["hassh"] == "e97d07603350d1111ec2b64bf25413c9"
+
+
+def test_ssh_hassh_must_be_32_hex_digest():
+    # The collector fails closed on a malformed fingerprint rather than storing it.
+    with pytest.raises(NetworkEvidenceValidationError):
+        make_network_evidence(
+            "sensor_socket", "application",
+            ssh={"hassh": "not-a-valid-hassh"},
+        )
+
+
+def test_ssh_offer_list_rejects_overlong_algorithm_name():
+    with pytest.raises(NetworkEvidenceValidationError):
+        make_network_evidence(
+            "sensor_socket", "application",
+            ssh={"kex_algorithms": ["x" * 65]},
+        )
+
+
+def test_ssh_offer_list_rejects_too_many_algorithms():
+    from aegis_nexus.network_evidence import MAX_SSH_ALGORITHMS
+
+    with pytest.raises(NetworkEvidenceValidationError):
+        make_network_evidence(
+            "sensor_socket", "application",
+            ssh={"kex_algorithms": [f"k{i}" for i in range(MAX_SSH_ALGORITHMS + 1)]},
+        )
+
+
+def test_collector_rejects_ssh_algorithm_name_over_cap_from_a_payload():
+    # Independent collector-side enforcement: even if a sensor were compromised
+    # and sent an over-long algorithm name, normalize_event refuses it
+    # (fail-closed) — the name exceeds the SSH cap but not the generic string
+    # cap, so it reaches validate_network_evidence and raises.
+    forged = {
+        "schema_version": NETWORK_EVIDENCE_SCHEMA_VERSION,
+        "source": "sensor_socket",
+        "capture_layer": "application",
+        "completeness": "partial",
+        "ssh": {"kex_algorithms": ["x" * 65]},
+    }
+    with pytest.raises(EventValidationError):
+        normalize_event({
+            "honeypot": "ssh-1",
+            "event_type": "connection.identified",
+            "severity": "info",
+            "observed": {"source_ip": "203.0.113.71", "network": forged},
+        })
+
+
+def test_collector_bounds_oversize_ssh_offer_list_and_discloses():
+    # A too-long offer list is bounded (to the collector's generic item cap) and
+    # the loss is disclosed under collector.normalization — truncate-and-disclose,
+    # never silent, never a stored over-cap list.
+    from aegis_nexus.network_evidence import MAX_SSH_ALGORITHMS
+
+    forged = {
+        "schema_version": NETWORK_EVIDENCE_SCHEMA_VERSION,
+        "source": "sensor_socket",
+        "capture_layer": "application",
+        "completeness": "partial",
+        "ssh": {"kex_algorithms": [f"k{i}" for i in range(MAX_SSH_ALGORITHMS + 5)]},
+    }
+    event = normalize_event({
+        "honeypot": "ssh-1",
+        "event_type": "connection.identified",
+        "severity": "info",
+        "observed": {"source_ip": "203.0.113.72", "network": forged},
+    })
+    stored = event["observed"]["network"]["ssh"]["kex_algorithms"]
+    assert len(stored) <= MAX_SSH_ALGORITHMS
+    normalization = event["collector"]["normalization"]
+    assert normalization["lossy"] is True
+    assert "observed.network.ssh.kex_algorithms" in normalization["paths"]["truncated_collections"]

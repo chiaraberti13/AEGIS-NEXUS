@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime
 from typing import Any
 
@@ -8,6 +9,25 @@ NETWORK_EVIDENCE_SCHEMA_VERSION = "1.0"
 NETWORK_SOURCES = {"sensor_socket", "http_request", "suricata_eve"}
 CAPTURE_LAYERS = {"application", "transport", "ids_flow"}
 COMPLETENESS = {"partial", "complete_for_source"}
+
+# Bounds for SSH KEXINIT offer lists / HASSH (attacker-influenced tooling hints,
+# never identity). A real client's KEXINIT is far smaller than these caps; they
+# exist so a pathological peer cannot bloat stored evidence. Enforced here so
+# both the sensor (via make_network_evidence) and the collector (via
+# normalize_event -> validate_network_evidence) uphold them, fail-closed.
+MAX_SSH_ALGORITHMS = 128
+MAX_SSH_ALGORITHM_LENGTH = 64
+MAX_SSH_HASSH_STRING = 4096
+_SSH_ALGORITHM_LISTS = (
+    "kex_algorithms",
+    "server_host_key_algorithms",
+    "encryption_algorithms",
+    "mac_algorithms",
+    "compression_algorithms",
+)
+# HASSH is an MD5 hex digest (32 lowercase hex chars) — a fingerprint of the
+# client's offered algorithms, never a secret and never identity.
+_HASSH_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 class NetworkEvidenceValidationError(ValueError):
@@ -159,16 +179,47 @@ def validate_network_evidence(value: Any) -> None:
             raise NetworkEvidenceValidationError(f"observed.network.{field} must be an object")
 
     ssh = value.get("ssh")
-    if isinstance(ssh, dict) and ssh.get("client_version") is not None:
-        client_version = ssh["client_version"]
-        if not isinstance(client_version, str):
-            raise NetworkEvidenceValidationError(
-                "observed.network.ssh.client_version must be a string"
-            )
-        # RFC 4253 §4.2 caps the SSH identification string at 255 bytes; the
-        # value is attacker-controlled so it is an observed tooling hint only,
-        # never attacker identity.
-        if len(client_version) > 255:
-            raise NetworkEvidenceValidationError(
-                "observed.network.ssh.client_version exceeds 255 bytes"
-            )
+    if isinstance(ssh, dict):
+        if ssh.get("client_version") is not None:
+            client_version = ssh["client_version"]
+            if not isinstance(client_version, str):
+                raise NetworkEvidenceValidationError(
+                    "observed.network.ssh.client_version must be a string"
+                )
+            # RFC 4253 §4.2 caps the SSH identification string at 255 bytes; the
+            # value is attacker-controlled so it is an observed tooling hint only,
+            # never attacker identity.
+            if len(client_version) > 255:
+                raise NetworkEvidenceValidationError(
+                    "observed.network.ssh.client_version exceeds 255 bytes"
+                )
+        # Client KEXINIT offer lists: each a bounded list of short algorithm
+        # name strings. Tooling hints only, never identity.
+        for field in _SSH_ALGORITHM_LISTS:
+            algorithms = ssh.get(field)
+            if algorithms is None:
+                continue
+            if not isinstance(algorithms, list) or len(algorithms) > MAX_SSH_ALGORITHMS:
+                raise NetworkEvidenceValidationError(
+                    f"observed.network.ssh.{field} must be a list of at most "
+                    f"{MAX_SSH_ALGORITHMS} algorithm names"
+                )
+            for name in algorithms:
+                if not isinstance(name, str) or len(name) > MAX_SSH_ALGORITHM_LENGTH:
+                    raise NetworkEvidenceValidationError(
+                        f"observed.network.ssh.{field} entries must be strings of at "
+                        f"most {MAX_SSH_ALGORITHM_LENGTH} chars"
+                    )
+        if ssh.get("hassh") is not None:
+            hassh = ssh["hassh"]
+            if not isinstance(hassh, str) or not _HASSH_RE.match(hassh):
+                raise NetworkEvidenceValidationError(
+                    "observed.network.ssh.hassh must be a 32-char lowercase hex digest"
+                )
+        if ssh.get("hassh_algorithms") is not None:
+            hassh_algorithms = ssh["hassh_algorithms"]
+            if not isinstance(hassh_algorithms, str) or len(hassh_algorithms) > MAX_SSH_HASSH_STRING:
+                raise NetworkEvidenceValidationError(
+                    "observed.network.ssh.hassh_algorithms must be a string of at most "
+                    f"{MAX_SSH_HASSH_STRING} chars"
+                )
