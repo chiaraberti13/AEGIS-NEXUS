@@ -114,10 +114,52 @@ prerequisite to splitting it further, and is out of scope here. The ES-module co
 browser XSS smoke test (`tests/browser/xss_smoke.cjs`) and the safe-DOM/i18n
 checks now scan every `static/*.js` module.
 
+## Update (2026-11-26) — Cycle I formally closed
+
+The two items that remained open are now **decided**, not left pending. Both are
+judgement calls this ADR is the right place to settle, and settling them is what
+"closing Cycle I" means — neither is blocked on missing work or an external
+dependency.
+
+**"Introduce explicit service layer where useful" — closed: declined, no
+concrete need (YAGNI).** The item is conditional by its own wording ("where
+useful"). After the storage split (six `store_*` modules behind `Store`) and the
+API-route split (twelve blueprint factories), the request-handling path is
+already layered: a blueprint captures its dependencies explicitly and calls the
+composed `Store` / domain helpers directly. Inserting a separate service layer
+between them now would add indirection without removing any — there is no
+duplicated orchestration across blueprints, no transaction spanning multiple
+domains, and no second caller (CLI/queue) that would share business logic with
+the HTTP layer. Introducing one speculatively would be the "speculative
+generality" this ADR set out to avoid. **Reopen trigger:** a concrete second
+entry point (e.g. a background worker or CLI that must reuse case/alert logic
+now living in a blueprint), or orchestration duplicated across ≥2 blueprints.
+Until then, the layering is the blueprint + `store_*` boundary already in place.
+
+**"Split `static/app.js` into ES modules by view (no build step)" — closed:
+complete to its by-design boundary.** `app.js` is a native ES module; the shared
+foundation lives in the cycle-free leaf `core.js`; and the self-contained views
+(`map`, `health`, `iocs`, `alerts`, `audit`) are independent modules importing
+only from `core.js`, cross-view calls inverted via injected hooks. The remaining
+coupled core (dashboard, investigate, relations, cases) stays in `app.js` **by
+design** — see the boundary analysis above: splitting it would replace direct
+calls with a growing web of inter-module hooks, i.e. worse boundaries on working
+code. That is the correct end state for "split by view without a mandatory build
+step", not an unfinished one. **Reopen trigger:** a refactor of the shared
+event/session *selection model* and `refresh()` orchestrator that would let those
+views become clean leaves; only then is splitting them an improvement. Guarded by
+the browser nav + XSS smoke tests and the safe-DOM/i18n scan over every
+`static/*.js`.
+
+With these, **Cycle I is complete**: every item is either implemented or a
+recorded, triggered decision. No big-bang rewrite was taken onto security-
+critical code.
+
 ## Consequences
 
-- The remaining Cycle I split/service-layer items stay unchecked and are tracked
-  by this ADR; "Review frontend module boundaries" is satisfied (documented
+- The two remaining Cycle I items (service layer, final `app.js` split) are now
+  **closed by decision** in the 2026-11-26 update above, each with an explicit
+  reopen trigger; "Review frontend module boundaries" is satisfied (documented
   here and in `docs/ARCHITECTURE.md`).
 - Already delivered in Cycle I: the mypy gate, API contract tests, the internal
   architecture doc, and the Playwright XSS browser smoke test.
