@@ -112,12 +112,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install pip-audit==2.7.3
       - name: Audit the hash-locked runtime dependencies
-        # PYSEC-2026-2858 (paramiko SHA-1 in rsakey.py) is accepted with no
-        # fixed release yet: paramiko runs server-side in the SSH decoy, not as
-        # a client verifying trusted signatures — not exploitable in the
-        # honeypot threat model. See docs/SUPPLY_CHAIN.md (triage). Drop the
-        # ignore when a fixed paramiko release ships.
-        run: pip-audit --requirement requirements.lock --ignore-vuln PYSEC-2026-2858
+        run: pip-audit --requirement requirements.lock
 
   secret-scan:
     name: Secret scanning (gitleaks)

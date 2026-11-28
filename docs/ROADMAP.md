@@ -28,6 +28,10 @@ Le stime sono giorni di lavoro indicativi. L’ordine privilegia distribuzione, 
 | AN-07 | TODO | P2 · rende leggibili dati e mappe a più utenti · visual e i18n · 2–3 g | AN-03, AN-04 | Alternative tabulari per visualizzazioni chiave, feedback per vuoto/errore/caricamento, formati IT/EN coerenti. Audit tastiera, contrasto, zoom, viewport stretti, movimento ridotto e lettore di schermo. |
 | AN-08 | TODO | P1 · verifica un candidato stabile · release · 2–3 g | AN-01–AN-07 | Suite completa, smoke dell’immagine da checkout pulito, compatibilità PostgreSQL, isolamento ed egress su host Linux, backup/rollback, supply chain, audit accessibilità e doc IT/EN. Valutare controlli definitivi e tag solo dopo verifica positiva. |
 
+## Supply chain
+
+- Remediata `PYSEC-2026-2858` (paramiko `rsakey.py` ammetteva SHA-1): il pin runtime passa a `paramiko>=5,<6` e il lock con hash a `paramiko==5.1.0` (dipendenze transitive già soddisfatte dal lock, hash verificati contro PyPI). Rimossa la soppressione `--ignore-vuln PYSEC-2026-2858` dalla CI e aggiornata la triage in SUPPLY_CHAIN.md: `pip-audit --requirement requirements.lock` ora riporta «No known vulnerabilities found» e la suite resta verde (520 test con PostgreSQL). Contribuisce al percorso di sicurezza/supply chain di AN-08.
+
 ## Continuità
 
 La [roadmap storica](https://github.com/chiaraberti13/AEGIS-NEXUS/blob/142f007/ROADMAP.md) resta consultabile nel commit precedente alla rimozione (`adfaf18`). I cicli Foundation, A–I, K, L e P risultano chiusi storicamente per implementazione o decisione, con evidenze e limiti nel documento originale. Il ciclo J Study Mode resta archiviato. La regola Sigma è rinviata dall’ADR 0001. Il layer servizi generalizzato è chiuso dall’ADR 0003. Zeek e fingerprint nativi seguono gli ADR 0004 e 0005. HASSH, passthrough JA4H e sidecar PCAP risultano presenti. La cattura live richiede verifica su un host adatto.

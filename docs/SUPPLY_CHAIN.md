@@ -111,7 +111,7 @@ CI audits the hash-locked closure (`pip-audit --requirement requirements.lock`).
 
 | Advisory | Package | Decision | Rationale |
 |---|---|---|---|
-| `PYSEC-2026-2858` | paramiko 4.0.0 | **accepted, no fix released** | "rsakey.py allows the SHA-1 algorithm." paramiko runs **server-side in the SSH decoy** (a honeypot that deliberately accepts any client, with an ephemeral generated host key) — it is never used as a client verifying trusted signatures, so SHA-1 in `rsakey.py` is not exploitable in the honeypot threat model. No fixed release exists yet (fix is only upstream commit `a448945`). Re-evaluate and drop the ignore when a fixed paramiko release ships. Pinned with `--ignore-vuln` in CI. |
+| `PYSEC-2026-2858` | paramiko 4.0.0 | **resolved — upgraded to paramiko 5.1.0** | "rsakey.py allows the SHA-1 algorithm." Previously accepted (paramiko runs **server-side in the SSH decoy**, never as a client verifying trusted signatures, so it was not exploitable in the honeypot threat model) while no fixed release existed. A fixed release has now shipped: the runtime pin is raised to `paramiko>=5,<6` and the hash-locked closure to `paramiko==5.1.0`, the full suite stays green, and the `--ignore-vuln` has been removed from CI. No accepted advisories remain. |
 
 ---
 
