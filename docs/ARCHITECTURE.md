@@ -87,10 +87,12 @@ SIEM forward. Each rejection is counted; evidence loss is always disclosed.
 
 ### Ports & adapters
 
-The `StorageBackend` protocol is the main port; `Store` (SQLite) is the
-reference adapter. A PostgreSQL adapter is deferred (ADR 0002). Enrichment,
-threat-context and passive-fingerprint providers are pluggable interfaces so
-external context can be swapped without touching the evidence model.
+The `StorageBackend` protocol defines a persistence contract implemented by
+`Store` (SQLite) and the standalone `PostgresBackend` adapter. The Flask
+factory instantiates SQLite stores directly, including for alerts and
+detection suppressions. See [storage backends](STORAGE.md) for the scope
+of PostgreSQL support. Enrichment, threat-context and passive-fingerprint
+providers can be swapped without touching the evidence model.
 
 ### Type checking
 
@@ -151,7 +153,7 @@ e delle API. Questa pagina è la mappa del codice; gli invarianti stanno in
 - **Storage** (`store.py`): SQLite raw (WAL) dietro l'interfaccia
   `StorageBackend` (`storage_backend.py`); migrazioni forward-only
   (`migrations.py`) su `PRAGMA user_version`; hash-chain degli eventi a prova di
-  manomissione (`event_chain.py`); backup + verifica restore (`backup.py`). La
+  manomissione (`event_chain.py`); backup + verifica restore (`backup.py`). I
   domini di storage sono estratti in moduli dedicati — proiezione del grafo di
   relazioni (`store_relations.py`), gestione casi (`store_cases.py`), analytics
   /dashboard (`store_analytics.py`), letture eventi (`store_events.py`) e
@@ -189,11 +191,13 @@ contato; la perdita di evidenza è sempre dichiarata.
 
 ### Porte & adattatori
 
-Il protocollo `StorageBackend` è la porta principale; `Store` (SQLite) è
-l'adattatore di riferimento. Un adattatore PostgreSQL è deferito (ADR 0002). I
-provider di enrichment, threat-context e fingerprint passivi sono interfacce
-sostituibili, così il contesto esterno si può cambiare senza toccare il modello
-di evidenza.
+Il protocollo `StorageBackend` definisce un contratto di persistenza
+implementato da `Store` (SQLite) e dall’adattatore autonomo
+`PostgresBackend`. La factory Flask inizializza direttamente gli store
+SQLite, compresi quelli per gli alert e le soppressioni delle detection.
+Vedi i [backend di storage](STORAGE.md) per l’ambito del supporto
+PostgreSQL. I provider di enrichment, threat context e fingerprint passivi
+sono sostituibili senza modificare il modello delle evidenze.
 
 ### Type checking
 

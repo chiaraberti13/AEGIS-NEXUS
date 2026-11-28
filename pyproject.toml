@@ -23,6 +23,9 @@ postgres = ["psycopg[binary]>=3.2,<4"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+aegis_nexus = ["static/*.js", "static/*.css", "templates/*.html"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

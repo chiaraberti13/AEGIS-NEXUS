@@ -15,10 +15,10 @@
 
 > Una piattaforma bilingue honeypot e di analisi SOC "evidence-first" per monitoraggio degli attacchi, investigazione, threat research e apprendimento della cybersecurity.
 
-<p align="center"><a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Modello di minaccia</a> · <a href="docs/DATA_PROVENANCE.md">Provenienza dei dati</a> · <a href="docs/NETWORK_EVIDENCE.md">Evidenza di rete</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="docs/INVESTIGATION.md">Investigazione</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">Licenza</a></p>
+<p align="center"><a href="SECURITY.md">Sicurezza</a> · <a href="docs/THREAT_MODEL.md">Modello di minaccia</a> · <a href="docs/DATA_PROVENANCE.md">Provenienza dei dati</a> · <a href="docs/NETWORK_EVIDENCE.md">Evidenza di rete</a> · <a href="docs/PRIVACY.md">Privacy e retention</a> · <a href="docs/INVESTIGATION.md">Investigazione</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="LICENSE">Licenza</a></p>
 
 > [!IMPORTANT]
-> Esponi i sensori honeypot solo su infrastruttura di tua proprietà o che sei esplicitamente autorizzato a monitorare. Eseguire i decoy **solo sul tuo computer** (l'impostazione predefinita di questa guida) è sempre sicuro. Prima di esporre qualcosa su Internet, leggi la documentazione su sicurezza, privacy e isolamento.
+> Esponi i sensori honeypot solo su infrastruttura di tua proprietà o che sei esplicitamente autorizzato a monitorare. L’avvio rapido associa le porte pubblicate all’interfaccia di loopback del tuo computer. Prima di esporre qualcosa su Internet, leggi la documentazione su sicurezza, privacy e isolamento.
 
 ---
 
@@ -33,7 +33,7 @@
 - 🛡️ **Blue team / analisti SOC** che vogliono un piccolo laboratorio autonomo per monitorare e investigare.
 - 🔬 **Ricercatori** che studiano il comportamento degli attaccanti.
 
-**È sicuro da eseguire?** Sì, quando lo esegui **sul tuo computer** come mostrato sotto: i decoy sono emulati (non danno all'attaccante una shell reale), i container sono blindati e nulla di ciò che viene catturato è inviato a terze parti. Il rischio nasce solo quando lo esponi deliberatamente su Internet — un passo avanzato trattato nella documentazione di sicurezza.
+**Cosa espone la configurazione locale?** Per impostazione predefinita le porte pubblicate sono associate al loopback, i container operano con privilegi ridotti e i decoy emulano le interazioni senza eseguire i comandi raccolti. Tratta i dati acquisiti come sensibili e custodisci la chiave operatore.
 
 👉 **Vuoi solo provarlo?** Vai all'[avvio rapido in 5 minuti](#-avvio-rapido-in-5-minuti). Nuovo con i termini? Vedi [Parole in parole semplici](#-parole-in-parole-semplici).
 
@@ -102,7 +102,7 @@ La regola di design centrale è la provenienza: **dati osservati, enrichment est
 ## ✨ Capacità principali
 
 - Decoy SSH, web, FTP e Telnet isolati con segreti per-sensore, telemetria firmata e nonce di richiesta monouso.
-- Collector Flask/Gunicorn con ingestione JSON bounded, rate limit, validazione dell'input ostile e persistenza SQLite (backend PostgreSQL opzionale).
+- Collector Flask/Gunicorn con ingestione JSON bounded, rate limit, validazione dell'input ostile e persistenza SQLite. È disponibile un adattatore PostgreSQL autonomo per integrazioni di storage e test del contratto. Vedi la [documentazione dello storage](docs/STORAGE.md).
 - Correlazione di sessione tramite ID di connessione espliciti del decoy o identità di flow Suricata quando disponibile, con fallback temporale.
 - Dashboard SOC con ricerca e filtri globali, Live Feed, attacchi nel tempo, IP unici, Paesi, ASN, porte, protocolli, servizi, honeypot, credenziali, comandi, payload, alert IDS, IOC, MITRE/CVE e heatmap temporali.
 - Mappa degli attacchi interattiva basata solo sull'enrichment di geolocalizzazione memorizzato.

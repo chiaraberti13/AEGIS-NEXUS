@@ -15,10 +15,10 @@
 
 > An evidence-first bilingual honeypot and SOC analysis platform for attack monitoring, investigation, threat research and cybersecurity learning.
 
-<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Data provenance</a> · <a href="docs/NETWORK_EVIDENCE.md">Network evidence</a> · <a href="docs/PRIVACY.md">Privacy &amp; retention</a> · <a href="docs/INVESTIGATION.md">Investigation</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="LICENSE">Licence</a></p>
+<p align="center"><a href="SECURITY.md">Security</a> · <a href="docs/THREAT_MODEL.md">Threat model</a> · <a href="docs/DATA_PROVENANCE.md">Data provenance</a> · <a href="docs/NETWORK_EVIDENCE.md">Network evidence</a> · <a href="docs/PRIVACY.md">Privacy &amp; retention</a> · <a href="docs/INVESTIGATION.md">Investigation</a> · <a href="docs/OPERATIONS.md">Operations</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="LICENSE">Licence</a></p>
 
 > [!IMPORTANT]
-> Deploy honeypot sensors only on infrastructure you own or are explicitly authorized to monitor. Running the decoys **only on your own computer** (the default in this guide) is always fine. Before exposing anything to the Internet, read the security, privacy and isolation documentation.
+> Deploy honeypot sensors only on infrastructure you own or are explicitly authorized to monitor. The quick start binds the published ports to your computer’s loopback interface. Before exposing anything to the Internet, read the security, privacy and isolation documentation.
 
 ---
 
@@ -33,7 +33,7 @@
 - 🛡️ **Blue teams / SOC analysts** who want a small, self-contained lab to monitor and investigate.
 - 🔬 **Researchers** studying attacker behaviour.
 
-**Is it safe to run?** Yes, when you run it **on your own machine** as shown below: the decoys are emulated (they don't give an attacker a real shell), the containers are locked down, and nothing captured is sent to any third party. Risk only appears when you deliberately expose it to the Internet — that's an advanced step covered in the security docs.
+**What does the local setup expose?** The published ports are bound to loopback by default, the containers run with restricted privileges, and the decoys emulate interactions without running captured commands. Treat captured data as sensitive and keep the operator key private.
 
 👉 **Just want to try it?** Jump to the [5-minute quick start](#-quick-start-in-5-minutes). New to the vocabulary? See [Words in plain English](#-words-in-plain-english).
 
@@ -102,7 +102,7 @@ The central design rule is provenance: **observed data, external enrichment, der
 ## ✨ Key capabilities
 
 - Isolated SSH, web, FTP and Telnet decoys with per-sensor secrets, signed telemetry and single-use request nonces.
-- Flask/Gunicorn collector with bounded JSON ingestion, rate limits, hostile-input validation and SQLite persistence (optional PostgreSQL backend).
+- Flask/Gunicorn collector with bounded JSON ingestion, rate limits, hostile-input validation and SQLite persistence. A standalone PostgreSQL adapter is available for storage integration and contract testing. See [storage](docs/STORAGE.md).
 - Session correlation using explicit decoy connection IDs or Suricata flow identity when available, with temporal fallback.
 - SOC dashboard with global search and filters, Live Feed, attacks over time, unique IPs, countries, ASN, ports, protocols, services, honeypots, credentials, commands, payloads, IDS alerts, IOC, MITRE/CVE and temporal heatmaps.
 - Interactive Attack Map based only on stored geolocation enrichment.

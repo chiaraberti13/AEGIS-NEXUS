@@ -2,13 +2,12 @@
 
 ## English
 
-The collector depends on a storage backend through the `StorageBackend`
-interface (`src/aegis_nexus/storage_backend.py`). **SQLite**, implemented by
-`Store`, is the default reference backend. An opt-in **PostgreSQL** backend
-(`PostgresBackend`, psycopg 3) implements core persistence — see
-`docs/adr/0002-storage-backend-postgresql.md`.
+The collector and SOC console run on **SQLite**. The `StorageBackend`
+protocol covers core persistence and has two implementations, `Store`
+(SQLite) and the standalone `PostgresBackend` adapter (psycopg 3). See
+[ADR 0002](adr/0002-storage-backend-postgresql.md) for the decision history.
 
-### SQLite profile (current, recommended)
+### SQLite deployment
 
 - Single-node, file-based (`AEGIS_DATABASE_PATH`), WAL journaling with
   `foreign_keys=ON`, `trusted_schema=OFF`, `secure_delete=ON` and a busy
@@ -22,13 +21,15 @@ interface (`src/aegis_nexus/storage_backend.py`). **SQLite**, implemented by
   verification (`make verify-restore`).
 - Best for: a single collector instance (the common honeypot deployment),
   where operational simplicity and file-level backup/restore are advantages.
-- Bounds: one writer process; very high sustained ingest across many
-  concurrent writers is where a client/server database would help.
+- SQLite serializes write transactions. Measure contention and ingestion
+  latency under representative load before choosing a different deployment
+  architecture.
 
-### PostgreSQL profile (opt-in, core persistence)
+### Standalone PostgreSQL adapter
 
-`PostgresBackend` (psycopg 3) targets multi-node or high-concurrency
-deployments. Install with `pip install '.[postgres]'` and point it at a DSN.
+Install the adapter dependencies with `pip install '.[postgres]'`. Python
+callers instantiate `PostgresBackend(dsn)` directly. The Flask factory
+and Docker Compose deployment currently use SQLite stores.
 It implements the **core persistence** contract — event ingest/fetch (event
 JSON in a `jsonb` column, provenance classes preserved), collector counters,
 operator cases (CRUD + list + retention prune), sensor heartbeats, sensor nonce
@@ -40,7 +41,7 @@ service).
 
 Migrations: forward-only with a transactional `schema_migrations` ledger
 (`apply_pg_migrations`), the PostgreSQL equivalent of SQLite's
-`PRAGMA user_version` — each step runs under a session advisory lock so
+`PRAGMA user_version` — each step runs under a transaction-level advisory lock so
 concurrent workers never double-apply, and a database written by a newer
 release is refused, not migrated down.
 
@@ -51,30 +52,24 @@ time window + cursor paging), `filter_options`, `detection_context`,
 The case surface is now ported too (migration v2 adds `case_evidence` and
 `case_history` tables): `add_case_evidence`, `case_report` and `case_timeline`
 behave as on SQLite, so **all 26 `StorageBackend` contract methods are
-implemented on PostgreSQL** — no method returns "unsupported". Two capabilities
-stay SQLite-only by design and are reported honestly, never faked: per-sensor
-event *sequencing* (PG reports sensors unsequenced) and the `session`/`alert`
-case-evidence kinds (the PG core backend models no sessions/alerts domain, so
-such references are refused rather than fabricated). For the full session/alert
-investigation surface in the console, run the SQLite profile; otherwise
-PostgreSQL is a verified drop-in for the whole storage contract. Tracked in ADR
-0002.
-
-Choosing a backend must never change investigation semantics (the evidence-first
-model, provenance separation and bounded hostile-input handling are backend
-independent); the `StorageBackend` interface exists to enforce that boundary.
+implemented on PostgreSQL**. This covers the persistence protocol. The
+full console also depends on SQLite-only capabilities such as session and alert
+investigation, case notes, and sensor event sequencing. PostgreSQL uses one
+connection per adapter instance. Its dashboard returns all-time event
+and severity totals. Window and filter semantics and response fields used
+by the console still need to be implemented. End-to-end console support and
+concurrent deployment require separate integration and validation.
 
 ---
 
 ## Italiano
 
-Il collector dipende da un backend di storage tramite l'interfaccia
-`StorageBackend` (`src/aegis_nexus/storage_backend.py`). **SQLite**,
-implementato da `Store`, è il backend di riferimento predefinito. Un backend
-**PostgreSQL** opt-in (`PostgresBackend`, psycopg 3) implementa la persistenza
-di base — vedi `docs/adr/0002-storage-backend-postgresql.md`.
+Il collector e la console SOC usano **SQLite**. Il protocollo
+`StorageBackend` copre la persistenza di base e ha due implementazioni,
+`Store` (SQLite) e l’adattatore autonomo `PostgresBackend` (psycopg 3).
+L’[ADR 0002](adr/0002-storage-backend-postgresql.md) documenta le decisioni.
 
-### Profilo SQLite (attuale, consigliato)
+### Deployment con SQLite
 
 - Nodo singolo, su file (`AEGIS_DATABASE_PATH`), journaling WAL con
   `foreign_keys=ON`, `trusted_schema=OFF`, `secure_delete=ON` e un busy timeout
@@ -88,13 +83,16 @@ di base — vedi `docs/adr/0002-storage-backend-postgresql.md`.
   automatica del restore (`make verify-restore`).
 - Ideale per: una singola istanza di collector (il deployment honeypot tipico),
   dove semplicità operativa e backup/restore a livello di file sono vantaggi.
-- Limiti: un solo processo scrittore; un ingest sostenuto molto elevato con
-  molti scrittori concorrenti è il caso in cui un database client/server aiuta.
+- SQLite serializza le transazioni di scrittura. Misura la contesa e la
+  latenza di ingestione con carichi rappresentativi prima di scegliere
+  un’architettura di deployment diversa.
 
-### Profilo PostgreSQL (opt-in, persistenza di base)
+### Adattatore PostgreSQL autonomo
 
-`PostgresBackend` (psycopg 3) serve deployment multi-nodo o ad alta concorrenza.
-Installa con `pip install '.[postgres]'` e puntalo a un DSN. Implementa il
+Installa le dipendenze dell’adattatore con `pip install '.[postgres]'`. I
+chiamanti Python inizializzano direttamente `PostgresBackend(dsn)`. La
+factory Flask e il deployment Docker Compose usano attualmente gli store
+SQLite. L’adattatore implementa il
 contratto di **persistenza di base** — ingest/fetch eventi (JSON evento in una
 colonna `jsonb`, classi di provenance preservate), counter del collector, casi
 operatore (CRUD + lista + prune retention), heartbeat sensori, anti-replay dei
@@ -106,7 +104,7 @@ CI `postgres:16`).
 
 Migrazioni: forward-only con un ledger transazionale `schema_migrations`
 (`apply_pg_migrations`), l'equivalente PostgreSQL del `PRAGMA user_version` di
-SQLite — ogni step gira sotto un advisory lock di sessione così worker
+SQLite — ogni step gira sotto un advisory lock transazionale così worker
 concorrenti non applicano due volte, e un database scritto da una release più
 recente viene rifiutato, non migrato all'indietro.
 
@@ -118,17 +116,12 @@ finestra temporale + paginazione a cursore), `filter_options`,
 Anche la superficie dei casi è ora portata (la migrazione v2 aggiunge le tabelle
 `case_evidence` e `case_history`): `add_case_evidence`, `case_report` e
 `case_timeline` si comportano come su SQLite, quindi **tutti i 26 metodi del
-contratto `StorageBackend` sono implementati su PostgreSQL** — nessun metodo
-restituisce "non supportato". Due funzionalità restano SQLite-only per scelta e
-sono riportate onestamente, mai inventate: la *sequenziazione* degli eventi per
-sensore (PG riporta i sensori come unsequenced) e i tipi di evidenza
-`session`/`alert` (il backend PG core non modella i domini sessioni/alert, quindi
-tali riferimenti vengono rifiutati invece che fabbricati). Per la superficie
-investigativa completa di sessioni/alert nella console usa il profilo SQLite;
-altrimenti PostgreSQL è un drop-in verificato per l'intero contratto di storage.
-Tracciato in ADR 0002.
-
-La scelta del backend non deve mai cambiare la semantica investigativa (il
-modello evidence-first, la separazione di provenance e la gestione bounded
-dell'input ostile sono indipendenti dal backend); l'interfaccia `StorageBackend`
-esiste per imporre questo confine.
+contratto `StorageBackend` sono implementati su PostgreSQL**. L’ambito è il
+protocollo di persistenza. La console completa dipende anche da funzionalità
+disponibili su SQLite, fra cui l’investigazione di sessioni e alert, le note
+dei casi e il sequenziamento degli eventi dei sensori. PostgreSQL usa una
+connessione per istanza dell’adattatore. La sua dashboard calcola totali
+e conteggi per gravità sull’intero storico. Restano da implementare la
+semantica di finestre e filtri e i campi della risposta usati dalla console. Il
+supporto end-to-end e il deployment concorrente richiedono integrazione e
+collaudo dedicati.

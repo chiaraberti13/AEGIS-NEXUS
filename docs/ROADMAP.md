@@ -1,0 +1,35 @@
+# Roadmap AEGIS-NEXUS
+
+Base di analisi: `4e8edad` su `main`. Progetto maturo come laboratorio SOC, con validazione di distribuzione da ripetere. Prospettive applicate: prodotto, architettura, sicurezza difensiva, privacy, storage, performance, Visual Design, UX, accessibilità, localizzazione e QA. Ruoli e responsabilità in [COMPETENZE.md](COMPETENZE.md).
+
+## Evidenze e decisioni
+
+| Area | Evidenza | Decisione |
+| --- | --- | --- |
+| Prodotto e funzionalità | Decoy isolati e collector con telemetria firmata. Console con triage, sessioni, IOC, casi, audit e report. Integrazioni optional per Suricata, SIEM e PCAP. | Investire sul percorso da evento a caso e condivisione. Usare fixture sintetiche per il primo avvio del laboratorio. |
+| Architettura e qualità | Flask e Gunicorn, 12 blueprint, moduli SQLite per dominio, frontend a moduli ES. Il Dockerfile installa un wheel, mentre la CI Python installa in modalità editable. | Mantenere lo stack e i contratti esistenti. Verificare i confini con test di distribuzione e API. Estrarre nuovi moduli quando il codice lo richiede ([ADR 0003](adr/0003-modularization-strategy.md)). |
+| Sicurezza e privacy | Autenticazione dei sensori e dell’operatore, isolamento Compose, retention, audit e bundle con hash. Il parser dei profili report ripiegava su `internal` con input invalido. | Priorità ai confini di condivisione, alla redazione e alla verifica di ripristino. |
+| Prestazioni e scalabilità | SQLite è il runtime del collector. L’adattatore PostgreSQL è autonomo. Il test di normalizzazione copre il costo CPU, mentre dashboard, contesa tra worker e latenze end-to-end richiedono misure proprie. | Ottimizzare dopo profilazione. Estendere PostgreSQL al runtime solo se emerge una soglia operativa o un requisito di disponibilità che lo giustifica. |
+| Visual Design, UX, accessibilità, lingue | Tema SOC, catalogo IT/EN, navigazione per viste, dialogo chiave operatore, filtri e mappa. I test browser esistenti coprono navigazione e rendering di dati ostili. | Conservare l’identità visiva. Intervenire su focus, gerarchia dei controlli, viewport stretti, formati locali e alternative testuali delle visualizzazioni. |
+| Documentazione e release | README reciproci, guide operative e ADR. Workflow su push con controlli dipendenze, immagine e isolamento. Nessuna issue aperta restituita dalla ricerca iniziale. | Mantenere questa roadmap come riferimento canonico. Collegare ogni guida alle capacità verificabili e ripetere la verifica su checkout pulito. |
+
+## Backlog
+
+Le stime sono giorni di lavoro indicativi. L’ordine privilegia distribuzione, riservatezza e percorso investigativo.
+
+| ID | Stato | Priorità, beneficio, impatto e stima | Dipendenze | Criterio di chiusura e verifica |
+| --- | --- | --- | --- | --- |
+| AN-01 | FEATURE_DONE | P0 · ripristina console e risorse da wheel · distribuzione · 0,5 g | — | Il wheel contiene template, CSS e JS. Da un ambiente esterno al checkout, `/`, `/health` e risorse rispondono 200. Ripetere con immagine CI. |
+| AN-02 | PARTIAL | P0 · evita esportazioni complete accidentali · API, privacy e report · 1 g | — | Profili invalidi respinti, formati condivisibili redatti, avvisi IT/EN e bundle esplicitamente interno. Verificare report di caso e riepiloghi, inclusi JSON, Markdown e PDF. |
+| AN-03 | PARTIAL | P1 · rende utilizzabile la console con tastiera · UX/UI · 1–2 g | AN-01 | Accesso, cambio lingua, filtri e navigazione utilizzabili con tastiera e focus visibile. Verificare browser, larghezze mobile/desktop e coerenza IT/EN. |
+| AN-04 | TODO | P1 · stabilisce capacità e colli di bottiglia · prestazioni e release · 2–3 g | AN-01 | Misurare latenza p95, throughput, occupazione disco, contesa SQLite e costo dashboard con fixture a più volumi e worker concorrenti. Documentare ambiente, ripetibilità e margini prima di proporre indici, aggregazioni o storage diverso. |
+| AN-05 | TODO | P1 · consolida equivalenza e privacy dello storage · integrazioni · 1–2 g | AN-02 | Contratto SQLite/PostgreSQL con dati legacy e import diretti, incluse credenziali e bundle. Dimostrare il ripristino e la verifica d’integrità su fixture. Indicare esplicitamente funzioni disponibili solo nel runtime SQLite. |
+| AN-06 | TODO | P2 · riduce il tempo al primo caso · onboarding e investigazione · 2–3 g | AN-02, AN-03 | Percorso guidato bilingue con fixture sintetiche già compatibili con lo schema, provenienza visibile e flusso fino al report redatto. Confrontare con l’onboarding attuale usando tempo e completamento del percorso. |
+| AN-07 | TODO | P2 · rende leggibili dati e mappe a più utenti · visual e i18n · 2–3 g | AN-03, AN-04 | Alternative tabulari per visualizzazioni chiave, feedback per vuoto/errore/caricamento, formati IT/EN coerenti. Audit tastiera, contrasto, zoom, viewport stretti, movimento ridotto e lettore di schermo. |
+| AN-08 | TODO | P1 · verifica un candidato stabile · release · 2–3 g | AN-01–AN-07 | Suite completa, smoke dell’immagine da checkout pulito, compatibilità PostgreSQL, isolamento ed egress su host Linux, backup/rollback, supply chain, audit accessibilità e doc IT/EN. Valutare controlli definitivi e tag solo dopo verifica positiva. |
+
+## Continuità
+
+La [roadmap storica](https://github.com/chiaraberti13/AEGIS-NEXUS/blob/142f007/ROADMAP.md) resta consultabile nel commit precedente alla rimozione (`adfaf18`). I cicli Foundation, A–I, K, L e P risultano chiusi storicamente per implementazione o decisione, con evidenze e limiti nel documento originale. Il ciclo J Study Mode resta archiviato. La regola Sigma è rinviata dall’ADR 0001. Il layer servizi generalizzato è chiuso dall’ADR 0003. Zeek e fingerprint nativi seguono gli ADR 0004 e 0005. HASSH, passthrough JA4H e sidecar PCAP risultano presenti. La cattura live richiede verifica su un host adatto.
+
+Baseline locale: 494 test superati, 21 saltati (PostgreSQL e pypdf), 2 smoke browser interrotti dall’eseguibile Playwright mancante. Misura locale su SQLite con 5.000 eventi sintetici e un solo scrittore: ingest p50 0,28 ms, p95 0,86 ms, p99 1,53 ms e dashboard mediana 93,80 ms su 10 chiamate. La misura esclude HTTP, detection e concorrenza. Il lock generato con Python 3.13 ometteva una dipendenza condizionale di aiohttp richiesta dal runtime Python 3.12. Il confronto dei wheel ha confermato che il pacchetto precedente ometteva template e risorse statiche. Installazione con hash verificati in un ambiente pulito e smoke da wheel superati: HTTP 200 su /health, /, app.js e styles.css. Nessun audit di rilascio concluso.

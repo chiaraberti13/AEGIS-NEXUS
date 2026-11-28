@@ -1,6 +1,6 @@
 # ADR 0002 — StorageBackend abstraction and optional PostgreSQL backend
 
-- Status: **Accepted** (defer implementation; revisit on a concrete multi-node need)
+- Status: **Accepted** (standalone adapter implemented; collector integration deferred)
 - Date: 2026-11-24
 - Context: ROADMAP Cycle H — "Define StorageBackend interface", "Refactor SQLite
   backend behind StorageBackend", "Add optional PostgreSQL backend", "Extend the
@@ -28,7 +28,7 @@ semantics:
   file-copy backup/restore path;
 - bounded, parameterized raw SQL throughout `store.py`.
 
-## Decision
+## Original decision (2026-11-24)
 
 **Defer the StorageBackend abstraction and the PostgreSQL backend.** They are
 not implemented in this cycle. Reasons:
@@ -45,7 +45,7 @@ not implemented in this cycle. Reasons:
   across backends; proving that needs a backend-parity test suite that only has
   value once a second backend actually exists.
 
-## Consequences
+## Original consequences (2026-11-24)
 
 - The six Cycle H storage-backend items stay unchecked and are tracked by this
   ADR rather than being marked done.
@@ -82,7 +82,7 @@ for, at the core-contract level.
 
 The migration strategy is now ported too: `apply_pg_migrations` maintains a
 transactional `schema_migrations` ledger (replacing SQLite's
-`PRAGMA user_version`), applying forward-only steps each under a session
+`PRAGMA user_version`), applying forward-only steps each under a transaction-level
 advisory lock so concurrent workers never double-apply, and **refusing** a
 database whose version exceeds the latest known migration (`SchemaVersionError`)
 rather than migrating it down. Guarded by `tests/test_postgres_migrations.py`
@@ -132,13 +132,24 @@ Two capabilities remain SQLite-only **by design**, honestly reported rather than
 faked: per-sensor event *sequencing* (PG reports sensors unsequenced), and the
 `session`/`alert` case-evidence kinds — the PG core backend models no
 sessions/alerts domain, so such references cannot be verified and are
-refused (`evidence_not_found`) / reported unavailable, never fabricated. The
-console's full session/alert investigation surface therefore still wants the
-SQLite profile; PostgreSQL is now a verified drop-in for the entire storage
-contract otherwise.
+refused or reported unavailable (`evidence_not_found`). Case notes also stay
+in the SQLite extension.
 
-## Notes
+## Current deployment boundary
 
-This supersedes nothing; it records why the Cycle H storage-backend cluster is
-intentionally deferred. See ADR 0001 for the first ADR and the ADR convention
-(`docs/adr/NNNN-title.md`).
+The 26-method contract is implemented by both adapters. The Flask factory
+instantiates SQLite stores for the collector, including the event, alert and
+suppression stores. Docker Compose runs this same SQLite-backed collector.
+PostgreSQL is available to Python callers as a standalone adapter with one
+connection per instance.
+
+Revisit collector integration when measured write contention or a concrete
+multi-node use case warrants it. An integration decision must address session
+and alert evidence, analyst notes, sequencing and event integrity,
+retention and backup/restore, and connection lifecycle. The PostgreSQL
+dashboard currently returns all-time event and severity totals. Establish
+window, filter and response parity before using it in the console. Verify full HTTP
+workflows and concurrent operation against PostgreSQL before treating it as a
+collector deployment profile.
+
+See [storage backends](../STORAGE.md) for operator-facing guidance.
