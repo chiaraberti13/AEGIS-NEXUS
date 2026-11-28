@@ -58,23 +58,31 @@ def _redact_in_place(node: Any) -> None:
             _redact_in_place(item)
 
 
-def redact_report(report: dict[str, Any], profile: str = "internal") -> dict[str, Any]:
-    """Return a copy of ``report`` redacted for ``profile``.
-
-    Unknown profiles fall back to ``internal`` (fail-open to *less* disclosure
-    is not possible here — the caller validates; this just never crashes).
-    """
-    if profile != "shareable":
-        result = deepcopy(report)
-        result["redaction_profile"] = "internal"
-        return result
-    result = deepcopy(report)
-    _redact_in_place(result)
-    result["redaction_profile"] = "shareable"
-    result["redaction_note"] = (
+_REDACTION_NOTES = {
+    "en": (
         "Shareable profile: source IPs are masked to their network prefix and "
         "usernames/operator identities are removed. This is not full "
         "anonymization — review free-text fields and command/payload evidence "
         "for embedded identifiers before sharing."
-    )
+    ),
+    "it": (
+        "Il profilo maschera gli IP sorgente al prefisso di rete e rimuove nomi "
+        "utente e identità degli operatori. L'anonimizzazione è parziale. Prima "
+        "di condividere il report, verifica eventuali identificatori presenti "
+        "nei campi a testo libero, nei comandi e nei payload."
+    ),
+}
+
+
+def redact_report(
+    report: dict[str, Any], profile: str = "internal", *, lang: str = "en",
+) -> dict[str, Any]:
+    """Return a copy of the report according to a supported profile."""
+    if profile not in REDACTION_PROFILES:
+        raise ValueError("Unknown report redaction profile")
+    result = deepcopy(report)
+    result["redaction_profile"] = profile
+    if profile == "shareable":
+        _redact_in_place(result)
+        result["redaction_note"] = _REDACTION_NOTES["it" if lang.lower().startswith("it") else "en"]
     return result

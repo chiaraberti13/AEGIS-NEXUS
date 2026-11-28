@@ -20,12 +20,17 @@ import io
 from collections.abc import Callable
 
 from flask import Blueprint, Response, jsonify, request
+from werkzeug.exceptions import BadRequest
 
 from .evidence_bundle import build_evidence_bundle
 from .pdf import text_to_pdf
 from .redaction import REDACTION_PROFILES, redact_report
 from .reporting import case_markdown, session_markdown, soc_summary_markdown
 from .soc_summary import NAMED_WINDOWS, build_soc_summary
+
+
+class InvalidReportProfile(BadRequest):
+    """The requested export does not support the selected profile."""
 
 
 def make_reports_blueprint(
@@ -46,15 +51,26 @@ def make_reports_blueprint(
     """
     bp = Blueprint("reports", __name__)
 
-    def _report_profile() -> str:
-        profile = (request.args.get("profile") or "internal").strip().lower()
-        return profile if profile in REDACTION_PROFILES else "internal"
+    @bp.errorhandler(InvalidReportProfile)
+    def invalid_report_profile(_exc):
+        return jsonify({"error": "invalid_report_profile"}), 400
+
+    def _report_profile(*, supports_shareable: bool = True) -> str:
+        profiles = request.args.getlist("profile")
+        if not profiles:
+            return "internal"
+        profile = profiles[0].strip().lower()
+        if len(profiles) != 1 or profile not in REDACTION_PROFILES:
+            raise InvalidReportProfile
+        if profile == "shareable" and not supports_shareable:
+            raise InvalidReportProfile
+        return profile
 
     def _markdown_redaction_banner(report: dict, it: bool) -> str:
         note = report.get("redaction_note")
         if not note:
             return ""
-        label = "Redazione: condivisibile" if it else "Redaction: shareable"
+        label = "Profilo di condivisione" if it else "Redaction: shareable"
         return f"> **{label}** — {note}\n\n"
 
     def _soc_summary_hours() -> int:
@@ -66,21 +82,23 @@ def make_reports_blueprint(
 
     @bp.get("/api/v1/reports/case/<case_id>")
     def case_report(case_id: str):
+        profile = _report_profile()
+        lang = request.args.get("lang", "en")[:8]
         item = store.case_report(case_id[:128])
         if not item:
             return jsonify({"error": "not_found"}), 404
         item["operator_audit"] = case_operator_audit(case_id[:128])
-        return jsonify(redact_report(item, _report_profile())), 200
+        return jsonify(redact_report(item, profile, lang=lang)), 200
 
     @bp.get("/api/v1/reports/case/<case_id>.md")
     def case_report_markdown(case_id: str):
+        profile = _report_profile()
+        lang = request.args.get("lang", "it")[:8]
         item = store.case_report(case_id[:128])
         if not item:
             return jsonify({"error": "not_found"}), 404
         item["operator_audit"] = case_operator_audit(case_id[:128])
-        profile = _report_profile()
-        item = redact_report(item, profile)
-        lang = request.args.get("lang", "it")[:8]
+        item = redact_report(item, profile, lang=lang)
         body = _markdown_redaction_banner(item, lang.lower().startswith("it")) + case_markdown(item, lang)
         filename = f"aegis-{case_id[:64]}.md"
         record_audit(
@@ -97,11 +115,13 @@ def make_reports_blueprint(
 
     @bp.get("/api/v1/reports/soc-summary")
     def soc_summary_report():
+        _report_profile(supports_shareable=False)
         summary = build_soc_summary(store, alert_store, detection_config, hours=_soc_summary_hours())
         return jsonify(summary)
 
     @bp.get("/api/v1/reports/soc-summary.md")
     def soc_summary_report_markdown():
+        _report_profile(supports_shareable=False)
         summary = build_soc_summary(store, alert_store, detection_config, hours=_soc_summary_hours())
         body = soc_summary_markdown(summary, request.args.get("lang", "it")[:8])
         record_audit(
@@ -118,13 +138,13 @@ def make_reports_blueprint(
 
     @bp.get("/api/v1/reports/case/<case_id>.pdf")
     def case_report_pdf(case_id: str):
+        profile = _report_profile()
+        lang = request.args.get("lang", "it")[:8]
         item = store.case_report(case_id[:128])
         if not item:
             return jsonify({"error": "not_found"}), 404
         item["operator_audit"] = case_operator_audit(case_id[:128])
-        profile = _report_profile()
-        item = redact_report(item, profile)
-        lang = request.args.get("lang", "it")[:8]
+        item = redact_report(item, profile, lang=lang)
         body = _markdown_redaction_banner(item, lang.lower().startswith("it")) + case_markdown(item, lang)
         pdf = text_to_pdf(f"AEGIS-NEXUS case {case_id[:64]}", body)
         record_audit(
@@ -141,6 +161,7 @@ def make_reports_blueprint(
 
     @bp.get("/api/v1/reports/case/<case_id>/bundle.zip")
     def case_evidence_bundle(case_id: str):
+        _report_profile(supports_shareable=False)
         report = store.case_report(case_id[:128])
         if not report:
             return jsonify({"error": "not_found"}), 404
@@ -187,6 +208,7 @@ def make_reports_blueprint(
 
     @bp.get("/api/v1/reports/case/<case_id>.csv")
     def case_report_csv(case_id: str):
+        _report_profile(supports_shareable=False)
         item = store.case_report(case_id[:128])
         if not item:
             return jsonify({"error": "not_found"}), 404
@@ -230,19 +252,21 @@ def make_reports_blueprint(
 
     @bp.get("/api/v1/reports/session/<session_id>")
     def session_report(session_id: str):
+        profile = _report_profile()
+        lang = request.args.get("lang", "en")[:8]
         item = store.report(session_id)
         if not item:
             return jsonify({"error": "not_found"}), 404
-        return jsonify(redact_report(item, _report_profile())), 200
+        return jsonify(redact_report(item, profile, lang=lang)), 200
 
     @bp.get("/api/v1/reports/session/<session_id>.md")
     def session_report_markdown(session_id: str):
+        profile = _report_profile()
+        lang = request.args.get("lang", "it")[:8]
         item = store.report(session_id)
         if not item:
             return jsonify({"error": "not_found"}), 404
-        profile = _report_profile()
-        item = redact_report(item, profile)
-        lang = request.args.get("lang", "it")[:8]
+        item = redact_report(item, profile, lang=lang)
         body = _markdown_redaction_banner(item, lang.lower().startswith("it")) + session_markdown(item, lang)
         filename = f"aegis-{session_id[:64]}.md"
         record_audit(
@@ -259,12 +283,12 @@ def make_reports_blueprint(
 
     @bp.get("/api/v1/reports/session/<session_id>.pdf")
     def session_report_pdf(session_id: str):
+        profile = _report_profile()
+        lang = request.args.get("lang", "it")[:8]
         item = store.report(session_id)
         if not item:
             return jsonify({"error": "not_found"}), 404
-        profile = _report_profile()
-        item = redact_report(item, profile)
-        lang = request.args.get("lang", "it")[:8]
+        item = redact_report(item, profile, lang=lang)
         body = _markdown_redaction_banner(item, lang.lower().startswith("it")) + session_markdown(item, lang)
         pdf = text_to_pdf(f"AEGIS-NEXUS session {session_id[:64]}", body)
         record_audit(
@@ -281,6 +305,7 @@ def make_reports_blueprint(
 
     @bp.get("/api/v1/reports/session/<session_id>.csv")
     def session_report_csv(session_id: str):
+        _report_profile(supports_shareable=False)
         item = store.report(session_id)
         if not item:
             return jsonify({"error": "not_found"}), 404

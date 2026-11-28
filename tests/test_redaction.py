@@ -91,3 +91,33 @@ def test_shareable_markdown_carries_redaction_banner(tmp_path):
     body = client.get(f"/api/v1/reports/session/{session_id}.md?profile=shareable&lang=en").get_data(as_text=True)
     assert "Redaction: shareable" in body
     assert "203.0.113.40" not in body
+
+
+def test_reports_reject_ambiguous_or_unsupported_privacy_profiles(tmp_path):
+    client = _client(tmp_path)
+    for resource in ("case/example", "session/example"):
+        for extension in ("", ".md", ".pdf"):
+            for query in ("profile=unknown", "profile=", "profile=internal&profile=shareable"):
+                response = client.get(f"/api/v1/reports/{resource}{extension}?{query}")
+                assert response.status_code == 400
+                assert response.get_json() == {"error": "invalid_report_profile"}
+
+    for path in ("case/example/bundle.zip", "case/example.csv", "session/example.csv",
+                 "soc-summary", "soc-summary.md"):
+        response = client.get(f"/api/v1/reports/{path}?profile=shareable")
+        assert response.status_code == 400
+        assert response.get_json() == {"error": "invalid_report_profile"}
+
+
+def test_shareable_exports_localize_privacy_notice(tmp_path):
+    client = _client(tmp_path)
+    case = client.post("/api/v1/cases", json={"title": "Research case"}).get_json()
+    url = f"/api/v1/reports/case/{case['id']}"
+    json_report = client.get(f"{url}?profile=shareable&lang=it").get_json()
+    assert "L'anonimizzazione è parziale" in json_report["redaction_note"]
+    markdown = client.get(f"{url}.md?profile=shareable&lang=it").get_data(as_text=True)
+    assert "Profilo di condivisione" in markdown
+    assert json_report["redaction_note"] in markdown
+    pdf = client.get(f"{url}.pdf?profile=shareable&lang=it")
+    assert pdf.status_code == 200
+    assert b"Profilo di condivisione" in pdf.data

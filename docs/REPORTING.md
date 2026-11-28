@@ -35,19 +35,23 @@ every other file. The manifest never hashes itself; the archive uses fixed
 timestamps so identical inputs produce a byte-identical bundle. The bundle is
 inert data served as an attachment — it is not rendered and executes nothing.
 Because it may embed full events (source IPs, usernames, payloads) and the
-case's operator audit trail, treat the download as sensitive.
+case's operator audit trail, treat the download as sensitive. The bundle is
+available under the internal profile only.
 
 ### Redaction profiles
 
-Session and case reports (JSON and Markdown) accept `?profile=internal`
-(default, full detail) or `?profile=shareable`. The shareable profile masks
+Session and case reports in JSON, Markdown and PDF accept `?profile=internal`
+(full detail and the default when omitted) or `?profile=shareable`. Empty, unknown,
+repeated or unsupported profile selections return HTTP 400 with
+`invalid_report_profile`. CSV exports, SOC summaries and the evidence bundle
+accept only the internal profile. The shareable profile masks
 structured network identifiers (source IPs to their /24 or /48 network prefix),
 removes usernames and operator/owner identities, and keeps SHA-256 fingerprints,
 detection structure and evidence-backed MITRE/IOC context. It is **not** full
 anonymization: free-text analyst fields and attacker-embedded identifiers inside
-commands/payloads are left intact for review, and the Markdown export carries a
-visible redaction banner. The chosen profile is recorded in the export audit
-entry.
+commands/payloads are left intact for review. Markdown and PDF carry a visible
+privacy notice, and their export audit entry records the chosen profile. The
+notice follows the requested `?lang=it` or `?lang=en` in all three formats.
 
 ### Safe PDF export
 
@@ -111,20 +115,25 @@ di sé stesso; l'archivio usa timestamp fissi così input identici producono un
 bundle identico byte-per-byte. Il bundle è dato inerte servito come attachment —
 non viene renderizzato e non esegue nulla. Poiché può includere eventi completi
 (IP sorgente, username, payload) e la traccia di audit operatore del caso, il
-download va trattato come sensibile.
+download va trattato come sensibile. Il bundle è disponibile solo con il profilo
+interno.
 
 ### Profili di redazione
 
-I report di sessione e caso (JSON e Markdown) accettano `?profile=internal`
-(default, dettaglio completo) o `?profile=shareable`. Il profilo condivisibile
+I report di sessione e caso in JSON, Markdown e PDF accettano `?profile=internal`
+(dettaglio completo, predefinito se omesso) oppure `?profile=shareable`. Un profilo
+vuoto, sconosciuto, ripetuto o incompatibile restituisce HTTP 400 con
+`invalid_report_profile`. Gli export CSV, i riepiloghi SOC e il bundle delle
+evidenze accettano solo il profilo interno. Il profilo condivisibile
 maschera gli identificatori di rete strutturati (IP sorgente al prefisso di rete
 /24 o /48), rimuove username e identità operatore/responsabile, e mantiene i
 fingerprint SHA-256, la struttura di detection e il contesto MITRE/IOC
 evidence-backed. **Non** è un'anonimizzazione completa: i campi free-text
 dell'analista e gli identificatori inseriti dall'attaccante dentro
-comandi/payload restano intatti per revisione, e l'export Markdown porta un
-banner di redazione visibile. Il profilo scelto è registrato nella voce di audit
-dell'export.
+comandi e payload restano intatti e vanno rivisti prima della condivisione.
+Markdown e PDF mostrano un avviso e registrano il profilo scelto nel registro
+di audit. In tutti e tre i formati l'avviso segue la lingua richiesta con
+`?lang=it` o `?lang=en`.
 
 ### Export PDF sicuro
 
