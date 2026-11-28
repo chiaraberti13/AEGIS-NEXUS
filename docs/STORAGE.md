@@ -54,7 +54,11 @@ The case surface is now ported too (migration v2 adds `case_evidence` and
 behave as on SQLite, so **all 26 `StorageBackend` contract methods are
 implemented on PostgreSQL**. This covers the persistence protocol. The
 full console also depends on SQLite-only capabilities such as session and alert
-investigation, case notes, and sensor event sequencing. PostgreSQL uses one
+investigation, case notes, and sensor event sequencing. The **tamper-evident
+event hash chain** is also SQLite-only: `PostgresBackend.verify_event_chain()`
+answers explicitly with `supported: false` / `ok: false` (ADR 0002) so a caller
+never mistakes the absence of a chain for a verified-intact one — event
+tamper-evidence on PostgreSQL would rely on database-level controls. PostgreSQL uses one
 connection per adapter instance. Its dashboard returns all-time event
 and severity totals. Window and filter semantics and response fields used
 by the console still need to be implemented. End-to-end console support and
@@ -119,7 +123,13 @@ Anche la superficie dei casi è ora portata (la migrazione v2 aggiunge le tabell
 contratto `StorageBackend` sono implementati su PostgreSQL**. L’ambito è il
 protocollo di persistenza. La console completa dipende anche da funzionalità
 disponibili su SQLite, fra cui l’investigazione di sessioni e alert, le note
-dei casi e il sequenziamento degli eventi dei sensori. PostgreSQL usa una
+dei casi e il sequenziamento degli eventi dei sensori. Anche la **hash-chain
+degli eventi a prova di manomissione** è solo-SQLite:
+`PostgresBackend.verify_event_chain()` risponde in modo esplicito con
+`supported: false` / `ok: false` (ADR 0002), così nessun chiamante scambia
+l’assenza della chain per una chain verificata e integra — su PostgreSQL la
+prova di manomissione degli eventi dipenderebbe da controlli a livello di
+database. PostgreSQL usa una
 connessione per istanza dell’adattatore. La sua dashboard calcola totali
 e conteggi per gravità sull’intero storico. Restano da implementare la
 semantica di finestre e filtri e i campi della risposta usati dalla console. Il

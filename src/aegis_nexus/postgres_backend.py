@@ -227,6 +227,28 @@ class PostgresBackend:
     def close(self) -> None:
         self._conn.close()
 
+    def verify_event_chain(self) -> dict[str, Any]:
+        """Report that the tamper-evident event hash chain is a SQLite-only feature.
+
+        The hash chain (``chain_seq``/``prev_hash``/``record_hash`` plus the
+        ``event_chain_head`` anchor) is implemented only by the reference SQLite
+        :class:`~aegis_nexus.store.Store`; ADR 0002 defers porting it, so this
+        backend stores no chain. Rather than omitting the method — which would
+        make a caller that iterates backends ``AttributeError`` or silently skip
+        the integrity check — we answer explicitly and honestly: ``ok`` is
+        ``False`` and ``supported`` is ``False`` so no caller can mistake the
+        absence of a chain for a verified-intact one. Event tamper-evidence on
+        PostgreSQL requires database-level controls (WAL archiving, restricted
+        roles, append-only auditing), tracked by ADR 0002.
+        """
+        return {
+            "backend": "postgresql",
+            "supported": False,
+            "ok": False,
+            "records_verified": 0,
+            "reason": "event hash chain is a SQLite-only capability (ADR 0002)",
+        }
+
     # -- events ------------------------------------------------------------
     def ingest(self, event: dict[str, Any], collector_received_at: str | None = None) -> dict[str, Any]:
         from psycopg.types.json import Jsonb

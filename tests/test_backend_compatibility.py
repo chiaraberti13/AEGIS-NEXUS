@@ -289,3 +289,21 @@ def test_case_evidence_ioc_resolved_via_injected_resolver(backend):
     # An IOC the resolver cannot derive is refused.
     with pytest.raises(ValueError):
         backend.add_case_evidence(case["id"], "ioc", "ioc_unknown")
+
+
+def test_event_hash_chain_is_an_explicit_sqlite_only_capability(backend):
+    """The tamper-evident event hash chain is SQLite-only (ADR 0002).
+
+    Both backends must answer ``verify_event_chain`` so a caller that iterates
+    backends never ``AttributeError``s or silently skips the integrity check;
+    the PostgreSQL answer must declare the feature unsupported rather than imply
+    a verified-intact chain.
+    """
+    report = backend.verify_event_chain()
+    if isinstance(backend, Store):
+        assert report["ok"] is True
+        assert "record_hash_mismatch" not in {p["type"] for p in report["problems"]}
+    else:  # PostgresBackend
+        assert report["supported"] is False
+        assert report["ok"] is False
+        assert "ADR 0002" in report["reason"]
